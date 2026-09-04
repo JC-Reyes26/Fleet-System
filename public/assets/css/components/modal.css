@@ -599,253 +599,264 @@
 
 
 /* Account Management */
+/* ==========================================
+   Account Management Modal
+========================================== */
+
+#accountManagementModal {
+  position: fixed;
+  inset: 0;
+
+  width: 100vw;
+  height: 100vh;
+
+  z-index: var(--z-modal, 10000);
+}
+
+#accountManagementModal.show {
+  display: flex;
+}
+
 #accountManagementModal .custom-modal {
-  width: min(100% - 32px, 1100px);
-  max-height: min(92vh, 920px);
+  position: relative;
+
+  width: min(calc(100vw - 32px), 960px);
+  max-width: 960px;
+
+  max-height: calc(100vh - 48px);
+
+  margin: auto;
+
+  background: var(--modal-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  z-index: 10001;
 }
 
 /* Header */
 #accountManagementModal .modal-header {
   padding: 24px 32px;
+  flex-shrink: 0;
 }
 
-/* Main body */
+/* Body */
 #accountManagementModal .modal-body {
   padding: 28px 32px 32px;
+
+  min-height: 0;
+
+  flex: 1 1 auto;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
-/* Account action selector spacing */
-#accountManagementModal
-  #accountManagementAction {
+/* Action selector */
+#accountManagementModal #accountManagementAction {
   width: 100%;
 }
 
-/* Space between action selector and dynamic content */
-#accountManagementModal
-  #accountManagementContent {
+/* Dynamic area */
+#accountManagementModal #accountManagementContent {
   margin-top: 28px;
+  min-width: 0;
 }
 
-/* Dynamic forms */
+/* Forms */
 #accountManagementModal .form-grid {
   display: grid;
+
   grid-template-columns:
     repeat(2, minmax(0, 1fr));
+
   column-gap: 28px;
   row-gap: 22px;
 }
 
-/* Keep full-width fields full */
-#accountManagementModal
-  .form-group.full-width {
-  grid-column: 1 / -1;
-}
-
-/* Better label spacing */
 #accountManagementModal .form-group {
   display: flex;
   flex-direction: column;
+
   gap: 8px;
+
   min-width: 0;
 }
 
-#accountManagementModal
-  .form-group label {
+#accountManagementModal .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+#accountManagementModal .form-group label {
   margin: 0;
 }
 
-/* Consistent control height */
 #accountManagementModal input,
 #accountManagementModal select,
 #accountManagementModal textarea {
   width: 100%;
   min-height: var(--control-height);
+  box-sizing: border-box;
 }
 
-/* Dynamic form spacing */
-#accountManagementModal
-  #createUserAccountForm,
-#accountManagementModal
-  #updateUserAccountForm,
-#accountManagementModal
-  #resetUserPasswordForm {
-  margin-top: 0;
-}
-
-/* Update account selected-user area */
-#accountManagementModal
-  #updateAccountFormContainer {
+/* Dynamic containers */
+#accountManagementModal #updateAccountFormContainer,
+#accountManagementModal #deleteAccountDetails {
   margin-top: 28px;
-}
 
-/* Delete selected-user details */
-#accountManagementModal
-  #deleteAccountDetails {
-  margin-top: 28px;
-}
-
-/* Delete summary spacing */
-#accountManagementModal
-  .account-delete-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-#accountManagementModal
-  .account-delete-summary p {
-  margin: 6px 0 0;
+  min-width: 0;
 }
 
 /* Notes */
-#accountManagementModal
-  .settings-note {
+#accountManagementModal .settings-note {
   margin-top: 22px;
+
   line-height: 1.6;
 }
 
 /* Empty state */
-#accountManagementModal
-  .settings-empty-state {
+#accountManagementModal .settings-empty-state {
   min-height: 90px;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+
   gap: 10px;
+
   text-align: center;
 }
 
-#accountManagementModal
-  .settings-empty-state i {
+#accountManagementModal .settings-empty-state i {
   font-size: 24px;
 }
 
 /* Footer */
-#accountManagementModal
-  .modal-footer {
+#accountManagementModal .modal-footer {
+  width: 100%;
+
   margin-top: 28px;
+
   padding: 22px 0 0;
+
   border-top:
     1px solid var(--color-border);
+
   background: transparent;
+
+  justify-content: flex-end;
+
   gap: 12px;
+
+  box-sizing: border-box;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  #accountManagementModal
-    .custom-modal {
-    width: min(100% - 20px, 760px);
-  }
-
-  #accountManagementModal
-    .modal-header {
-    padding: 20px;
-  }
-
-  #accountManagementModal
-    .modal-body {
-    padding: 20px;
-  }
-
-  #accountManagementModal
-    .form-grid {
-    grid-template-columns: 1fr;
-    row-gap: 18px;
-  }
-}
-
-#accountManagementModal .settings-empty-state {
-    min-height: 90px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Account Management - Delete Account */
+/* Delete section */
 #accountManagementModal .account-delete-summary {
   width: 100%;
+
   min-width: 0;
+
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
 
-#accountManagementModal .account-delete-summary > div {
-  min-width: 0;
+  gap: 20px;
 }
 
 #accountManagementModal .account-delete-summary strong {
   display: block;
+
   margin-bottom: 4px;
+
   font-size: 15px;
   font-weight: 600;
+
   color: var(--color-text);
 }
 
 #accountManagementModal .account-delete-summary p {
   margin: 4px 0 0;
+
   color: var(--color-text-muted);
+
   line-height: 1.5;
 }
 
-/* Driver warning */
-#accountManagementModal .account-delete-summary .settings-note {
-  width: 100%;
-  margin: 0;
-  padding: 12px 14px;
-  box-sizing: border-box;
-}
-
-/* Confirmation row */
-#accountManagementModal .account-delete-confirmation {
+#accountManagementModal
+  .account-delete-confirmation {
   width: 100%;
   min-width: 0;
 }
 
-#accountManagementModal .account-delete-confirmation label {
+#accountManagementModal
+  .account-delete-confirmation label {
   width: 100%;
+
   display: flex;
   align-items: center;
+
   gap: 10px;
+
   cursor: pointer;
+
   color: var(--color-text);
+
   font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 
-#accountManagementModal .account-delete-confirmation input[type="checkbox"] {
+#accountManagementModal
+  .account-delete-confirmation
+  input[type="checkbox"] {
   width: 16px;
   height: 16px;
+
   min-width: 16px;
   min-height: 16px;
+
   flex: 0 0 16px;
+
   margin: 0;
 }
 
-#accountManagementModal .account-delete-confirmation span {
-  min-width: 0;
-  flex: 1;
-  white-space: normal;
-  word-break: normal;
-  overflow-wrap: break-word;
-}
+/* Responsive */
+@media (max-width: 768px) {
+  #accountManagementModal {
+    padding: 10px;
+  }
 
-/* Prevent horizontal overflow */
-#accountManagementModal .modal-body,
-#accountManagementModal #accountManagementContent,
-#accountManagementModal #deleteAccountDetails {
-  min-width: 0;
-  overflow-x: hidden;
-}
+  #accountManagementModal .custom-modal {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+  }
 
-/* Delete footer */
-#accountManagementModal .account-delete-summary .modal-footer {
-  width: 100%;
-  margin-top: 8px;
-  padding: 20px 0 0;
-  box-sizing: border-box;
-  justify-content: flex-end;
+  #accountManagementModal .modal-header {
+    padding: 20px;
+  }
+
+  #accountManagementModal .modal-body {
+    padding: 20px;
+  }
+
+  #accountManagementModal .form-grid {
+    grid-template-columns: 1fr;
+
+    row-gap: 18px;
+  }
+
+  #accountManagementModal .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  #accountManagementModal .modal-footer button {
+    width: 100%;
+  }
 }

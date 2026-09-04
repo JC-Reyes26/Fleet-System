@@ -1,21 +1,33 @@
+let accountManagementTrigger = null;
+
 function getAccountManagementModal() {
     return document.getElementById("accountManagementModal");
 }
 
-function openAccountManagementModal() {
+function openAccountManagementModal(event = null) {
     const modal = getAccountManagementModal();
     if (!modal) {
         return;
     }
+    accountManagementTrigger =
+        event?.currentTarget ||
+        document.activeElement ||
+        document.getElementById("openAccountManagementModal");
     modal.classList.add("show");
     modal.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => {
+        document.getElementById("accountManagementAction")?.focus();
+    });
 }
 
 function closeAccountManagementModal() {
     const modal = getAccountManagementModal();
     if (!modal) {
         return;
+    }
+    if (modal.contains(document.activeElement)) {
+        document.activeElement?.blur();
     }
     modal.classList.remove("show");
     modal.setAttribute("aria-hidden", "true");
@@ -32,13 +44,22 @@ function closeAccountManagementModal() {
                     class="ph ph-user-gear"
                     aria-hidden="true"
                 ></i>
-
                 <p>
                     Select an account action to continue.
                 </p>
             </div>
         `;
     }
+
+    requestAnimationFrame(() => {
+        if (
+            accountManagementTrigger &&
+            document.body.contains(accountManagementTrigger)
+        ) {
+            accountManagementTrigger.focus();
+        }
+        accountManagementTrigger = null;
+    });
 }
 
 function initAccountManagementModal() {
