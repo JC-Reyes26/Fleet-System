@@ -20,52 +20,25 @@ class AccountCreatedNotification extends Notification
         return ['mail'];
     }
 
-    public function toMail(object $notifiable): MailMessage
-    {
-        $role = ucwords(
-            str_replace(
-                '_',
-                ' ',
-                (string) $notifiable->role
-            )
-        );
-
-        $name =
-            $notifiable->first_name
-            ?: $notifiable->name
-            ?: 'User';
-
+    public function toMail(
+        object $notifiable
+    ): MailMessage {
         return (new MailMessage)
             ->subject(
                 'Your HIMS Fleet Account Has Been Created'
             )
-            ->greeting(
-                "Hello {$name},"
-            )
-            ->line(
-                'An account has been created for you in the HIMS Fleet & Transportation Management System.'
-            )
-            ->line(
-                'Login Email: ' .
-                $notifiable->email
-            )
-            ->line(
-                'Password: ' .
-                $this->plainPassword
-            )
-            ->line(
-                'Role: ' .
-                $role
-            )
-            ->action(
-                'Open HIMS Fleet',
-                url('/login')
-            )
-            ->line(
-                'You may change your password later from your profile.'
-            )
-            ->line(
-                'If you were not expecting this account, please contact the system administrator.'
+            ->view(
+                'emails.account-created',
+                [
+                    'title' =>
+                        'HIMS Fleet Account Created',
+
+                    'user' =>
+                        $notifiable,
+
+                    'plainPassword' =>
+                        $this->plainPassword,
+                ]
             );
     }
 }
