@@ -573,8 +573,26 @@
                                 href="{{ route('settings') }}"
                                 class="btn-outline"
                             >
+                                <i
+                                    class="ph ph-gear"
+                                    aria-hidden="true"
+                                ></i>
+
                                 Account Settings
                             </a>
+                        @else
+                            <button
+                                type="button"
+                                class="btn-outline"
+                                id="openChangePasswordModal"
+                            >
+                                <i
+                                    class="ph ph-key"
+                                    aria-hidden="true"
+                                ></i>
+
+                                Change Password
+                            </button>
                         @endif
                     </div>
 
@@ -686,6 +704,10 @@
 
             </div>
         </form>
+
+        @if(!($profilePermissions['canAccessSettings'] ?? false))
+            @include('profile.partials.update-password-form')
+        @endif
     </div>
 </section>
 

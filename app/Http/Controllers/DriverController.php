@@ -6,6 +6,9 @@ use App\Models\Driver;
 use App\Models\User;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
+use App\Notifications\AccountCreatedNotification;
+use App\Notifications\AccountUpdatedNotification;
+use App\Notifications\AccountDeletedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
@@ -13,6 +16,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class DriverController extends Controller
@@ -491,11 +495,45 @@ class DriverController extends Controller
                             'vehicle',
                         ]);
 
-                        return $driver;
+                        return [
+                            'driver' =>
+                                $driver,
+
+                            'user' =>
+                                $user,
+
+                            'plainPassword' =>
+                                $temporaryPassword,
+                        ];
                     }
                 );
 
-            $driver = $result;
+            $driver =
+                $result['driver'];
+
+            $driverUser =
+                $result['user'];
+
+            $plainPassword =
+                $result['plainPassword'];
+            /*
+            |--------------------------------------------------------------------------
+            | Driver Account Created Email
+            |--------------------------------------------------------------------------
+            |
+            | Driver + User transaction has already succeeded.
+            | Mail failure must not roll back Driver creation.
+            |--------------------------------------------------------------------------
+            */
+            try {
+                $driverUser->notify(
+                    new AccountCreatedNotification(
+                        $plainPassword
+                    )
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
             /*
             |--------------------------------------------------------------------------
             | License Expiry Notification
@@ -584,6 +622,20 @@ class DriverController extends Controller
                 $previousLicenseExpiry,
                 $driverSettings['warnLicenseDays']
             );
+
+        $previousAccountDetails = [
+            'first_name' =>
+                $driver->first_name,
+
+            'last_name' =>
+                $driver->last_name,
+
+            'email' =>
+                $driver->email,
+
+            'contact_number' =>
+                $driver->contact_number,
+        ];
 
         $validated = $request->validate([
             'first_name'         => 'required|string|max:255',
@@ -698,6 +750,33 @@ class DriverController extends Controller
 
         $driver->refresh();
 
+        $accountDetailsChanged =
+        $previousAccountDetails['first_name'] !== $driver->first_name ||
+        $previousAccountDetails['last_name'] !== $driver->last_name ||
+        $previousAccountDetails['email'] !== $driver->email ||
+        $previousAccountDetails['contact_number'] !== $driver->contact_number;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Driver Account Updated Email
+        |--------------------------------------------------------------------------
+        */
+        $driver->loadMissing('user');
+
+        if (
+            $accountDetailsChanged &&
+            $driver->user &&
+            $driver->user->role === 'driver'
+        ) {
+            try {
+                $driver->user->notify(
+                    new AccountUpdatedNotification()
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         $currentLicenseExpiry =
             $driver->license_expiry
                 ? Carbon::parse(
@@ -744,25 +823,69 @@ class DriverController extends Controller
         ]);
     }
 
-    public function destroy(Driver $driver)
-    {
-        $this->authorize('delete', $driver);
+    public function destroy(
+        Driver $driver
+    ) {
+        $this->authorize(
+            'delete',
+            $driver
+        );
 
-        DB::transaction(function () use ($driver) {
-            $user = $driver->user;
+        $driver->loadMissing(
+            'user'
+        );
 
-            $driver->delete();
+        $user =
+            $driver->user;
 
-            if (
-                $user &&
-                $user->role === 'driver'
+        $deletedEmail =
+            $user?->email;
+
+        $deletedName =
+            $user?->first_name
+            ?: $user?->name
+            ?: $driver->first_name
+            ?: 'Driver';
+
+        DB::transaction(
+            function () use (
+                $driver,
+                $user
             ) {
-                $user->delete();
+                $driver->delete();
+
+                if (
+                    $user &&
+                    $user->role === 'driver'
+                ) {
+                    $user->delete();
+                }
             }
-        });
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Account Deleted Email
+        |--------------------------------------------------------------------------
+        */
+        if ($deletedEmail) {
+            try {
+                Notification::route(
+                    'mail',
+                    $deletedEmail
+                )->notify(
+                    new AccountDeletedNotification(
+                        $deletedName
+                    )
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return response()->json([
             'success' => true,
+
             'message' =>
                 'Driver and linked account deleted successfully.',
         ]);
@@ -782,29 +905,79 @@ class DriverController extends Controller
             ],
         ]);
 
-        DB::transaction(function () use ($request) {
-            $drivers =
-                Driver::with('user')
-                    ->whereIn(
-                        'id',
-                        $request->ids
-                    )
-                    ->get();
+        $deletedAccounts = [];
 
-            foreach ($drivers as $driver) {
-                $user =
-                    $driver->user;
+        $drivers =
+            Driver::with('user')
+                ->whereIn(
+                    'id',
+                    $request->ids
+                )
+                ->get();
 
-                $driver->delete();
+        $deletedAccounts =
+            $drivers
+                ->map(function ($driver) {
+                    $user =
+                        $driver->user;
 
-                if (
-                    $user &&
-                    $user->role === 'driver'
+                    if (
+                        !$user ||
+                        $user->role !== 'driver'
+                    ) {
+                        return null;
+                    }
+
+                    return [
+                        'email' =>
+                            $user->email,
+
+                        'name' =>
+                            $user->first_name
+                            ?: $user->name
+                            ?: 'Driver',
+                    ];
+                })
+                ->filter()
+                ->values();
+
+        DB::transaction(
+            function () use ($drivers) {
+                foreach (
+                    $drivers as $driver
                 ) {
-                    $user->delete();
+                    $user =
+                        $driver->user;
+
+                    $driver->delete();
+
+                    if (
+                        $user &&
+                        $user->role === 'driver'
+                    ) {
+                        $user->delete();
+                    }
                 }
             }
-        });
+        );
+
+        foreach (
+            $deletedAccounts
+            as $account
+        ) {
+            try {
+                Notification::route(
+                    'mail',
+                    $account['email']
+                )->notify(
+                    new AccountDeletedNotification(
+                        $account['name']
+                    )
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -952,40 +1125,63 @@ class DriverController extends Controller
                 )
             );
 
-        DB::transaction(
-            function () use (
-                $driver,
-                $temporaryPassword
-            ) {
-                $user = User::create([
-                    'name' =>
-                        trim(
-                            $driver->first_name .
-                            ' ' .
-                            $driver->last_name
-                        ),
+        $createdUser =
+            DB::transaction(
+                function () use (
+                    $driver,
+                    $temporaryPassword
+                ) {
+                    $user =
+                        User::create([
+                            'first_name' =>
+                                $driver->first_name,
 
-                    'email' =>
-                        $driver->email,
+                            'last_name' =>
+                                $driver->last_name,
 
-                    'password' =>
-                        Hash::make(
-                            $temporaryPassword
-                        ),
+                            'name' =>
+                                trim(
+                                    $driver->first_name .
+                                    ' ' .
+                                    $driver->last_name
+                                ),
 
-                    'role' =>
-                        'driver',
+                            'email' =>
+                                $driver->email,
 
-                    'job_title' =>
-                        'Driver',
-                ]);
+                            'mobile_number' =>
+                                $driver->contact_number,
 
-                $driver->forceFill([
-                    'user_id' =>
-                        $user->id,
-                ])->save();
+                            'password' =>
+                                Hash::make(
+                                    $temporaryPassword
+                                ),
+
+                            'role' =>
+                                'driver',
+
+                            'job_title' =>
+                                'Driver',
+                        ]);
+
+                    $driver->forceFill([
+                        'user_id' =>
+                            $user->id,
+                    ])->save();
+
+                    return $user;
+                }
+            );
+
+            try {
+                $createdUser->notify(
+                    new AccountCreatedNotification(
+                        $temporaryPassword
+                    )
+                );
+            } catch (\Throwable $e) {
+                report($e);
             }
-        );
 
         return response()->json([
             'success' => true,

@@ -84,23 +84,305 @@ function profileClearErrors() {
 // LARAVEL PASSWORDTOGGLE
 function initPasswordToggles() {
     document.querySelectorAll("[data-password-toggle]").forEach((button) => {
-        button.addEventListener("click", () => {
-            const inputId = button.getAttribute("data-password-toggle");
-            const input = document.getElementById(inputId);
-            if (!input) {
-                return;
-            }
-            const showing = input.type === "text";
-            input.type = showing ? "password" : "text";
-            const icon = button.querySelector("i");
+        const inputId = button.getAttribute("data-password-toggle");
+        const input = document.getElementById(inputId);
+        const icon = button.querySelector("i");
+        if (!input) {
+            return;
+        }
+        function syncToggleState() {
+            const isVisible = input.type === "text";
             if (icon) {
-                icon.className = showing ? "ph ph-eye" : "ph ph-eye-slash";
+                icon.className = isVisible ? "ph ph-eye" : "ph ph-eye-slash";
             }
             button.setAttribute(
                 "aria-label",
-                showing ? "Show password" : "Hide password",
+                isVisible ? "Hide password" : "Show password",
             );
+        }
+        syncToggleState();
+        button.addEventListener("click", () => {
+            input.type = input.type === "password" ? "text" : "password";
+            syncToggleState();
         });
+    });
+}
+
+/* ==========================================
+   CHANGE PASSWORD MODAL
+========================================== */
+function initChangePasswordModal() {
+    const modal =
+        document.getElementById(
+            "changePasswordModal"
+        );
+    if (!modal) {
+        return;
+    }
+    const openButton =
+        document.getElementById(
+            "openChangePasswordModal"
+        );
+    const closeButton =
+        document.getElementById(
+            "closeChangePasswordModal"
+        );
+    const cancelButton =
+        document.getElementById(
+            "cancelChangePasswordModal"
+        );
+    const currentPasswordInput =
+        document.getElementById(
+            "update_password_current_password"
+        );
+
+    let triggerElement = null;
+
+    function openModal() {
+        triggerElement =
+            document.activeElement;
+
+        modal.classList.add(
+            "show"
+        );
+        modal.setAttribute(
+            "aria-hidden",
+            "false"
+        );
+        document.body.style.overflow =
+            "hidden";
+
+        requestAnimationFrame(() => {
+            currentPasswordInput?.focus();
+        });
+    }
+
+    function closeModal() {
+        /*
+        |--------------------------------------------------------------
+        | Remove focus before aria-hidden=true
+        |--------------------------------------------------------------
+        */
+        if (
+            modal.contains(
+                document.activeElement
+            )
+        ) {
+            document.activeElement?.blur();
+        }
+        modal.classList.remove(
+            "show"
+        );
+        modal.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+        document.body.style.overflow =
+            "";
+        requestAnimationFrame(() => {
+            if (
+                triggerElement &&
+                document.body.contains(
+                    triggerElement
+                )
+            ) {
+                triggerElement.focus();
+            }
+            triggerElement = null;
+        });
+    }
+    openButton?.addEventListener(
+        "click",
+        openModal
+    );
+    closeButton?.addEventListener(
+        "click",
+        closeModal
+    );
+    cancelButton?.addEventListener(
+        "click",
+        closeModal
+    );
+    /*
+    |--------------------------------------------------------------
+    | Click outside modal
+    |--------------------------------------------------------------
+    */
+    modal.addEventListener(
+        "click",
+        (event) => {
+            if (
+                event.target ===
+                modal
+            ) {
+                closeModal();
+            }
+        }
+    );
+    /*
+    |--------------------------------------------------------------
+    | Escape key
+    |--------------------------------------------------------------
+    */
+    document.addEventListener(
+        "keydown",
+        (event) => {
+            if (
+                event.key ===
+                    "Escape" &&
+                modal.classList.contains(
+                    "show"
+                )
+            ) {
+                closeModal();
+            }
+        }
+    );
+    /*
+    |--------------------------------------------------------------
+    | Laravel validation error
+    |--------------------------------------------------------------
+    |
+    | If password validation redirects back,
+    | automatically reopen the modal.
+    |
+    */
+    if (
+        modal.dataset.hasErrors ===
+        "true"
+    ) {
+        openModal();
+    }
+}
+
+let passwordFormSubmitting = false;
+
+function setPasswordFieldError(inputId, message) {
+    const input = document.getElementById(inputId);
+    const error = document.getElementById(inputId + "Error");
+    if (input) {
+        if (message) {
+            input.classList.add("is-invalid");
+            input.setAttribute("aria-invalid", "true");
+        } else {
+            input.classList.remove("is-invalid");
+            input.removeAttribute("aria-invalid");
+        }
+    }
+    if (error) {
+        error.textContent = message || "";
+
+        error.hidden = !message;
+    }
+}
+
+function clearPasswordErrors() {
+    [
+        "update_password_current_password",
+        "update_password_password",
+        "update_password_password_confirmation",
+    ].forEach((id) => {
+        setPasswordFieldError(id, "");
+    });
+}
+
+function validatePasswordForm() {
+    clearPasswordErrors();
+    const current =
+        document.getElementById("update_password_current_password")?.value ||
+        "";
+    const password =
+        document.getElementById("update_password_password")?.value || "";
+    const confirmation =
+        document.getElementById("update_password_password_confirmation")
+            ?.value || "";
+
+    let valid = true;
+
+    if (!current) {
+        setPasswordFieldError(
+            "update_password_current_password",
+            "Current password is required.",
+        );
+
+        valid = false;
+    }
+    if (!password) {
+        setPasswordFieldError(
+            "update_password_password",
+            "New password is required.",
+        );
+
+        valid = false;
+    } else if (password.length < 8) {
+        setPasswordFieldError(
+            "update_password_password",
+            "New password must be at least 8 characters.",
+        );
+
+        valid = false;
+    }
+    if (!confirmation) {
+        setPasswordFieldError(
+            "update_password_password_confirmation",
+            "Please confirm your new password.",
+        );
+
+        valid = false;
+    } else if (password !== confirmation) {
+        setPasswordFieldError(
+            "update_password_password_confirmation",
+            "Password confirmation does not match.",
+        );
+
+        valid = false;
+    }
+    if (current && password && current === password) {
+        setPasswordFieldError(
+            "update_password_password",
+            "New password must be different from your current password.",
+        );
+
+        valid = false;
+    }
+
+    if (!valid) {
+        document.querySelector("#updatePasswordForm .is-invalid")?.focus();
+    }
+
+    return valid;
+}
+
+function initPasswordFormSubmission() {
+    const form = document.getElementById("updatePasswordForm");
+    const submitButton = document.getElementById("updatePasswordSubmitBtn");
+    if (!form) {
+        return;
+    }
+    form.addEventListener("submit", (event) => {
+        if (passwordFormSubmitting) {
+            event.preventDefault();
+            return;
+        }
+
+        if (!validatePasswordForm()) {
+            event.preventDefault();
+            return;
+        }
+        passwordFormSubmitting = true;
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = `
+                    <i class="ph ph-spinner"></i>
+                    Updating...
+                `;
+        }
+    });
+    form.addEventListener("input", (event) => {
+        const input = event.target;
+        if (input?.id?.startsWith("update_password_")) {
+            setPasswordFieldError(input.id, "");
+        }
     });
 }
 
@@ -481,56 +763,6 @@ function prepareProfileSubmission(event) {
     }
 }
 
-// LARAVEL DELETE 
-function initDeleteAccountModal() {
-    const modal = document.getElementById("deleteAccountModal");
-    const openButton = document.getElementById("openDeleteAccountModal");
-    const closeButton = document.getElementById("closeDeleteAccountModal");
-    const cancelButton = document.getElementById("cancelDeleteAccountBtn");
-    const passwordInput = document.getElementById("delete_account_password");
-    if (!modal) {
-        return;
-    }
-    function openModal() {
-        modal.hidden = false;
-        document.body.classList.add("modal-open");
-        setTimeout(() => {
-            passwordInput?.focus();
-        }, 50);
-    }
-    function closeModal() {
-        modal.hidden = true;
-        document.body.classList.remove("modal-open");
-        if (passwordInput) {
-            passwordInput.value = "";
-        }
-    }
-    openButton?.addEventListener("click", openModal);
-    closeButton?.addEventListener("click", closeModal);
-    cancelButton?.addEventListener("click", closeModal);
-    modal.addEventListener("click", (event) => {
-        if (event.target === modal) {
-            closeModal();
-        }
-    });
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && !modal.hidden) {
-            closeModal();
-        }
-    });
-    /*
-     * If Laravel redirects back because
-     * the entered password was incorrect,
-     * automatically reopen the modal.
-     */
-    const hasDeletionError = document.getElementById(
-        "deleteAccountPasswordError",
-    );
-    if (hasDeletionError) {
-        openModal();
-    }
-}
-
 function initProfilePage() {
     if (profilePageInitialized) {
         return;
@@ -662,11 +894,8 @@ function initProfilePage() {
 function initializeProfileScripts() {
     initProfilePage();
     initPasswordToggles();
-    /*
-     * Keep only if account deletion
-     * is actually supported.
-     */
-    initDeleteAccountModal();
+    initChangePasswordModal();
+    initPasswordFormSubmission();
 }
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initializeProfileScripts);

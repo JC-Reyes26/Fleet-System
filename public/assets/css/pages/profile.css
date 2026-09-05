@@ -227,3 +227,90 @@
 
   border-radius: 50%;
 }
+
+
+/* Change Password Modal */
+.profile-password-modal {
+    width: min(100%, 720px);
+}
+
+.profile-password-modal .modal-body {
+    overflow-y: auto;
+}
+
+.profile-password-modal .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-password-modal .form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.profile-password-modal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+@media (max-width: 768px) {
+    .profile-password-modal .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-password-modal .form-group.full-width {
+        grid-column: auto;
+    }
+}
+
+/* Change Password Inputs */
+.profile-password-modal .password-input-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.profile-password-modal .password-input-wrapper input {
+    width: 100%;
+    padding-right: 46px;
+}
+
+.profile-password-modal .password-toggle-btn {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+
+    width: 32px;
+    height: 32px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+    margin: 0;
+
+    border: none;
+    background: transparent;
+    box-shadow: none;
+
+    color: var(--color-text-muted);
+    cursor: pointer;
+
+    z-index: 2;
+}
+
+.profile-password-modal .password-toggle-btn:hover {
+    color: var(--color-text);
+}
+
+.profile-password-modal .password-toggle-btn i {
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.profile-password-modal .password-toggle-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 6px;
+}

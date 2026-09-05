@@ -3,10 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Notifications\AccountCreatedNotification;
+use App\Notifications\AccountUpdatedNotification;
+use App\Notifications\PasswordResetByAdminNotification;
+use App\Notifications\AccountDeletedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 class UserAccountController extends Controller
 {
@@ -118,6 +123,9 @@ class UserAccountController extends Controller
                 ],
             ]);
 
+        $plainPassword =
+            $validated['password'];
+
         $createdUser =
             User::create([
                 'first_name' =>
@@ -168,11 +176,19 @@ class UserAccountController extends Controller
 
                 'password' =>
                     Hash::make(
-                        $validated[
-                            'password'
-                        ]
+                        $plainPassword
                     ),
             ]);
+
+            try {
+                $createdUser->notify(
+                    new AccountCreatedNotification(
+                        $plainPassword
+                    )
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
 
         return response()->json([
             'success' => true,
@@ -329,6 +345,7 @@ class UserAccountController extends Controller
 
             'status' => [
                 'nullable',
+
                 Rule::in([
                     'active',
                     'inactive',
@@ -338,15 +355,18 @@ class UserAccountController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Driver-linked account protection
+        | Driver-managed fields
+        |--------------------------------------------------------------------------
+        |
+        | Name/mobile come from Driver module,
+        | so Account Management does not require or modify them.
         |--------------------------------------------------------------------------
         */
         if ($user->role === 'driver') {
             unset(
-                $validated['first_name'],
-                $validated['last_name'],
-                $validated['name'],
-                $validated['mobile_number']
+                $rules['first_name'],
+                $rules['last_name'],
+                $rules['mobile_number']
             );
         }
 
@@ -357,31 +377,17 @@ class UserAccountController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Driver-managed fields stay untouched
-        |--------------------------------------------------------------------------
-        */
-        if ($user->role === 'driver') {
-            unset(
-                $validated['first_name'],
-                $validated['last_name'],
-                $validated['mobile_number']
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent converting accounts into Driver manually
+        | Prevent converting a normal account into Driver manually
         |--------------------------------------------------------------------------
         */
         if (
             isset($validated['role']) &&
-            $validated['role'] ===
-                'driver' &&
-            $user->role !==
-                'driver'
+            $validated['role'] === 'driver' &&
+            $user->role !== 'driver'
         ) {
             return response()->json([
                 'success' => false,
+
                 'message' =>
                     'Driver accounts must be created from the Driver module.',
             ], 422);
@@ -389,7 +395,7 @@ class UserAccountController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Preserve Driver role for linked Driver accounts
+        | Preserve Driver role
         |--------------------------------------------------------------------------
         */
         if ($user->role === 'driver') {
@@ -399,7 +405,7 @@ class UserAccountController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Rebuild display name
+        | Rebuild display name for non-Driver accounts
         |--------------------------------------------------------------------------
         */
         if (
@@ -410,19 +416,28 @@ class UserAccountController extends Controller
         ) {
             $validated['name'] =
                 trim(
-                    $validated[
-                        'first_name'
-                    ] .
+                    $validated['first_name'] .
                     ' ' .
-                    $validated[
-                        'last_name'
-                    ]
+                    $validated['last_name']
                 );
         }
 
         $user->update(
             $validated
         );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Account Updated Email
+        |--------------------------------------------------------------------------
+        */
+        try {
+            $user->notify(
+                new AccountUpdatedNotification()
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json([
             'success' => true,
@@ -471,12 +486,25 @@ class UserAccountController extends Controller
                 ],
             ]);
 
+        $plainPassword =
+            $validated['password'];
+
         $user->update([
             'password' =>
                 Hash::make(
-                    $validated['password']
+                    $plainPassword
                 ),
         ]);
+
+        try {
+            $user->notify(
+                new PasswordResetByAdminNotification(
+                    $plainPassword
+                )
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json([
             'success' => true,
@@ -489,7 +517,8 @@ class UserAccountController extends Controller
         Request $request,
         User $user
     ) {
-        $currentUser = $request->user();
+        $currentUser =
+            $request->user();
 
         abort_unless(
             $currentUser->hasRole(
@@ -499,7 +528,10 @@ class UserAccountController extends Controller
             403
         );
 
-        if ($currentUser->id === $user->id) {
+        if (
+            $currentUser->id ===
+            $user->id
+        ) {
             return response()->json([
                 'success' => false,
                 'message' =>
@@ -507,34 +539,70 @@ class UserAccountController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($user) {
+        /*
+        |--------------------------------------------------------------------------
+        | Preserve contact details before deletion
+        |--------------------------------------------------------------------------
+        */
+        $deletedUserEmail =
+            $user->email;
 
-            /*
-            |--------------------------------------------------------------------------
-            | Driver account only
-            |--------------------------------------------------------------------------
-            |
-            | Never delete the Driver operational record here.
-            | Only remove its link to the User account.
-            |--------------------------------------------------------------------------
-            */
-            if ($user->role === 'driver') {
-                $driver = $user->driverProfile;
+        $deletedUserName =
+            $user->first_name
+            ?: $user->name
+            ?: 'User';
 
-                if ($driver) {
-                    $driver->update([
-                        'user_id' => null,
-                    ]);
+        DB::transaction(
+            function () use ($user) {
+                /*
+                |--------------------------------------------------------------------------
+                | Driver account only
+                |--------------------------------------------------------------------------
+                */
+                if (
+                    $user->role ===
+                    'driver'
+                ) {
+                    $driver =
+                        $user->driverProfile;
+
+                    if ($driver) {
+                        $driver->update([
+                            'user_id' =>
+                                null,
+                        ]);
+                    }
                 }
-            }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Delete User login account only
-            |--------------------------------------------------------------------------
-            */
-            $user->delete();
-        });
+                /*
+                |--------------------------------------------------------------------------
+                | Delete login account only
+                |--------------------------------------------------------------------------
+                */
+                $user->delete();
+            }
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Account Deleted Email
+        |--------------------------------------------------------------------------
+        |
+        | Send only after the database transaction succeeded.
+        |--------------------------------------------------------------------------
+        */
+        try {
+            Notification::route(
+                'mail',
+                $deletedUserEmail
+            )->notify(
+                new AccountDeletedNotification(
+                    $deletedUserName
+                )
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json([
             'success' => true,
