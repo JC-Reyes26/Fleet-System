@@ -332,3 +332,73 @@
     max-width: none;
   }
 }
+
+
+/* Account Management Toggle Eye */
+#accountManagementModal .account-password-wrapper {
+    position: relative !important;
+    width: 100% !important;
+}
+
+#accountManagementModal .account-password-wrapper > input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding-right: 48px !important;
+}
+
+#accountManagementModal .account-password-toggle {
+    position: absolute !important;
+
+    top: 50% !important;
+    right: 10px !important;
+
+    transform: translateY(-50%) !important;
+
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    border: 0 !important;
+    border-radius: 6px !important;
+
+    background: transparent !important;
+    box-shadow: none !important;
+
+    color: var(--color-text-muted) !important;
+
+    cursor: pointer;
+    z-index: 5;
+}
+
+#accountManagementModal .account-password-toggle:hover {
+    color: var(--color-text) !important;
+}
+
+#accountManagementModal .account-password-toggle:focus {
+    box-shadow: none !important;
+}
+
+#accountManagementModal .account-password-toggle:focus-visible {
+    outline: 2px solid var(--color-primary) !important;
+    outline-offset: 2px;
+}
+
+#accountManagementModal .account-password-toggle i {
+    display: block !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    font-size: 18px !important;
+    line-height: 1 !important;
+
+    pointer-events: none;
+}

@@ -45,6 +45,35 @@ function loginToast(message, type = "info") {
     }
 }
 
+function initLoginPasswordToggle() {
+    const input = document.getElementById("loginPassword");
+    const button = document.getElementById("loginPasswordToggle");
+    const icon = button?.querySelector("i");
+    if (!input || !button) {
+        return;
+    }
+
+    function syncState() {
+        const visible = input.type === "text";
+
+        if (icon) {
+            icon.className = visible ? "ph ph-eye" : "ph ph-eye-slash";
+        }
+
+        button.setAttribute(
+            "aria-label",
+            visible ? "Hide password" : "Show password",
+        );
+    }
+
+    syncState();
+    button.addEventListener("click", () => {
+        input.type = input.type === "password" ? "text" : "password";
+        syncState();
+        input.focus();
+    });
+}
+
 function initLoginPage() {
     if (loginPageInitialized) {
         return;
@@ -59,9 +88,7 @@ function initLoginPage() {
     loginPageInitialized = true;
 
     const emailInput = document.getElementById("loginEmail");
-
     const passwordInput = document.getElementById("loginPassword");
-
     const submitButton = document.getElementById("loginSubmitBtn");
 
     /*
@@ -86,9 +113,7 @@ function initLoginPage() {
 
     form.addEventListener("submit", (event) => {
         loginClearErrors();
-
         const email = (emailInput?.value || "").trim();
-
         const password = passwordInput?.value || "";
 
         let valid = true;
@@ -136,4 +161,13 @@ function initLoginPage() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", initLoginPage);
+function initializeLoginScripts() {
+    initLoginPage();
+    initLoginPasswordToggle();
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeLoginScripts);
+} else {
+    initializeLoginScripts();
+}

@@ -263,53 +263,56 @@
 }
 
 /* Change Password Inputs */
-.profile-password-modal .password-input-wrapper {
-    position: relative;
+#changePasswordModal .password-input-wrapper {
+    position: relative !important;
     width: 100%;
 }
 
-.profile-password-modal .password-input-wrapper input {
+#changePasswordModal .password-input-wrapper input {
     width: 100%;
-    padding-right: 46px;
+    padding-right: 46px !important;
+    box-sizing: border-box;
 }
 
-.profile-password-modal .password-toggle-btn {
-    position: absolute;
-    top: 50%;
-    right: 12px;
-    transform: translateY(-50%);
+#changePasswordModal .password-toggle-btn {
+    position: absolute !important;
 
-    width: 32px;
-    height: 32px;
+    top: 50% !important;
+    right: 12px !important;
 
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    transform: translateY(-50%) !important;
 
-    padding: 0;
-    margin: 0;
+    width: 32px !important;
+    height: 32px !important;
 
-    border: none;
-    background: transparent;
-    box-shadow: none;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
 
     color: var(--color-text-muted);
     cursor: pointer;
 
-    z-index: 2;
+    z-index: 5;
 }
 
-.profile-password-modal .password-toggle-btn:hover {
-    color: var(--color-text);
-}
-
-.profile-password-modal .password-toggle-btn i {
+#changePasswordModal .password-toggle-btn i {
     font-size: 18px;
     line-height: 1;
     pointer-events: none;
 }
 
-.profile-password-modal .password-toggle-btn:focus-visible {
+#changePasswordModal .password-toggle-btn:hover {
+    color: var(--color-text);
+}
+
+#changePasswordModal .password-toggle-btn:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
     border-radius: 6px;

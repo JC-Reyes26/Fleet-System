@@ -90,18 +90,33 @@
                     Password
                 </label>
 
-                <input
-                    type="password"
-                    id="loginPassword"
-                    name="password"
-                    autocomplete="current-password"
-                    required
-                    maxlength="120"
-                    placeholder="Enter password"
-                    @class([
-                        'is-invalid' => $errors->has('password'),
-                    ])
-                />
+                <div class="login-password-wrapper">
+                    <input
+                        type="password"
+                        id="loginPassword"
+                        name="password"
+                        autocomplete="current-password"
+                        required
+                        maxlength="120"
+                        placeholder="Enter password"
+                        @class([
+                            'is-invalid' => $errors->has('password'),
+                        ])
+                    />
+
+                    <button
+                        type="button"
+                        class="login-password-toggle"
+                        id="loginPasswordToggle"
+                        aria-label="Show password"
+                        aria-controls="loginPassword"
+                    >
+                        <i
+                            class="ph ph-eye-slash"
+                            aria-hidden="true"
+                        ></i>
+                    </button>
+                </div>
 
                 <p
                     class="login-field-error"

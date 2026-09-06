@@ -273,13 +273,24 @@ async function renderAccountResetPasswordForm() {
                             New Password *
                         </label>
 
-                        <input
-                            type="password"
-                            id="resetAccountPassword"
-                            minlength="8"
-                            required
-                            autocomplete="new-password"
-                        >
+                        <div class="account-password-wrapper">
+                            <input
+                                type="password"
+                                id="resetAccountPassword"
+                                minlength="8"
+                                required
+                                autocomplete="new-password"
+                            >
+
+                            <button
+                                type="button"
+                                class="account-password-toggle"
+                                data-account-password-toggle="resetAccountPassword"
+                                aria-label="Show new password"
+                            >
+                                <i class="ph ph-eye-slash"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -287,13 +298,24 @@ async function renderAccountResetPasswordForm() {
                             Confirm New Password *
                         </label>
 
-                        <input
-                            type="password"
-                            id="resetAccountPasswordConfirmation"
-                            minlength="8"
-                            required
-                            autocomplete="new-password"
-                        >
+                        <div class="account-password-wrapper">
+                            <input
+                                type="password"
+                                id="resetAccountPasswordConfirmation"
+                                minlength="8"
+                                required
+                                autocomplete="new-password"
+                            >
+
+                            <button
+                                type="button"
+                                class="account-password-toggle"
+                                data-account-password-toggle="resetAccountPasswordConfirmation"
+                                aria-label="Show password confirmation"
+                            >
+                                <i class="ph ph-eye-slash"></i>
+                            </button>
+                        </div>
                     </div>
 
                 </div>
@@ -326,6 +348,7 @@ async function renderAccountResetPasswordForm() {
 
         initResetUserPasswordForm();
         initAccountModalCancelButtons();
+        initAccountPasswordToggles(content);
     } catch (error) {
         console.error("LOAD RESET PASSWORD ACCOUNTS ERROR:", error);
 
@@ -453,6 +476,41 @@ function escapeAccountHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+function initAccountPasswordToggles(root = document) {
+    root.querySelectorAll("[data-account-password-toggle]").forEach(
+        (button) => {
+            if (button.dataset.initialized === "true") {
+                return;
+            }
+
+            button.dataset.initialized = "true";
+            const inputId = button.getAttribute("data-account-password-toggle");
+            const input = document.getElementById(inputId);
+            const icon = button.querySelector("i");
+            if (!input) {
+                return;
+            }
+
+            function syncState() {
+                const visible = input.type === "text";
+                if (icon) {
+                    icon.className = visible ? "ph ph-eye" : "ph ph-eye-slash";
+                }
+                button.setAttribute(
+                    "aria-label",
+                    visible ? "Hide password" : "Show password",
+                );
+            }
+            syncState();
+            button.addEventListener("click", () => {
+                input.type = input.type === "password" ? "text" : "password";
+                syncState();
+                input.focus();
+            });
+        },
+    );
 }
 
 async function loadUpdateAccountForm(userId) {
@@ -1215,12 +1273,24 @@ function renderAccountCreateForm() {
                         Password *
                     </label>
 
-                    <input
-                        type="password"
-                        id="accountPassword"
-                        required
-                        minlength="8"
-                    >
+                    <div class="account-password-wrapper">
+                        <input
+                            type="password"
+                            id="accountPassword"
+                            required
+                            minlength="8"
+                            autocomplete="new-password"
+                        >
+
+                        <button
+                            type="button"
+                            class="account-password-toggle"
+                            data-account-password-toggle="accountPassword"
+                            aria-label="Show password"
+                        >
+                            <i class="ph ph-eye-slash"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -1228,12 +1298,24 @@ function renderAccountCreateForm() {
                         Confirm Password *
                     </label>
 
-                    <input
-                        type="password"
-                        id="accountPasswordConfirmation"
-                        required
-                        minlength="8"
-                    >
+                    <div class="account-password-wrapper">
+                        <input
+                            type="password"
+                            id="accountPasswordConfirmation"
+                            required
+                            minlength="8"
+                            autocomplete="new-password"
+                        >
+
+                        <button
+                            type="button"
+                            class="account-password-toggle"
+                            data-account-password-toggle="accountPasswordConfirmation"
+                            aria-label="Show password confirmation"
+                        >
+                            <i class="ph ph-eye-slash"></i>
+                        </button>
+                    </div>
                 </div>
 
             </div>
@@ -1261,6 +1343,7 @@ function renderAccountCreateForm() {
 
     initCreateUserAccountForm();
     initAccountModalCancelButtons();
+    initAccountPasswordToggles(content);
 }
 
 function initCreateUserAccountForm() {
