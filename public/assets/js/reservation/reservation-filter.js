@@ -46,24 +46,33 @@ function getReservationDataRows(tableBody) {
 }
 
 function updateReservationNoResultsRow(tableBody, shouldShow) {
-    if (!tableBody) return;
-
-    const existingRow = tableBody.querySelector(".reservation-no-results");
-
-    if (!shouldShow) {existingRow?.remove();
+    if (!tableBody) {
         return;
     }
-    if (existingRow) return;
-
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-
-    row.className = "reservation-no-results";
-    cell.colSpan = 10;
-    cell.className = "text-center";
-    cell.textContent = "No reservations found.";
-    row.appendChild(cell);
-    tableBody.appendChild(row);
+    const existingRow = tableBody.querySelector(".reservation-no-results");
+    if (!shouldShow) {
+        existingRow?.remove();
+        return;
+    }
+    if (existingRow) {
+        return;
+    }
+    tableBody.insertAdjacentHTML(
+        "beforeend",
+        `
+            <tr
+                class="reservation-no-results"
+                data-helper-row="true"
+            >
+                <td
+                    colspan="10"
+                    class="text-center"
+                >
+                    No reservations found.
+                </td>
+            </tr>
+        `,
+    );
 }
 
 function renderReservationFilterRows(matchingRows) {

@@ -754,14 +754,11 @@ function buildRouteTableRow(record) {
 function renderRoutePagination(total) {
     const info = document.getElementById("routePaginationInfo");
     const pagination = document.getElementById("routePagination");
-
     if (!info || !pagination) {
         return;
     }
-
     const pageSize = routePaginationState.pageSize;
     const totalPages = Math.ceil(total / pageSize) || 0;
-
     if (totalPages === 0) {
         routePaginationState.page = 1;
     } else {
@@ -770,17 +767,18 @@ function renderRoutePagination(total) {
             totalPages,
         );
     }
-
     const page = routePaginationState.page;
     const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
     const end = Math.min(page * pageSize, total);
+    /*
+    |--------------------------------------------------------------------------
+    | Pagination Info
+    |--------------------------------------------------------------------------
+    */
     const range = document.createElement("strong");
     const totalElement = document.createElement("strong");
-
-    range.textContent = start + "–" + end;
-
+    range.textContent = `${start}–${end}`;
     totalElement.textContent = String(total);
-
     info.replaceChildren(
         document.createTextNode("Showing "),
         range,
@@ -788,18 +786,22 @@ function renderRoutePagination(total) {
         totalElement,
         document.createTextNode(" routes"),
     );
-
+    /*
+    |--------------------------------------------------------------------------
+    | Pagination Buttons
+    |--------------------------------------------------------------------------
+    */
     const fragment = document.createDocumentFragment();
-    const createButton = (
-        label,
+    const createButton = ({
+        label = "",
         ariaLabel,
-        disabled,
-        active,
+        iconClass = null,
+        disabled = false,
+        active = false,
         action,
-        pageNumber,
-    ) => {
+        pageNumber = null,
+    }) => {
         const button = document.createElement("button");
-
         button.type = "button";
         button.setAttribute("aria-label", ariaLabel);
         button.disabled = disabled;
@@ -815,35 +817,46 @@ function renderRoutePagination(total) {
             button.setAttribute("aria-current", "page");
         }
 
-        button.textContent = label;
-
+        if (iconClass) {
+            const icon = document.createElement("i");
+            icon.className = iconClass;
+            icon.setAttribute("aria-hidden", "true");
+            button.appendChild(icon);
+        } else {
+            button.textContent = label;
+        }
         return button;
     };
 
     fragment.appendChild(
-        createButton(
-            "‹",
-            "Previous page",
-            page <= 1 || totalPages === 0,
-            false,
-            "prev",
-        ),
+        createButton({
+            ariaLabel: "Previous page",
+            iconClass: "ph ph-caret-left",
+            disabled: page <= 1 || totalPages === 0,
+            action: "prev",
+        }),
     );
 
-    for (let p = 1; p <= totalPages; p += 1) {
+    for (let p = 1; p <= Math.max(1, totalPages); p += 1) {
         fragment.appendChild(
-            createButton(String(p), "Page " + p, false, p === page, "page", p),
+            createButton({
+                label: String(p),
+                ariaLabel: `Page ${p}`,
+                active: totalPages > 0 && p === page,
+                action: "page",
+                pageNumber: p,
+                disabled: totalPages === 0,
+            }),
         );
     }
 
     fragment.appendChild(
-        createButton(
-            "›",
-            "Next page",
-            totalPages === 0 || page >= totalPages,
-            false,
-            "next",
-        ),
+        createButton({
+            ariaLabel: "Next page",
+            iconClass: "ph ph-caret-right",
+            disabled: totalPages === 0 || page >= totalPages,
+            action: "next",
+        }),
     );
 
     pagination.replaceChildren(fragment);

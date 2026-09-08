@@ -17,6 +17,63 @@ function showReportsExportToast(message, type) {
   }
 }
 
+async function auditReportExport(format, model) {
+    if (!window.REPORT_AUDIT_URL || !model) {
+        return;
+    }
+
+    try {
+        const csrfToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute("content");
+        const dateRange =
+            document.getElementById("reportDateRange")?.value || null;
+        const startDate =
+            document.getElementById("reportStartDate")?.value || null;
+        const endDate = document.getElementById("reportEndDate")?.value || null;
+        const vehicleValue =
+            document.getElementById("reportVehicleFilter")?.value || null;
+        const departmentValue =
+            document.getElementById("reportDepartmentFilter")?.value || null;
+        const response = await fetch(window.REPORT_AUDIT_URL, {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "X-CSRF-TOKEN": csrfToken,
+            },
+
+            body: JSON.stringify({
+                format: format,
+                report_type: model.reportType || "overview",
+                date_range: dateRange,
+                start_date: dateRange === "custom" ? startDate : null,
+                end_date: dateRange === "custom" ? endDate : null,
+                vehicle_id:
+                    vehicleValue && vehicleValue !== "all"
+                        ? Number(vehicleValue)
+                        : null,
+                department:
+                    departmentValue && departmentValue !== "all"
+                        ? departmentValue
+                        : null,
+            }),
+        });
+
+        if (!response.ok) {
+            console.error("Report audit request failed:", response.status);
+        }
+    } catch (error) {
+        /*
+    |--------------------------------------------------------------------------
+    | Never break an already-successful export
+    |--------------------------------------------------------------------------
+    */
+        console.error("Report export audit failed:", error);
+    }
+}
+
 function getReportsExportDateStamp() {
   const now = new Date();
   return (
@@ -380,6 +437,7 @@ function printReports() {
       try {
         printWindow.focus();
         printWindow.print();
+        void auditReportExport("print", model);
       } catch (error) {
         console.error("Reports print failed:", error);
         showReportsExportToast("Unable to print report.", "error");
@@ -528,6 +586,7 @@ function exportReportsToExcel() {
 
     xlsx.utils.book_append_sheet(workbook, reportSheet, "Report Data");
     xlsx.writeFile(workbook, getReportsExportFilename("xlsx"));
+    void auditReportExport("excel", model);
     showReportsExportToast("Report exported to Excel successfully.", "success");
   } catch (error) {
     console.error("Reports Excel export failed:", error);
@@ -663,6 +722,7 @@ function exportReportsToPdf() {
     }
 
     pdf.save(getReportsExportFilename("pdf"));
+    void auditReportExport("pdf", model);
     showReportsExportToast("Report PDF exported successfully.", "success");
   } catch (error) {
     console.error("Reports PDF export failed:", error);

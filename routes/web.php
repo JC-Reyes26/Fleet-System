@@ -18,6 +18,7 @@ use App\Http\Controllers\FleetSearchController;
 use App\Http\Controllers\CostAnalysisController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserAccountController;
+use App\Http\Controllers\AuditLogController;
 
 
 /*
@@ -499,9 +500,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     */
     Route::middleware('fleet.module:cost_analysis')->group(function () {
 
-        Route::view(
+        Route::get(
             '/cost-analysis',
-            'cost-analysis.index'
+            [CostAnalysisController::class, 'index']
         )->name('cost-analysis');
 
         Route::get(
@@ -553,6 +554,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
             '/reports/data',
             [ReportController::class, 'data']
         )->name('reports.data');
+
+        Route::post(
+            '/reports/audit-export',
+            [ReportController::class, 'auditExport']
+        )->name('reports.audit-export');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUDIT LOGS
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:audit_logs')->group(function () {
+
+        Route::get(
+            '/audit-logs',
+            [AuditLogController::class, 'index']
+        )->name('audit-logs.index');
+
+        Route::get(
+            '/audit-logs/{auditLog}',
+            [AuditLogController::class, 'show']
+        )->name('audit-logs.show');
 
     });
 

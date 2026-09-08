@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\FleetSetting;
+use App\Services\AuditLogService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -39,17 +41,53 @@ class SettingsController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$record) {
-            $record = new FleetSetting();
-        }
+        $oldSettings =
+            $record?->settings ?? [];
 
-        $record->settings =
+        $newSettings =
             $validated['settings'];
 
-        $record->updated_by =
-            $request->user()?->id;
+        $record = DB::transaction(
+            function () use (
+                $record,
+                $newSettings,
+                $request,
+                $oldSettings
+            ) {
+                if (!$record) {
+                    $record =
+                        new FleetSetting();
+                }
 
-        $record->save();
+                $record->settings =
+                    $newSettings;
+
+                $record->updated_by =
+                    $request->user()?->id;
+
+                $record->save();
+
+                if ($oldSettings !== $newSettings) {
+                    AuditLogService::log(
+                        module: 'Settings',
+                        action: 'Updated',
+                        description:
+                            'Updated fleet system settings.',
+                        record: $record,
+                        oldValues: [
+                            'settings' =>
+                                $oldSettings,
+                        ],
+                        newValues: [
+                            'settings' =>
+                                $newSettings,
+                        ]
+                    );
+                }
+
+                return $record;
+            }
+        );
 
         return response()->json([
             'message' =>
@@ -70,7 +108,29 @@ class SettingsController extends Controller
             ->first();
 
         if ($record) {
-            $record->delete();
+            DB::transaction(
+                function () use ($record) {
+                    $oldSettings =
+                        $record->settings ?? [];
+
+                    AuditLogService::log(
+                        module: 'Settings',
+                        action: 'Reset',
+                        description:
+                            'Reset fleet system settings to defaults.',
+                        record: $record,
+                        oldValues: [
+                            'settings' =>
+                                $oldSettings,
+                        ],
+                        newValues: [
+                            'settings' => [],
+                        ]
+                    );
+
+                    $record->delete();
+                }
+            );
         }
 
         return response()->json([

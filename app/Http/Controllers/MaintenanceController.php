@@ -6,6 +6,7 @@ use App\Models\Maintenance;
 use App\Models\Vehicle;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
+use App\Services\AuditLogService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -539,6 +540,18 @@ class MaintenanceController extends Controller
 
                 $maintenance->load('vehicle');
 
+                AuditLogService::log(
+                    module: 'Maintenance Management',
+                    action: 'Created',
+                    description:
+                        "Created maintenance record {$maintenance->maintenance_number}.",
+                    record: $maintenance,
+                    newValues:
+                        $this->getMaintenanceAuditValues(
+                            $maintenance
+                        )
+                );
+
                 return $maintenance;
             });
 
@@ -671,6 +684,11 @@ class MaintenanceController extends Controller
                 */
                 $maintenance = Maintenance::lockForUpdate()
                     ->findOrFail($maintenance->id);
+
+                $oldAuditValues =
+                    $this->getMaintenanceAuditValues(
+                        $maintenance
+                    );
 
                 $previousNextSchedule =
                     $maintenance->next_schedule
@@ -873,6 +891,19 @@ class MaintenanceController extends Controller
                 $maintenance->fill($validated);
                 $maintenance->save();
 
+                $maintenance->refresh();
+
+                $newAuditValues =
+                    $this->getMaintenanceAuditValues(
+                        $maintenance
+                    );
+
+                $this->logMaintenanceUpdate(
+                    $maintenance,
+                    $oldAuditValues,
+                    $newAuditValues
+                );
+
                 /*
                 |--------------------------------------------------------------------------
                 | Load Updated Vehicle
@@ -958,6 +989,23 @@ class MaintenanceController extends Controller
 
                 $vehicle = $maintenance->vehicle;
 
+                $deletedValues =
+                    $this->getMaintenanceAuditValues(
+                        $maintenance
+                    );
+
+                AuditLogService::log(
+                    module: 'Maintenance Management',
+                    action: 'Deleted',
+                    description:
+                        "Deleted maintenance record {$maintenance->maintenance_number}.",
+                    record: $maintenance,
+                    oldValues:
+                        $deletedValues
+                );
+
+                $maintenance->delete();
+
                 $maintenance->delete();
 
                 /*
@@ -1042,6 +1090,21 @@ class MaintenanceController extends Controller
 
                     $vehicle = $maintenance->vehicle;
 
+                    $deletedValues =
+                        $this->getMaintenanceAuditValues(
+                            $maintenance
+                        );
+
+                    AuditLogService::log(
+                        module: 'Maintenance Management',
+                        action: 'Deleted',
+                        description:
+                            "Deleted maintenance record {$maintenance->maintenance_number}.",
+                        record: $maintenance,
+                        oldValues:
+                            $deletedValues
+                    );
+
                     $maintenance->delete();
 
                     if (
@@ -1082,5 +1145,138 @@ class MaintenanceController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function getMaintenanceAuditValues(
+        Maintenance $maintenance
+    ): array {
+        return [
+            'maintenance_number' =>
+                $maintenance->maintenance_number,
+
+            'vehicle_id' =>
+                $maintenance->vehicle_id,
+
+            'maintenance_type' =>
+                $maintenance->maintenance_type,
+
+            'maintenance_date' =>
+                $maintenance->maintenance_date
+                    ? Carbon::parse(
+                        $maintenance->maintenance_date
+                    )->format('Y-m-d')
+                    : null,
+
+            'completion_date' =>
+                $maintenance->completion_date
+                    ? Carbon::parse(
+                        $maintenance->completion_date
+                    )->format('Y-m-d')
+                    : null,
+
+            'next_schedule' =>
+                $maintenance->next_schedule
+                    ? Carbon::parse(
+                        $maintenance->next_schedule
+                    )->format('Y-m-d')
+                    : null,
+
+            'technician' =>
+                $maintenance->technician,
+
+            'priority' =>
+                $maintenance->priority,
+
+            'odometer' =>
+                $maintenance->odometer,
+
+            'cost' =>
+                $maintenance->cost,
+
+            'status' =>
+                $maintenance->status,
+        ];
+    }
+
+    private function logMaintenanceUpdate(
+        Maintenance $maintenance,
+        array $oldValues,
+        array $newValues
+    ): void {
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach ($newValues as $field => $newValue) {
+            $oldValue =
+                $oldValues[$field] ?? null;
+
+            if ((string) $oldValue !== (string) $newValue) {
+                $changedOldValues[$field] =
+                    $oldValue;
+
+                $changedNewValues[$field] =
+                    $newValue;
+            }
+        }
+
+        if (empty($changedNewValues)) {
+            return;
+        }
+
+        $oldStatus =
+            $oldValues['status'] ?? null;
+
+        $newStatus =
+            $newValues['status'] ?? null;
+
+        $action = 'Updated';
+
+        if (
+            $oldStatus !== $newStatus &&
+            $newStatus
+        ) {
+            $action = match ($newStatus) {
+                'In Progress' =>
+                    'Started',
+
+                'Completed' =>
+                    'Completed',
+
+                'Cancelled' =>
+                    'Cancelled',
+
+                'Scheduled' =>
+                    'Scheduled',
+
+                default =>
+                    'Updated',
+            };
+        }
+
+        $description = match ($action) {
+            'Started' =>
+                "Started maintenance {$maintenance->maintenance_number}.",
+
+            'Completed' =>
+                "Completed maintenance {$maintenance->maintenance_number}.",
+
+            'Cancelled' =>
+                "Cancelled maintenance {$maintenance->maintenance_number}.",
+
+            'Scheduled' =>
+                "Scheduled maintenance {$maintenance->maintenance_number}.",
+
+            default =>
+                "Updated maintenance {$maintenance->maintenance_number}.",
+        };
+
+        AuditLogService::log(
+            module: 'Maintenance Management',
+            action: $action,
+            description: $description,
+            record: $maintenance,
+            oldValues: $changedOldValues,
+            newValues: $changedNewValues
+        );
     }
 }

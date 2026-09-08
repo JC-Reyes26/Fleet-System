@@ -508,12 +508,20 @@
               <div id="costTablePaginationInfo">
                 Showing <strong>0–0</strong> of <strong>0</strong> records
               </div>
-              <div class="pagination" id="costTablePagination"></div>
+              <div class="pagination" id="costTablePagination">
+                <button type="button" aria-label="Previous page">
+                  <i class="ph ph-caret-left"></i>
+                </button>
+
+                <button type="button" aria-label="Next page">
+                  <i class="ph ph-caret-right"></i>
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
-    @if($costAnalysisPermissions['canManageBudget'] ?? false)
+    @if($costAnalysisPermissions['canManageBudget'] ?? false) 
       <!-- Budget configuration modal -->
       <div
         id="costBudgetModal"

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CostBudget;
 use App\Models\CostBudgetHistory;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -178,18 +179,30 @@ class CostBudgetController extends Controller
                                 ->lockForUpdate()
                                 ->first();
 
+                        $isNewBudget =
+                            !$budget;
+
+                        $oldAuditValues =
+                            $budget
+                                ? $this->getBudgetAuditValues(
+                                    $budget
+                                )
+                                : null;
+
                         $previousValue =
                             $budget
-                                ? (float)
-                                    $budget
-                                        ->overall_budget
+                                ? (float) $budget->overall_budget
                                 : null;
 
                         $action =
-                            $budget
-                                ? 'Updated'
-                                : 'Created';
+                            $isNewBudget
+                                ? 'Created'
+                                : 'Updated';
 
+                        if (!$budget) {
+                            $budget =
+                                new CostBudget();
+                        }
                         if (!$budget) {
                             $budget =
                                 new CostBudget();
@@ -200,6 +213,30 @@ class CostBudgetController extends Controller
                         );
 
                         $budget->save();
+
+                        $newAuditValues =
+                            $this->getBudgetAuditValues(
+                                $budget
+                            );
+
+                        if (
+                            $isNewBudget ||
+                            $oldAuditValues !== $newAuditValues
+                        ) {
+                            AuditLogService::log(
+                                module: 'Cost & Budget',
+                                action: $action,
+                                description:
+                                    $isNewBudget
+                                        ? 'Created the fleet budget configuration.'
+                                        : 'Updated the fleet budget configuration.',
+                                record: $budget,
+                                oldValues:
+                                    $oldAuditValues,
+                                newValues:
+                                    $newAuditValues
+                            );
+                        }
 
                         CostBudgetHistory::create([
                             'action' =>
@@ -274,6 +311,22 @@ class CostBudgetController extends Controller
                                 ->period_type,
                     ]);
 
+                    $deletedBudgetValues =
+                        $this->getBudgetAuditValues(
+                            $budget
+                        );
+
+                    AuditLogService::log(
+                        module: 'Cost & Budget',
+                        action: 'Cleared',
+                        description:
+                            'Cleared the fleet budget configuration.',
+                        record: $budget,
+                        oldValues:
+                            $deletedBudgetValues,
+                        newValues: null
+                    );
+
                     $budget->delete();
                 }
             );
@@ -295,16 +348,79 @@ class CostBudgetController extends Controller
 
     public function clearHistory()
     {
-        $this->authorize('manage', CostBudget::class);
-        
-        CostBudgetHistory::query()
-            ->delete();
+        $this->authorize(
+            'manage',
+            CostBudget::class
+        );
+
+        $deletedCount = 0;
+
+        DB::transaction(
+            function () use (
+                &$deletedCount
+            ) {
+                $deletedCount =
+                    CostBudgetHistory::query()
+                        ->count();
+
+                if ($deletedCount === 0) {
+                    return;
+                }
+
+                CostBudgetHistory::query()
+                    ->delete();
+
+                AuditLogService::log(
+                    module:
+                        'Cost & Budget',
+
+                    action:
+                        'History Cleared',
+
+                    description:
+                        "Cleared {$deletedCount} budget history record" .
+                        ($deletedCount === 1
+                            ? '.'
+                            : 's.'),
+
+                    oldValues: [
+                        'deleted_records' =>
+                            $deletedCount,
+                    ]
+                );
+            }
+        );
 
         return response()->json([
-            'success' => true,
+            'success' =>
+                true,
+
             'message' =>
                 'Budget history cleared.',
         ]);
+    }
+
+    private function getBudgetAuditValues(
+        CostBudget $budget
+    ): array {
+        return [
+            'overall_budget' =>
+                (float) $budget->overall_budget,
+
+            'category_budgets' =>
+                $budget->category_budgets ?? [],
+
+            'period_type' =>
+                $budget->period_type,
+
+            'start_date' =>
+                $budget->start_date
+                    ?->format('Y-m-d'),
+
+            'end_date' =>
+                $budget->end_date
+                    ?->format('Y-m-d'),
+        ];
     }
 
     private function formatBudget(

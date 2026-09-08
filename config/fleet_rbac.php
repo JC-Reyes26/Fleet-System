@@ -159,6 +159,16 @@ return [
             'it_admin' => 'view',
         ],
 
+        'audit_logs' => [
+            'fleet_manager' => 'view',
+            'dispatcher' => 'none',
+            'driver' => 'none',
+            'department_head' => 'none',
+            'finance' => 'none',
+            'maintenance' => 'none',
+            'it_admin' => 'view',
+        ],
+
         'profile' => [
             'fleet_manager' => 'limited',
             'dispatcher' => 'limited',

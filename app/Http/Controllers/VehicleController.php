@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\Vehicle;
 use App\Models\Driver;
 use App\Models\FleetSetting;
+use App\Services\AuditLogService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -57,10 +59,19 @@ class VehicleController extends Controller
     {   
         $this->authorize('viewAny', Vehicle::class);
 
+        $user = $request->user();
+
+
         $query = Vehicle::with([
             'drivers',
             'lastCompletedMaintenance',
         ]);
+
+        $query =
+        $this->applyVehicleVisibility(
+            $query,
+            $user
+        );
 
         if ($request->filled('search')) {
 
@@ -306,6 +317,20 @@ class VehicleController extends Controller
                 ]);
         }
 
+        $vehicle->load('drivers');
+
+        AuditLogService::log(
+            module: 'Vehicle Management',
+            action: 'Created',
+            description:
+                "Created vehicle {$vehicle->plate_number}.",
+            record: $vehicle,
+            newValues:
+                $this->getVehicleAuditValues(
+                    $vehicle
+                )
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Vehicle added successfully.',
@@ -316,22 +341,56 @@ class VehicleController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Vehicle $vehicle)
-    {
-        $this->authorize('view', $vehicle);
+    public function show(
+        Request $request,
+        Vehicle $vehicle
+    ) {
+        $this->authorize(
+            'view',
+            $vehicle
+        );
+
+        $user =
+            $request->user();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Driver - Assigned Vehicle Only
+        |--------------------------------------------------------------------------
+        */
+        if ($user->hasRole('driver')) {
+            $driver =
+                $user->driverProfile;
+
+            abort_unless(
+                $driver &&
+                (int) $driver->assigned_vehicle_id ===
+                (int) $vehicle->id,
+                403
+            );
+        }
 
         $vehicle->load([
             'drivers',
             'lastCompletedMaintenance',
         ]);
 
-        $availableDrivers = Driver::whereNull('assigned_vehicle_id')
-            ->orWhere('assigned_vehicle_id', $vehicle->id)
-            ->get();
+        $availableDrivers =
+            Driver::whereNull(
+                'assigned_vehicle_id'
+            )
+                ->orWhere(
+                    'assigned_vehicle_id',
+                    $vehicle->id
+                )
+                ->get();
 
         return response()->json([
-            'vehicle' => $vehicle,
-            'drivers' => $availableDrivers,
+            'vehicle' =>
+                $vehicle,
+
+            'drivers' =>
+                $availableDrivers,
         ]);
     }
 
@@ -353,6 +412,13 @@ class VehicleController extends Controller
         $this->authorize('update', $vehicle);
 
         $user = $request->user();
+
+        $vehicle->load('drivers');
+
+        $oldAuditValues =
+            $this->getVehicleAuditValues(
+                $vehicle
+            );
 
         /*
         |--------------------------------------------------------------------------
@@ -657,6 +723,101 @@ class VehicleController extends Controller
             abort(403);
         }
 
+        $vehicle =
+            $vehicle
+                ->fresh()
+                ->load('drivers');
+
+        $newAuditValues =
+            $this->getVehicleAuditValues(
+                $vehicle
+            );
+
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach (
+            $newAuditValues
+            as $field => $newValue
+        ) {
+            $oldValue =
+                $oldAuditValues[$field]
+                ?? null;
+
+            if (
+                (string) $oldValue !==
+                (string) $newValue
+            ) {
+                $changedOldValues[$field] =
+                    $oldValue;
+
+                $changedNewValues[$field] =
+                    $newValue;
+            }
+        }
+
+        if (!empty($changedNewValues)) {
+            $action = 'Updated';
+
+            if (
+                array_key_exists(
+                    'assigned_driver_id',
+                    $changedNewValues
+                )
+            ) {
+                if (
+                    $changedNewValues[
+                        'assigned_driver_id'
+                    ] === null
+                ) {
+                    $action =
+                        'Driver Unassigned';
+                } elseif (
+                    $changedOldValues[
+                        'assigned_driver_id'
+                    ] === null
+                ) {
+                    $action =
+                        'Driver Assigned';
+                } else {
+                    $action =
+                        'Driver Reassigned';
+                }
+            } elseif (
+                array_key_exists(
+                    'status',
+                    $changedNewValues
+                )
+            ) {
+                $action =
+                    'Status Changed';
+            }
+
+            $description = match ($action) {
+                'Driver Assigned' =>
+                    "Assigned a driver to vehicle {$vehicle->plate_number}.",
+                'Driver Unassigned' =>
+                    "Unassigned the driver from vehicle {$vehicle->plate_number}.",
+                'Driver Reassigned' =>
+                    "Reassigned the driver for vehicle {$vehicle->plate_number}.",
+                'Status Changed' =>
+                    "Changed the status of vehicle {$vehicle->plate_number}.",
+                default =>
+                    "Updated vehicle {$vehicle->plate_number}.",
+            };
+
+            AuditLogService::log(
+                module: 'Vehicle Management',
+                action: $action,
+                description: $description,
+                record: $vehicle,
+                oldValues:
+                    $changedOldValues,
+                newValues:
+                    $changedNewValues
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' =>
@@ -673,7 +834,31 @@ class VehicleController extends Controller
     {
         $this->authorize('delete', $vehicle);
 
-        $vehicle->delete();
+        $vehicle->load('drivers');
+
+        $deletedValues =
+            $this->getVehicleAuditValues(
+                $vehicle
+            );
+
+        DB::transaction(
+            function () use (
+                $vehicle,
+                $deletedValues
+            ) {
+                AuditLogService::log(
+                    module: 'Vehicle Management',
+                    action: 'Deleted',
+                    description:
+                        "Deleted vehicle {$vehicle->plate_number}.",
+                    record: $vehicle,
+                    oldValues:
+                        $deletedValues
+                );
+
+                $vehicle->delete();
+            }
+        );
 
         return response()->json([
             'success' => true,
@@ -691,7 +876,36 @@ class VehicleController extends Controller
             'ids.*' => 'exists:vehicles,id',
         ]);
 
-        Vehicle::whereIn('id', $request->ids)->delete();
+        $vehicles =
+            Vehicle::with('drivers')
+                ->whereIn(
+                    'id',
+                    $request->ids
+                )
+                ->get();
+
+        DB::transaction(
+            function () use ($vehicles) {
+                foreach ($vehicles as $vehicle) {
+                    $deletedValues =
+                        $this->getVehicleAuditValues(
+                            $vehicle
+                        );
+
+                    AuditLogService::log(
+                        module: 'Vehicle Management',
+                        action: 'Deleted',
+                        description:
+                            "Deleted vehicle {$vehicle->plate_number}.",
+                        record: $vehicle,
+                        oldValues:
+                            $deletedValues
+                    );
+
+                    $vehicle->delete();
+                }
+            }
+        );
 
         return response()->json([
             'success' => true,
@@ -699,45 +913,187 @@ class VehicleController extends Controller
         ]);
     }
 
-    public function stats()
-    {
-        $this->authorize('viewAny', Vehicle::class);
+    public function stats(
+        Request $request
+    ) {
+        $this->authorize(
+            'viewAny',
+            Vehicle::class
+        );
+
+        $user =
+            $request->user();
+
+        $baseQuery =
+            $this->applyVehicleVisibility(
+                Vehicle::query(),
+                $user
+            );
 
         return response()->json([
-            'total' => Vehicle::count(),
-
-            'available' => Vehicle::where('status', 'Available')->count(),
-
-            'on_trip' => Vehicle::where('status', 'On Trip')->count(),
-
-            'maintenance' => Vehicle::where('status', 'Maintenance')->count(),
-
-            'out_of_service' => Vehicle::where('status', 'Out of Service')->count(),
+            'total' =>
+                (clone $baseQuery)
+                    ->count(),
+            'available' =>
+                (clone $baseQuery)
+                    ->where(
+                        'status',
+                        'Available'
+                    )
+                    ->count(),
+            'on_trip' =>
+                (clone $baseQuery)
+                    ->where(
+                        'status',
+                        'On Trip'
+                    )
+                    ->count(),
+            'maintenance' =>
+                (clone $baseQuery)
+                    ->where(
+                        'status',
+                        'Maintenance'
+                    )
+                    ->count(),
+            'out_of_service' =>
+                (clone $baseQuery)
+                    ->where(
+                        'status',
+                        'Out of Service'
+                    )
+                    ->count(),
         ]);
     }
 
-    public function available()
-    {
-        $this->authorize('viewAny', Vehicle::class);
+    public function available(
+        Request $request
+    ) {
+        $this->authorize(
+            'viewAny',
+            Vehicle::class
+        );
 
-        $vehicles = Vehicle::with('drivers')
-            ->where('status', 'Available')
-            ->orderBy('brand')
-            ->orderBy('model')
-            ->get([
-                'id',
-                'brand',
-                'model',
-                'vehicle_type',
-                'department',
-                'fuel_type',
-                'tank_capacity',
-                'current_fuel',
-                'current_odometer',
-                'status',
-            ]);
+        $query =
+            Vehicle::with('drivers');
 
-        return response()->json($vehicles);
+        $query =
+            $this->applyVehicleVisibility(
+                $query,
+                $request->user()
+            );
+
+        $vehicles =
+            $query
+                ->where(
+                    'status',
+                    'Available'
+                )
+                ->orderBy('brand')
+                ->orderBy('model')
+                ->get([
+                    'id',
+                    'brand',
+                    'model',
+                    'vehicle_type',
+                    'department',
+                    'fuel_type',
+                    'tank_capacity',
+                    'current_fuel',
+                    'current_odometer',
+                    'status',
+                ]);
+
+        return response()->json(
+            $vehicles
+        );
+    }
+
+    private function applyVehicleVisibility(
+        $query,
+        $user
+    ) {
+        /*
+        |--------------------------------------------------------------------------
+        | Driver - Assigned Vehicle Only
+        |--------------------------------------------------------------------------
+        |
+        | Drivers may only see the vehicle currently assigned to
+        | their Driver profile.
+        |--------------------------------------------------------------------------
+        */
+        if ($user->hasRole('driver')) {
+            $driver =
+                $user->driverProfile;
+
+            if (
+                $driver &&
+                $driver->assigned_vehicle_id
+            ) {
+                $query->where(
+                    'vehicles.id',
+                    $driver->assigned_vehicle_id
+                );
+            } else {
+                /*
+                |--------------------------------------------------------------------------
+                | Driver Has No Assigned Vehicle
+                |--------------------------------------------------------------------------
+                |
+                | Return zero vehicles instead of exposing the full fleet.
+                |--------------------------------------------------------------------------
+                */
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        return $query;
+    }
+
+    private function getVehicleAuditValues(
+        Vehicle $vehicle
+    ): array {
+        $vehicle->loadMissing('drivers');
+
+        $driver =
+            $vehicle->drivers->first();
+
+        return [
+            'plate_number' =>
+                $vehicle->plate_number,
+
+            'vehicle_type' =>
+                $vehicle->vehicle_type,
+
+            'department' =>
+                $vehicle->department,
+
+            'brand' =>
+                $vehicle->brand,
+
+            'model' =>
+                $vehicle->model,
+
+            'capacity' =>
+                $vehicle->capacity,
+
+            'fuel_type' =>
+                $vehicle->fuel_type,
+
+            'tank_capacity' =>
+                $vehicle->tank_capacity,
+
+            'current_fuel' =>
+                $vehicle->current_fuel,
+
+            'current_odometer' =>
+                $vehicle->current_odometer,
+
+            'status' =>
+                $vehicle->status,
+
+            'assigned_driver_id' =>
+                $driver?->id,
+        ];
     }
 
 }

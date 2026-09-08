@@ -276,4 +276,8 @@ function renderVehicleTable(vehicles) {
     if (typeof initVehiclePagination === "function") {
         initVehiclePagination();
     }
+
+    if (typeof applyVehicleFilters === "function") {
+        applyVehicleFilters();
+    }
 }

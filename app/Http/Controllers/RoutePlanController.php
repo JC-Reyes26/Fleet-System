@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Reservation;
 use App\Models\RoutePlan;
 use App\Models\FleetSetting;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -457,6 +458,18 @@ class RoutePlanController extends Controller
                     'stops',
                 ]);
 
+                AuditLogService::log(
+                    module: 'Route Planning',
+                    action: 'Created',
+                    description:
+                        "Created route plan {$routePlan->route_number}.",
+                    record: $routePlan,
+                    newValues:
+                        $this->getRoutePlanAuditValues(
+                            $routePlan
+                        )
+                );
+
                 return $routePlan;
             });
 
@@ -551,14 +564,6 @@ class RoutePlanController extends Controller
                 'status' => [
                     'required',
                     'in:Draft,Planned,Ready For Dispatch,Completed,Archived',
-                ],
-                'departure_date' => [
-                    'required',
-                    'date',
-                ],
-                'departure_time' => [
-                    'required',
-                    'date_format:H:i',
                 ],
                 'estimated_distance' => [
                     'nullable',
@@ -655,6 +660,11 @@ class RoutePlanController extends Controller
 
                 $newStatus =
                     $validated['status'];
+
+                $oldAuditValues =
+                    $this->getRoutePlanAuditValues(
+                        $routePlan
+                    );
 
                 /*
                 |--------------------------------------------------------------------------
@@ -755,9 +765,9 @@ class RoutePlanController extends Controller
                     'status' =>
                         $newStatus,
                     'departure_date' =>
-                        $validated['departure_date'],
+                        $routePlan->reservation->schedule_date,
                     'departure_time' =>
-                        $validated['departure_time'],
+                        $routePlan->reservation->schedule_time,
                     'estimated_distance' =>
                         $validated['estimated_distance'] ?? null,
                     'estimated_time' =>
@@ -795,6 +805,19 @@ class RoutePlanController extends Controller
                             $stop['longitude'] ?? null,
                     ]);
                 }
+
+                $routePlan->refresh();
+
+                $newAuditValues =
+                    $this->getRoutePlanAuditValues(
+                        $routePlan
+                    );
+
+                $this->logRoutePlanUpdate(
+                    $routePlan,
+                    $oldAuditValues,
+                    $newAuditValues
+                );
 
                 $routePlan->load([
                     'reservation.vehicle',
@@ -857,6 +880,11 @@ class RoutePlanController extends Controller
                 'message' => 'This route plan is already archived.',
             ], 422);
         }
+
+        $oldValues =
+            $this->getRoutePlanAuditValues(
+                $routePlan
+            );
         /*
         |--------------------------------------------------------------------------
         | Archive Route
@@ -865,6 +893,19 @@ class RoutePlanController extends Controller
         $routePlan->update([
             'status' => 'Archived',
         ]);
+
+        $routePlan->refresh();
+
+        $newValues =
+            $this->getRoutePlanAuditValues(
+                $routePlan
+            );
+
+        $this->logRoutePlanUpdate(
+            $routePlan,
+            $oldValues,
+            $newValues
+        );
 
         return response()->json([
             'success' => true,
@@ -928,6 +969,11 @@ class RoutePlanController extends Controller
             ], 422);
         }
 
+        $oldValues =
+            $this->getRoutePlanAuditValues(
+                $routePlan
+            );
+
         /*
         |--------------------------------------------------------------------------
         | Restore Route To Draft
@@ -936,6 +982,29 @@ class RoutePlanController extends Controller
         $routePlan->update([
             'status' => 'Draft',
         ]);
+
+        $routePlan->refresh();
+
+        $newValues =
+            $this->getRoutePlanAuditValues(
+                $routePlan
+            );
+
+        AuditLogService::log(
+            module: 'Route Planning',
+            action: 'Restored',
+            description:
+                "Restored route {$routePlan->route_number} to Draft.",
+            record: $routePlan,
+            oldValues: [
+                'status' =>
+                    $oldValues['status'] ?? null,
+            ],
+            newValues: [
+                'status' =>
+                    $newValues['status'] ?? null,
+            ]
+        );
 
         $routePlan->load([
             'reservation.vehicle',
@@ -998,6 +1067,11 @@ class RoutePlanController extends Controller
                     'This route plan cannot be deleted because a dispatch already exists for its reservation.',
             ], 422);
         }
+
+        $deletedValues =
+            $this->getRoutePlanAuditValues(
+                $routePlan
+            );
         /*
         |--------------------------------------------------------------------------
         | Delete Route Plan
@@ -1005,7 +1079,24 @@ class RoutePlanController extends Controller
         | Related route stops will be deleted automatically because
         | route_stops.route_plan_id uses cascadeOnDelete().
         */
-        $routePlan->delete();
+        DB::transaction(
+            function () use (
+                $routePlan,
+                $deletedValues
+            ) {
+                AuditLogService::log(
+                    module: 'Route Planning',
+                    action: 'Deleted',
+                    description:
+                        "Deleted route plan {$routePlan->route_number}.",
+                    record: $routePlan,
+                    oldValues:
+                        $deletedValues
+                );
+
+                $routePlan->delete();
+            }
+        );
 
         return response()->json([
             'success' => true,
@@ -1186,11 +1277,25 @@ class RoutePlanController extends Controller
                             $stop->longitude,
                     ]);
                 }
-                return $copy->load([
+                $copy->load([
                     'reservation.vehicle',
                     'reservation.driver',
                     'stops',
                 ]);
+
+                AuditLogService::log(
+                    module: 'Route Planning',
+                    action: 'Duplicated',
+                    description:
+                        "Duplicated route {$routePlan->route_number} as {$copy->route_number}.",
+                    record: $copy,
+                    newValues:
+                        $this->getRoutePlanAuditValues(
+                            $copy
+                        )
+                );
+
+                return $copy;
             });
             return response()->json([
                 'success' => true,
@@ -1395,5 +1500,115 @@ class RoutePlanController extends Controller
         }
 
         return $query;
+    }
+
+    private function getRoutePlanAuditValues(
+        RoutePlan $routePlan
+    ): array {
+        return [
+            'route_number' =>
+                $routePlan->route_number,
+            'reservation_id' =>
+                $routePlan->reservation_id,
+            'origin' =>
+                $routePlan->origin,
+            'destination' =>
+                $routePlan->destination,
+            'priority' =>
+                $routePlan->priority,
+            'department' =>
+                $routePlan->department,
+            'status' =>
+                $routePlan->status,
+            'departure_date' =>
+                $routePlan->departure_date
+                    ?->format('Y-m-d'),
+            'departure_time' =>
+                $routePlan->departure_time,
+            'estimated_distance' =>
+                $routePlan->estimated_distance,
+            'estimated_time' =>
+                $routePlan->estimated_time,
+            'optimization_strategy' =>
+                $routePlan->optimization_strategy,
+            'optimization_score' =>
+                $routePlan->optimization_score,
+        ];
+    }
+
+    private function logRoutePlanUpdate(
+        RoutePlan $routePlan,
+        array $oldValues,
+        array $newValues
+    ): void {
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach ($newValues as $field => $newValue) {
+            $oldValue =
+                $oldValues[$field] ?? null;
+
+            if ((string) $oldValue !== (string) $newValue) {
+                $changedOldValues[$field] =
+                    $oldValue;
+
+                $changedNewValues[$field] =
+                    $newValue;
+            }
+        }
+
+        if (empty($changedNewValues)) {
+            return;
+        }
+
+        $oldStatus =
+            $oldValues['status'] ?? null;
+        $newStatus =
+            $newValues['status'] ?? null;
+        $action = 'Updated';
+
+        if (
+            $oldStatus !== $newStatus &&
+            $newStatus
+        ) {
+            $action = match ($newStatus) {
+                'Planned' =>
+                    'Planned',
+                'Ready For Dispatch' =>
+                    'Ready For Dispatch',
+                'Completed' =>
+                    'Completed',
+                'Archived' =>
+                    'Archived',
+                'Draft' =>
+                    'Returned To Draft',
+                default =>
+                    'Updated',
+            };
+        }
+
+        $description = match ($action) {
+            'Planned' =>
+                "Planned route {$routePlan->route_number}.",
+            'Ready For Dispatch' =>
+                "Marked route {$routePlan->route_number} as Ready For Dispatch.",
+            'Completed' =>
+                "Completed route {$routePlan->route_number}.",
+            'Archived' =>
+                "Archived route {$routePlan->route_number}.",
+            'Returned To Draft' =>
+                "Returned route {$routePlan->route_number} to Draft.",
+            default =>
+                "Updated route {$routePlan->route_number}.",
+        };
+
+        AuditLogService::log(
+            module: 'Route Planning',
+            action: $action,
+            description: $description,
+            record: $routePlan,
+            oldValues: $changedOldValues,
+            newValues: $changedNewValues
+        );
     }
 }

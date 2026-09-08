@@ -7,6 +7,7 @@ use App\Models\Vehicle;
 use App\Models\Driver;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -458,6 +459,18 @@ class FuelLogController extends Controller
                     'driver',
                 ]);
 
+                AuditLogService::log(
+                    module: 'Fuel Management',
+                    action: 'Created',
+                    description:
+                        "Created fuel record {$fuelLog->fuel_number}.",
+                    record: $fuelLog,
+                    newValues:
+                        $this->getFuelAuditValues(
+                            $fuelLog
+                        )
+                );
+
                 $fuelLog->setAttribute(
                     'high_cost_alert',
                     $fuelSettings['highCostAlert'] > 0 &&
@@ -610,6 +623,11 @@ class FuelLogController extends Controller
                 $fuelLog = FuelLog::lockForUpdate()
                     ->findOrFail($fuelLog->id);
 
+                $oldAuditValues =
+                    $this->getFuelAuditValues(
+                        $fuelLog
+                    );
+
                 $validated = $validator->validated();
 
                 $previousCost =
@@ -649,6 +667,50 @@ class FuelLogController extends Controller
                 |
                 */
                 $fuelLog->update($validated);
+
+                $fuelLog->refresh();
+
+                $newAuditValues =
+                    $this->getFuelAuditValues(
+                        $fuelLog
+                    );
+
+                $changedOldValues = [];
+                $changedNewValues = [];
+
+                foreach (
+                    $newAuditValues
+                    as $field => $newValue
+                ) {
+                    $oldValue =
+                        $oldAuditValues[$field]
+                        ?? null;
+
+                    if (
+                        (string) $oldValue !==
+                        (string) $newValue
+                    ) {
+                        $changedOldValues[$field] =
+                            $oldValue;
+
+                        $changedNewValues[$field] =
+                            $newValue;
+                    }
+                }
+
+                if (!empty($changedNewValues)) {
+                    AuditLogService::log(
+                        module: 'Fuel Management',
+                        action: 'Updated',
+                        description:
+                            "Updated fuel record {$fuelLog->fuel_number}.",
+                        record: $fuelLog,
+                        oldValues:
+                            $changedOldValues,
+                        newValues:
+                            $changedNewValues
+                    );
+                }
 
                 $fuelLog->load([
                     'vehicle',
@@ -819,5 +881,51 @@ class FuelLogController extends Controller
         return response()->json([
             'fuel_number' => $this->generateFuelNumber(),
         ]);
+    }
+
+    private function getFuelAuditValues(
+        FuelLog $fuelLog
+    ): array {
+        return [
+            'fuel_number' =>
+                $fuelLog->fuel_number,
+
+            'vehicle_id' =>
+                $fuelLog->vehicle_id,
+
+            'driver_id' =>
+                $fuelLog->driver_id,
+
+            'fuel_amount' =>
+                $fuelLog->fuel_amount,
+
+            'cost_per_liter' =>
+                $fuelLog->cost_per_liter,
+
+            'cost' =>
+                $fuelLog->cost,
+
+            'odometer' =>
+                $fuelLog->odometer,
+
+            'date' =>
+                $fuelLog->date
+                    ? \Carbon\Carbon::parse(
+                        $fuelLog->date
+                    )->format('Y-m-d')
+                    : null,
+
+            'refuel_time' =>
+                $fuelLog->refuel_time,
+
+            'fuel_type' =>
+                $fuelLog->fuel_type,
+
+            'fuel_station' =>
+                $fuelLog->fuel_station,
+
+            'payment_method' =>
+                $fuelLog->payment_method,
+        ];
     }
 }

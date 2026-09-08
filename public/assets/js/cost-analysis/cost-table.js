@@ -214,36 +214,65 @@ function renderCostTable() {
   const pagination = document.getElementById("costTablePagination");
   if (pagination) {
     const frag = document.createDocumentFragment();
-    const btn = (label, aria, disabled, active, action, pageNumber) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.setAttribute("aria-label", aria);
-      b.disabled = disabled;
-      if (action) b.dataset.costPage = action;
-      if (pageNumber != null) b.dataset.pageNumber = String(pageNumber);
-      if (active) {
-        b.classList.add("active");
-        b.setAttribute("aria-current", "page");
-      }
-      b.textContent = label;
-      return b;
+    const btn = ({
+        label = "",
+        aria,
+        iconClass = null,
+        disabled = false,
+        active = false,
+        action,
+        pageNumber = null,
+    }) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", aria);
+        b.disabled = disabled;
+        if (action) {
+            b.dataset.costPage = action;
+        }
+        if (pageNumber != null) {
+            b.dataset.pageNumber = String(pageNumber);
+        }
+        if (active) {
+            b.classList.add("active");
+            b.setAttribute("aria-current", "page");
+        }
+        if (iconClass) {
+            const icon = document.createElement("i");
+            icon.className = iconClass;
+            icon.setAttribute("aria-hidden", "true");
+            b.appendChild(icon);
+        } else {
+            b.textContent = label;
+        }
+        return b;
     };
     frag.appendChild(
-      btn("‹", "Previous page", costTableState.page <= 1 || totalPages === 0, false, "prev"),
+        btn({
+            aria: "Previous page",
+            disabled: costTableState.page <= 1 || totalPages === 0,
+            action: "prev",
+            iconClass: "ph ph-caret-left",
+        }),
     );
     for (let p = 1; p <= totalPages; p += 1) {
-      frag.appendChild(
-        btn(String(p), "Page " + p, false, p === costTableState.page, "page", p),
-      );
+        frag.appendChild(
+            btn({
+                label: String(p),
+                aria: `Page ${p}`,
+                active: p === costTableState.page,
+                action: "page",
+                pageNumber: p,
+            }),
+        );
     }
     frag.appendChild(
-      btn(
-        "›",
-        "Next page",
-        totalPages === 0 || costTableState.page >= totalPages,
-        false,
-        "next",
-      ),
+        btn({
+            aria: "Next page",
+            disabled: totalPages === 0 || costTableState.page >= totalPages,
+            action: "next",
+            iconClass: "ph ph-caret-right",
+        }),
     );
     pagination.replaceChildren(frag);
   }

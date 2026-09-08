@@ -47,29 +47,30 @@ function updateDispatchNoResultsRow(tableBody, shouldShow) {
     if (!tableBody) {
         return;
     }
-
     const existingRow = tableBody.querySelector(".dispatch-no-results");
-
     if (!shouldShow) {
         existingRow?.remove();
         return;
     }
-
     if (existingRow) {
         return;
     }
-
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-
-    row.className = "dispatch-no-results";
-
-    cell.colSpan = 11;
-    cell.className = "text-center";
-    cell.textContent = "No dispatch records found.";
-
-    row.appendChild(cell);
-    tableBody.appendChild(row);
+    tableBody.insertAdjacentHTML(
+        "beforeend",
+        `
+            <tr
+                class="dispatch-no-results"
+                data-helper-row="true"
+            >
+                <td
+                    colspan="11"
+                    class="text-center"
+                >
+                    No dispatch records found.
+                </td>
+            </tr>
+        `,
+    );
 }
 
 function renderDispatchFilterRows(matchingRows) {

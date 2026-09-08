@@ -38,25 +38,28 @@ function getVehicleDataRows(tableBody) {
 }
 
 function updateVehicleNoResultsRow(tableBody, shouldShow) {
-    if (!tableBody) return;
-
-    const existingRow = tableBody.querySelector(".vehicle-no-results");
-
-    if (!shouldShow) {existingRow?.remove();
+    if (!tableBody) {
         return;
     }
-
-    if (existingRow) return;
-
+    const existingRow = tableBody.querySelector(".vehicle-no-results");
+    if (!shouldShow) {
+        existingRow?.remove();
+        return;
+    }
+    if (existingRow) {
+        return;
+    }
     const row = document.createElement("tr");
-    const cell = document.createElement("td");
-
     row.className = "vehicle-no-results";
-    cell.colSpan = 9;
-    cell.className = "text-center";
-    cell.textContent = "No vehicles found.";
-
-    row.appendChild(cell);
+    row.dataset.helperRow = "true";
+    row.innerHTML = `
+        <td
+            colspan="9"
+            class="text-center"
+        >
+            No vehicles found.
+        </td>
+    `;
     tableBody.appendChild(row);
 }
 

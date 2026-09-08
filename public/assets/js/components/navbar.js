@@ -94,6 +94,7 @@ let navbarBrowserNotificationsEnabled = false;
 let navbarGlobalEventsInitialized = false;
 let navbarObserverStarted = false;
 
+let navbarNotificationTimeInterval = null;
 /* ==========================================
    Routes
 ========================================== */
@@ -536,6 +537,8 @@ function initNavbarNotifications() {
         return;
     }
 
+    startNavbarNotificationTimeUpdater();
+
     if (button.dataset.navNotificationsInit === "true") {
         return;
     }
@@ -647,7 +650,12 @@ function initNavbarNotifications() {
 
             const time = document.createElement("span");
             time.className = "navbar-notification-time";
-            time.textContent = formatNotificationAge(notification.created_at);
+            time.dataset.notificationTimestamp =
+                notification.created_at_timestamp;
+
+            time.textContent = formatNotificationAge(
+                notification.created_at_timestamp,
+            );
 
             itemHeader.appendChild(itemTitle);
 
@@ -879,29 +887,48 @@ function initNavbarMessages() {
     });
 }
 
-function formatNotificationAge(dateValue) {
-    if (!dateValue) return "";
-    const created = new Date(dateValue);
-    const now = new Date();
-    const diffMs = now.getTime() - created.getTime();
-    if (Number.isNaN(diffMs) || diffMs < 0) {
+function formatNotificationAge(timestamp) {
+    const createdSeconds = Number(timestamp);
+    if (!Number.isFinite(createdSeconds)) {
+        return "";
+    }
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const diffSeconds = Math.max(0, nowSeconds - createdSeconds);
+    if (diffSeconds < 60) {
         return "now";
     }
-    const minutes = Math.floor(diffMs / (1000 * 60));
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (minutes < 1) {
-        return "now";
-    }
+    const minutes = Math.floor(diffSeconds / 60);
     if (minutes < 60) {
         return `${minutes}m`;
     }
+    const hours = Math.floor(minutes / 60);
     if (hours < 24) {
         return `${hours}h`;
     }
+    const days = Math.floor(hours / 24);
     return `${days}d`;
 }
+function refreshNavbarNotificationTimes() {
+    document
+        .querySelectorAll(
+            ".navbar-notification-time[data-notification-timestamp]",
+        )
+        .forEach((element) => {
+            element.textContent = formatNotificationAge(
+                element.dataset.notificationTimestamp,
+            );
+        });
+}
+function startNavbarNotificationTimeUpdater() {
+    if (navbarNotificationTimeInterval) {
+        return;
+    }
 
+    navbarNotificationTimeInterval = window.setInterval(
+        refreshNavbarNotificationTimes,
+        30000,
+    );
+}
 /* ==========================================
    Global Search
 ========================================== */

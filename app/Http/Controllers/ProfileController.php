@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -250,6 +251,14 @@ class ProfileController extends Controller
                     $validated['password']
                 ),
         ]);
+
+        AuditLogService::log(
+            module: 'Profile',
+            action: 'Password Changed',
+            description:
+                'Changed own account password.',
+            record: $user
+        );
 
         return Redirect::route(
             'profile.edit'

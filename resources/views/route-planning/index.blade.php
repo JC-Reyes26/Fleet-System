@@ -325,7 +325,15 @@
               <div id="routePaginationInfo">
                 Showing <strong>0–0</strong> of <strong>0</strong> routes
               </div>
-              <div class="pagination" id="routePagination"></div>
+              <div class="pagination" id="routePagination">
+                <button type="button" aria-label="Previous page">
+                  <i class="ph ph-caret-left"></i>
+                </button>
+
+                <button type="button" aria-label="Next page">
+                  <i class="ph ph-caret-right"></i>
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -413,11 +421,11 @@
                 </div>
                 <div class="form-group">
                   <label for="routeDepartureDate">Departure Date *</label>
-                  <input type="date" id="routeDepartureDate" required />
+                  <input type="date" id="routeDepartureDate" required readonly />
                 </div>
                 <div class="form-group">
                   <label for="routeDepartureTime">Departure Time *</label>
-                  <input type="time" id="routeDepartureTime" required />
+                  <input type="time" id="routeDepartureTime" required readonly />
                 </div>
                 <div class="form-group">
                   <label for="routeEstimatedDistance">Estimated Distance</label>

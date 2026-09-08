@@ -9,6 +9,9 @@ use App\Models\Dispatch;
 use App\Models\Maintenance;
 use App\Models\FuelLog;
 use Illuminate\Http\Request;
+use App\Services\AuditLogService;
+use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
 
 class ReportController extends Controller
 {
@@ -406,6 +409,166 @@ class ReportController extends Controller
                         'it_admin'
                     ),
             ],
+        ]);
+    }
+
+    public function auditExport(
+        Request $request
+    ): JsonResponse {
+        $user = $request->user();
+
+        abort_unless(
+            $user?->canViewModule('reports'),
+            403
+        );
+
+        $validated =
+            $request->validate([
+                'format' => [
+                    'required',
+                    Rule::in([
+                        'print',
+                        'pdf',
+                        'excel',
+                    ]),
+                ],
+
+                'report_type' => [
+                    'required',
+                    Rule::in(
+                        $this->allowedReportTypes(
+                            $user->role
+                        )
+                    ),
+                ],
+
+                'date_range' => [
+                    'nullable',
+                    'string',
+                    'max:50',
+                ],
+
+                'start_date' => [
+                    'nullable',
+                    'date',
+                ],
+
+                'end_date' => [
+                    'nullable',
+                    'date',
+                    'after_or_equal:start_date',
+                ],
+
+                'vehicle_id' => [
+                    'nullable',
+                    'integer',
+                ],
+
+                'department' => [
+                    'nullable',
+                    'string',
+                    'max:120',
+                ],
+            ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Department Head Scope
+        |--------------------------------------------------------------------------
+        |
+        | Never trust a department submitted by a Department Head.
+        |--------------------------------------------------------------------------
+        */
+        if ($user->hasRole('department_head')) {
+            $validated['department'] =
+                $user->department;
+        }
+
+        $formatLabel =
+            match ($validated['format']) {
+                'pdf' =>
+                    'PDF',
+
+                'excel' =>
+                    'Excel',
+
+                'print' =>
+                    'Print',
+
+                default =>
+                    strtoupper(
+                        $validated['format']
+                    ),
+            };
+
+        $reportLabel =
+            match ($validated['report_type']) {
+                'overview' =>
+                    'Overview',
+
+                'utilization' =>
+                    'Fleet Utilization',
+
+                'trips' =>
+                    'Trip & Dispatch',
+
+                'reservations' =>
+                    'Reservations',
+
+                'maintenance' =>
+                    'Maintenance',
+
+                'fuel' =>
+                    'Fuel & Cost',
+
+                'drivers' =>
+                    'Driver Performance',
+
+                default =>
+                    $validated['report_type'],
+            };
+
+        AuditLogService::log(
+            module: 'Reports',
+            action:
+                $validated['format'] === 'print'
+                    ? 'Printed'
+                    : 'Exported',
+
+            description:
+                "{$formatLabel} report generated for {$reportLabel}.",
+
+            newValues: [
+                'format' =>
+                    $validated['format'],
+
+                'report_type' =>
+                    $validated['report_type'],
+
+                'date_range' =>
+                    $validated['date_range']
+                    ?? null,
+
+                'start_date' =>
+                    $validated['start_date']
+                    ?? null,
+
+                'end_date' =>
+                    $validated['end_date']
+                    ?? null,
+
+                'vehicle_id' =>
+                    $validated['vehicle_id']
+                    ?? null,
+
+                'department' =>
+                    $validated['department']
+                    ?? null,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
         ]);
     }
 

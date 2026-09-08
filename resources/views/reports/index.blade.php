@@ -482,15 +482,28 @@
               <div id="reportsTablePaginationInfo">
                 Showing <strong>0–0</strong> of <strong>0</strong> rows
               </div>
-              <div class="pagination" id="reportsTablePagination"></div>
+              <div class="pagination" id="reportsTablePagination">
+                <button type="button" aria-label="Previous page">
+                  <i class="ph ph-caret-left"></i>
+                </button>
+
+                <button type="button" aria-label="Next page">
+                  <i class="ph ph-caret-right"></i>
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
     <script>
-      window.FLEET_RBAC = window.FLEET_RBAC || {};
-      window.FLEET_RBAC.role = @json(auth()->user()?->role);
-      window.FLEET_RBAC.reports = @json($reportPermissions ?? []);
+        window.FLEET_RBAC =
+            window.FLEET_RBAC || {};
+        window.FLEET_RBAC.role =
+            @json(auth()->user()?->role);
+        window.FLEET_RBAC.reports =
+            @json($reportPermissions ?? []);
+        window.REPORT_AUDIT_URL =
+            @json(route('reports.audit-export'));
     </script>
 
     <script src="{{ asset('assets/js/helpers/rbac.js') }}"></script>

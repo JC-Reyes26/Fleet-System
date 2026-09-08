@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
+
 class DispatchController extends Controller
 {   
     use AuthorizesRequests;
@@ -465,6 +466,18 @@ class DispatchController extends Controller
                     'reservation.routePlan.stops',
                 ]);
 
+                AuditLogService::log(
+                    module: 'Dispatch Management',
+                    action: 'Created',
+                    description:
+                        "Created dispatch {$dispatch->dispatch_number}.",
+                    record: $dispatch,
+                    newValues:
+                        $this->getDispatchAuditValues(
+                            $dispatch
+                        )
+                );
+
                 return $dispatch;
             });
 
@@ -603,6 +616,11 @@ class DispatchController extends Controller
 
                 $newStatus =
                     $validated['trip_status'];
+
+                $oldAuditValues =
+                    $this->getDispatchAuditValues(
+                        $dispatch
+                    );
 
                 /*
                 |--------------------------------------------------------------------------
@@ -766,6 +784,24 @@ class DispatchController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
+                | Audit Dispatch Changes
+                |--------------------------------------------------------------------------
+                */
+                $dispatch->refresh();
+
+                $newAuditValues =
+                    $this->getDispatchAuditValues(
+                        $dispatch
+                    );
+
+                $this->logDispatchUpdate(
+                    $dispatch,
+                    $oldAuditValues,
+                    $newAuditValues
+                );
+
+                /*
+                |--------------------------------------------------------------------------
                 | Reload Relationships
                 |--------------------------------------------------------------------------
                 */
@@ -867,6 +903,20 @@ class DispatchController extends Controller
                     );
                 }
 
+                $deletedDispatchValues =
+                $this->getDispatchAuditValues(
+                    $dispatch
+                );
+
+                AuditLogService::log(
+                    module: 'Dispatch Management',
+                    action: 'Deleted',
+                    description:
+                        "Deleted dispatch {$dispatch->dispatch_number}.",
+                    record: $dispatch,
+                    oldValues:
+                        $deletedDispatchValues
+                );
                 /*
                 |--------------------------------------------------------------------------
                 | Delete Dispatch
@@ -988,6 +1038,21 @@ class DispatchController extends Controller
                     $deletedIds[] =
                         $dispatch->id;
 
+                    $deletedDispatchValues =
+                        $this->getDispatchAuditValues(
+                            $dispatch
+                        );
+
+                    AuditLogService::log(
+                        module: 'Dispatch Management',
+                        action: 'Deleted',
+                        description:
+                            "Deleted dispatch {$dispatch->dispatch_number}.",
+                        record: $dispatch,
+                        oldValues:
+                            $deletedDispatchValues
+                    );
+
                     $dispatch->delete();
                 }
             });
@@ -1088,5 +1153,118 @@ class DispatchController extends Controller
             'success' => true,
             'dispatch_number' => $this->generateDispatchNumber(),
         ]);
+    }
+
+    private function getDispatchAuditValues(
+        Dispatch $dispatch
+    ): array {
+        return [
+            'dispatch_number' =>
+                $dispatch->dispatch_number,
+
+            'reservation_id' =>
+                $dispatch->reservation_id,
+
+            'dispatch_date' =>
+                $dispatch->dispatch_date
+                    ?->format('Y-m-d'),
+
+            'departure_time' =>
+                $dispatch->departure_time,
+
+            'arrival_time' =>
+                $dispatch->arrival_time,
+
+            'trip_status' =>
+                $dispatch->trip_status,
+        ];
+    }
+
+    private function logDispatchUpdate(
+        Dispatch $dispatch,
+        array $oldValues,
+        array $newValues
+    ): void {
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach ($newValues as $field => $newValue) {
+            $oldValue =
+                $oldValues[$field] ?? null;
+
+            if ((string) $oldValue !== (string) $newValue) {
+                $changedOldValues[$field] =
+                    $oldValue;
+
+                $changedNewValues[$field] =
+                    $newValue;
+            }
+        }
+
+        if (empty($changedNewValues)) {
+            return;
+        }
+
+        $oldStatus =
+            $oldValues['trip_status'] ?? null;
+
+        $newStatus =
+            $newValues['trip_status'] ?? null;
+
+        $action = 'Updated';
+
+        if (
+            $oldStatus !== $newStatus &&
+            $newStatus
+        ) {
+            $action = match ($newStatus) {
+                'Assigned' =>
+                    'Assigned',
+
+                'En Route' =>
+                    'En Route',
+
+                'Arrived' =>
+                    'Arrived',
+
+                'Completed' =>
+                    'Completed',
+
+                'Cancelled' =>
+                    'Cancelled',
+
+                default =>
+                    'Updated',
+            };
+        }
+
+        $description = match ($action) {
+            'Assigned' =>
+                "Assigned dispatch {$dispatch->dispatch_number}.",
+
+            'En Route' =>
+                "Dispatch {$dispatch->dispatch_number} started the trip.",
+
+            'Arrived' =>
+                "Dispatch {$dispatch->dispatch_number} arrived at its destination.",
+
+            'Completed' =>
+                "Completed dispatch {$dispatch->dispatch_number}.",
+
+            'Cancelled' =>
+                "Cancelled dispatch {$dispatch->dispatch_number}.",
+
+            default =>
+                "Updated dispatch {$dispatch->dispatch_number}.",
+        };
+
+        AuditLogService::log(
+            module: 'Dispatch Management',
+            action: $action,
+            description: $description,
+            record: $dispatch,
+            oldValues: $changedOldValues,
+            newValues: $changedNewValues
+        );
     }
 }

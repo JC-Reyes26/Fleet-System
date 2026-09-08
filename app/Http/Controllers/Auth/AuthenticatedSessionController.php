@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
@@ -22,25 +24,108 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): RedirectResponse
-    {
-        $request->authenticate();
+    public function store(
+        LoginRequest $request
+    ): RedirectResponse {
+        try {
+            /*
+            |--------------------------------------------------------------------------
+            | Authenticate
+            |--------------------------------------------------------------------------
+            */
+            $request->authenticate();
 
-        $request->session()->regenerate();
+        } catch (ValidationException $e) {
 
-        return redirect()->intended(route('dashboard', absolute: false));
+            /*
+            |--------------------------------------------------------------------------
+            | Failed Login Audit
+            |--------------------------------------------------------------------------
+            |
+            | Never log the submitted password.
+            |--------------------------------------------------------------------------
+            */
+            AuditLogService::log(
+                module: 'Authentication',
+                action: 'Failed Login',
+                description:
+                    'Failed login attempt for ' .
+                    $request->input('email') .
+                    '.',
+                newValues: [
+                    'email' =>
+                        $request->input('email'),
+                ]
+            );
+
+            throw $e;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Regenerate Session
+        |--------------------------------------------------------------------------
+        */
+        $request
+            ->session()
+            ->regenerate();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Successful Login Audit
+        |--------------------------------------------------------------------------
+        |
+        | At this point auth()->user() is available, so AuditLogService
+        | automatically records the authenticated user.
+        |--------------------------------------------------------------------------
+        */
+        AuditLogService::log(
+            module: 'Authentication',
+            action: 'Login',
+            description:
+                'Logged in successfully.'
+        );
+
+        return redirect()->intended(
+            route(
+                'dashboard',
+                absolute: false
+            )
+        );
     }
 
     /**
      * Destroy an authenticated session.
      */
-    public function destroy(Request $request): RedirectResponse
-    {
-        Auth::guard('web')->logout();
+    public function destroy(
+        Request $request
+    ): RedirectResponse {
+        /*
+        |--------------------------------------------------------------------------
+        | Logout Audit
+        |--------------------------------------------------------------------------
+        |
+        | Must be logged BEFORE Auth::logout(), otherwise the authenticated
+        | actor would no longer be available to AuditLogService.
+        |--------------------------------------------------------------------------
+        */
+        AuditLogService::log(
+            module: 'Authentication',
+            action: 'Logout',
+            description:
+                'Logged out successfully.'
+        );
 
-        $request->session()->invalidate();
+        Auth::guard('web')
+            ->logout();
 
-        $request->session()->regenerateToken();
+        $request
+            ->session()
+            ->invalidate();
+
+        $request
+            ->session()
+            ->regenerateToken();
 
         return redirect('/');
     }

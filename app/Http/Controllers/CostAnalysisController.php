@@ -13,6 +13,39 @@ class CostAnalysisController extends Controller
 {
     use AuthorizesRequests;
 
+    public function index(Request $request)
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $user?->canViewModule('cost_analysis'),
+            403
+        );
+
+        $costAnalysisPermissions = [
+            'role' =>
+                $user->role,
+
+            'canView' =>
+                $user->canViewModule(
+                    'cost_analysis'
+                ),
+
+            'canManageBudget' =>
+                $user->canModuleAction(
+                    'cost_analysis',
+                    'manage'
+                ),
+        ];
+
+        return view(
+            'cost-analysis.index',
+            compact(
+                'costAnalysisPermissions'
+            )
+        );
+    }
+
     /**
      * Cost Analysis consolidated data endpoint.
      */

@@ -6,6 +6,7 @@ use App\Models\Driver;
 use App\Models\User;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
+use App\Services\AuditLogService;
 use App\Notifications\AccountCreatedNotification;
 use App\Notifications\AccountUpdatedNotification;
 use App\Notifications\AccountDeletedNotification;
@@ -495,6 +496,18 @@ class DriverController extends Controller
                             'vehicle',
                         ]);
 
+                        AuditLogService::log(
+                            module: 'Driver Management',
+                            action: 'Created',
+                            description:
+                                "Created driver {$driver->driver_number}.",
+                            record: $driver,
+                            newValues:
+                                $this->getDriverAuditValues(
+                                    $driver
+                                )
+                        );
+
                         return [
                             'driver' =>
                                 $driver,
@@ -605,6 +618,11 @@ class DriverController extends Controller
     public function update(Request $request, Driver $driver)
     {
         $this->authorize( 'update',$driver);
+
+        $oldAuditValues =
+            $this->getDriverAuditValues(
+                $driver
+            );
 
         $driverSettings =
             $this->getDriverSettings();
@@ -750,6 +768,96 @@ class DriverController extends Controller
 
         $driver->refresh();
 
+                $newAuditValues =
+            $this->getDriverAuditValues(
+                $driver
+            );
+
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach (
+            $newAuditValues
+            as $field => $newValue
+        ) {
+            $oldValue =
+                $oldAuditValues[$field]
+                ?? null;
+
+            if (
+                (string) $oldValue !==
+                (string) $newValue
+            ) {
+                $changedOldValues[$field] =
+                    $oldValue;
+
+                $changedNewValues[$field] =
+                    $newValue;
+            }
+        }
+
+        if (!empty($changedNewValues)) {
+            $action = 'Updated';
+
+            if (
+                array_key_exists(
+                    'assigned_vehicle_id',
+                    $changedNewValues
+                )
+            ) {
+                if (
+                    $changedNewValues[
+                        'assigned_vehicle_id'
+                    ] === null
+                ) {
+                    $action =
+                        'Vehicle Unassigned';
+                } elseif (
+                    $changedOldValues[
+                        'assigned_vehicle_id'
+                    ] === null
+                ) {
+                    $action =
+                        'Vehicle Assigned';
+                } else {
+                    $action =
+                        'Vehicle Reassigned';
+                }
+            } elseif (
+                array_key_exists(
+                    'status',
+                    $changedNewValues
+                )
+            ) {
+                $action =
+                    'Status Changed';
+            }
+
+            $description = match ($action) {
+                'Vehicle Assigned' =>
+                    "Assigned a vehicle to driver {$driver->driver_number}.",
+                'Vehicle Unassigned' =>
+                    "Unassigned the vehicle from driver {$driver->driver_number}.",
+                'Vehicle Reassigned' =>
+                    "Reassigned the vehicle for driver {$driver->driver_number}.",
+                'Status Changed' =>
+                    "Changed the status of driver {$driver->driver_number}.",
+                default =>
+                    "Updated driver {$driver->driver_number}.",
+            };
+
+            AuditLogService::log(
+                module: 'Driver Management',
+                action: $action,
+                description: $description,
+                record: $driver,
+                oldValues:
+                    $changedOldValues,
+                newValues:
+                    $changedNewValues
+            );
+        }
+
         $accountDetailsChanged =
         $previousAccountDetails['first_name'] !== $driver->first_name ||
         $previousAccountDetails['last_name'] !== $driver->last_name ||
@@ -846,12 +954,27 @@ class DriverController extends Controller
             ?: $user?->name
             ?: $driver->first_name
             ?: 'Driver';
-
+        
+        $deletedDriverValues =
+            $this->getDriverAuditValues(
+                $driver
+            );
+        
         DB::transaction(
             function () use (
                 $driver,
                 $user
             ) {
+                AuditLogService::log(
+                    module: 'Driver Management',
+                    action: 'Deleted',
+                    description:
+                        "Deleted driver {$driver->driver_number}.",
+                    record: $driver,
+                    oldValues:
+                        $deletedDriverValues
+                );
+
                 $driver->delete();
 
                 if (
@@ -948,6 +1071,21 @@ class DriverController extends Controller
                 ) {
                     $user =
                         $driver->user;
+
+                    $deletedDriverValues =
+                        $this->getDriverAuditValues(
+                            $driver
+                        );
+
+                    AuditLogService::log(
+                        module: 'Driver Management',
+                        action: 'Deleted',
+                        description:
+                            "Deleted driver {$driver->driver_number}.",
+                        record: $driver,
+                        oldValues:
+                            $deletedDriverValues
+                    );
 
                     $driver->delete();
 
@@ -1169,6 +1307,24 @@ class DriverController extends Controller
                             $user->id,
                     ])->save();
 
+                    $driver->refresh();
+
+                    AuditLogService::log(
+                        module: 'Driver Management',
+                        action: 'Account Created',
+                        description:
+                            "Created and linked an account for driver {$driver->driver_number}.",
+                        record: $driver,
+                        oldValues: [
+                            'user_id' =>
+                                null,
+                        ],
+                        newValues: [
+                            'user_id' =>
+                                $user->id,
+                        ]
+                    );
+
                     return $user;
                 }
             );
@@ -1188,5 +1344,51 @@ class DriverController extends Controller
             'message' =>
                 'Driver account created and linked successfully.',
         ]);
+    }
+
+    private function getDriverAuditValues(
+        Driver $driver
+    ): array {
+        return [
+            'driver_number' =>
+                $driver->driver_number,
+
+            'first_name' =>
+                $driver->first_name,
+
+            'last_name' =>
+                $driver->last_name,
+
+            'license_number' =>
+                $driver->license_number,
+
+            'license_class' =>
+                $driver->license_class,
+
+            'license_expiry' =>
+                $driver->license_expiry
+                    ? Carbon::parse(
+                        $driver->license_expiry
+                    )->format('Y-m-d')
+                    : null,
+
+            'email' =>
+                $driver->email,
+
+            'contact_number' =>
+                $driver->contact_number,
+
+            'experience' =>
+                $driver->experience,
+
+            'assigned_vehicle_id' =>
+                $driver->assigned_vehicle_id,
+
+            'status' =>
+                $driver->status,
+
+            'user_id' =>
+                $driver->user_id,
+        ];
     }
 }

@@ -189,28 +189,47 @@ function buildReportsPagination(totalPages) {
   const page = reportsTableState.page;
   const fragment = document.createDocumentFragment();
 
-  const makeBtn = ({ label, aria, disabled, active, action, pageNumber }) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.setAttribute("aria-label", aria);
-    btn.disabled = disabled;
-    if (action) btn.dataset.reportsPage = action;
-    if (pageNumber != null) btn.dataset.pageNumber = String(pageNumber);
-    if (active) {
-      btn.classList.add("active");
-      btn.setAttribute("aria-current", "page");
-    }
-    if (label) btn.textContent = label;
-    return btn;
+  const makeBtn = ({
+      label = "",
+      aria,
+      iconClass = null,
+      disabled,
+      active,
+      action,
+      pageNumber,
+  }) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("aria-label", aria);
+      btn.disabled = disabled;
+      if (action) {
+          btn.dataset.reportsPage = action;
+      }
+      if (pageNumber != null) {
+          btn.dataset.pageNumber = String(pageNumber);
+      }
+      if (active) {
+          btn.classList.add("active");
+          btn.setAttribute("aria-current", "page");
+      }
+      if (iconClass) {
+          const icon = document.createElement("i");
+          icon.className = iconClass;
+          icon.setAttribute("aria-hidden", "true");
+          btn.appendChild(icon);
+      } else {
+          btn.textContent = label;
+      }
+      return btn;
   };
 
   fragment.appendChild(
-    makeBtn({
-      aria: "Previous page",
-      disabled: page <= 1 || totalPages === 0,
-      action: "prev",
-      label: "‹",
-    }),
+      makeBtn({
+          aria: "Previous page",
+          disabled: page <= 1 || totalPages === 0,
+          action: "prev",
+          iconClass: "ph ph-caret-left",
+      }),
   );
 
   for (let p = 1; p <= totalPages; p += 1) {
@@ -236,12 +255,12 @@ function buildReportsPagination(totalPages) {
   }
 
   fragment.appendChild(
-    makeBtn({
-      aria: "Next page",
-      disabled: totalPages === 0 || page >= totalPages,
-      action: "next",
-      label: "›",
-    }),
+      makeBtn({
+          aria: "Next page",
+          disabled: totalPages === 0 || page >= totalPages,
+          action: "next",
+          iconClass: "ph ph-caret-right",
+      }),
   );
 
   pagination.replaceChildren(fragment);

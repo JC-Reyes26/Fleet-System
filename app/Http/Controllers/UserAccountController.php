@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AuditLogService;
 use App\Notifications\AccountCreatedNotification;
 use App\Notifications\AccountUpdatedNotification;
 use App\Notifications\PasswordResetByAdminNotification;
@@ -179,6 +180,33 @@ class UserAccountController extends Controller
                         $plainPassword
                     ),
             ]);
+        
+        AuditLogService::log(
+            module: 'Account Management',
+            action: 'Created',
+            description:
+                "Created user account {$createdUser->name}.",
+            record: $createdUser,
+            newValues: [
+                'name' =>
+                    $createdUser->name,
+
+                'email' =>
+                    $createdUser->email,
+
+                'role' =>
+                    $createdUser->role,
+
+                'department' =>
+                    $createdUser->department,
+
+                'job_title' =>
+                    $createdUser->job_title,
+
+                'status' =>
+                    $createdUser->status,
+            ]
+        );
 
             try {
                 $createdUser->notify(
@@ -422,9 +450,52 @@ class UserAccountController extends Controller
                 );
         }
 
+        $auditFields =
+            array_keys($validated);
+        $oldValues =
+            $user->only(
+                $auditFields
+            );
+
         $user->update(
             $validated
         );
+
+        $newValues =
+            $user->fresh()->only(
+                $auditFields
+            );
+
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach ($auditFields as $field) {
+            $oldValue =
+                $oldValues[$field] ?? null;
+
+            $newValue =
+                $newValues[$field] ?? null;
+
+            if ($oldValue != $newValue) {
+                $changedOldValues[$field] =
+                    $oldValue;
+
+                $changedNewValues[$field] =
+                    $newValue;
+            }
+        }
+
+if (!empty($changedNewValues)) {
+    AuditLogService::log(
+        module: 'Account Management',
+        action: 'Updated',
+        description:
+            "Updated user account {$user->name}.",
+        record: $user,
+        oldValues: $changedOldValues,
+        newValues: $changedNewValues
+    );
+}
 
         /*
         |--------------------------------------------------------------------------
@@ -496,6 +567,14 @@ class UserAccountController extends Controller
                 ),
         ]);
 
+        AuditLogService::log(
+            module: 'Account Management',
+            action: 'Password Reset',
+            description:
+                "Reset the password for user account {$user->name}.",
+            record: $user
+        );
+
         try {
             $user->notify(
                 new PasswordResetByAdminNotification(
@@ -552,8 +631,34 @@ class UserAccountController extends Controller
             ?: $user->name
             ?: 'User';
 
+        $deletedUserSnapshot = [
+            'id' =>
+                $user->id,
+
+            'name' =>
+                $user->name,
+
+            'email' =>
+                $user->email,
+
+            'role' =>
+                $user->role,
+
+            'department' =>
+                $user->department,
+
+            'job_title' =>
+                $user->job_title,
+
+            'status' =>
+                $user->status,
+        ];
+
         DB::transaction(
-            function () use ($user) {
+            function () use (
+                $user,
+                $deletedUserSnapshot
+            ) {
                 /*
                 |--------------------------------------------------------------------------
                 | Driver account only
@@ -573,6 +678,15 @@ class UserAccountController extends Controller
                         ]);
                     }
                 }
+                AuditLogService::log(
+                    module: 'Account Management',
+                    action: 'Deleted',
+                    description:
+                        "Deleted user account {$user->name}.",
+                    record: $user,
+                    oldValues:
+                        $deletedUserSnapshot
+                );
 
                 /*
                 |--------------------------------------------------------------------------

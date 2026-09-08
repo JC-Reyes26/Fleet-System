@@ -34,7 +34,7 @@ class RoutePlan extends Model
     ];
 
     protected $casts = [
-        'departure_date' => 'date',
+        'departure_date' => 'date:Y-m-d',
         'estimated_distance' => 'decimal:2',
         'optimization_score' => 'decimal:2',
         'estimated_time' => 'integer',

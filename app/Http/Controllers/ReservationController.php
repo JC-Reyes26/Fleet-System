@@ -8,9 +8,11 @@ use App\Models\Driver;
 use Illuminate\Http\Request;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
+use App\Services\AuditLogService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\DB;
 
 class ReservationController extends Controller
 {   
@@ -472,6 +474,18 @@ class ReservationController extends Controller
                 'driver'
             ]);
 
+            AuditLogService::log(
+                module: 'Reservation Management',
+                action: 'Created',
+                description:
+                    "Created reservation {$reservation->reservation_number}.",
+                record: $reservation,
+                newValues:
+                    $this->getReservationAuditValues(
+                        $reservation
+                    )
+            );
+
             if ($reservation->status === 'Pending') {
                 FleetNotificationService::createWhenEnabled(
                     'reservationPending',
@@ -669,11 +683,37 @@ class ReservationController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
+                | Capture Previous Audit State
+                |--------------------------------------------------------------------------
+                */
+                $oldAuditValues =
+                    $this->getReservationAuditValues(
+                        $reservation
+                    );
+
+                /*
+                |--------------------------------------------------------------------------
                 | RBAC-Protected Ownership
                 |--------------------------------------------------------------------------
                 | requested_by and department are not accepted from the request.
                 */
-                $reservation->update($validated);
+                $reservation->update(
+                    $validated
+                );
+
+                $reservation->refresh();
+
+                $newAuditValues =
+                    $this->getReservationAuditValues(
+                        $reservation
+                    );
+
+                $this->logReservationUpdate(
+                    $reservation,
+                    $oldAuditValues,
+                    $newAuditValues
+                );
+
                 $reservation->load([
                     'vehicle',
                     'driver',
@@ -790,8 +830,26 @@ class ReservationController extends Controller
             $validated =
                 $validator->validated();
 
+            $oldAuditValues =
+                $this->getReservationAuditValues(
+                    $reservation
+                );
+
             $reservation->update(
                 $validated
+            );
+
+            $reservation->refresh();
+
+            $newAuditValues =
+                $this->getReservationAuditValues(
+                    $reservation
+                );
+
+            $this->logReservationUpdate(
+                $reservation,
+                $oldAuditValues,
+                $newAuditValues
             );
 
             $reservation->load([
@@ -837,7 +895,30 @@ class ReservationController extends Controller
                     'This reservation cannot be deleted because it already has a route plan.'
                 );
             }
-            $reservation->delete();
+
+            $deletedReservationValues =
+                $this->getReservationAuditValues(
+                    $reservation
+                );
+
+            DB::transaction(
+                function () use (
+                    $reservation,
+                    $deletedReservationValues
+                ) {
+                    AuditLogService::log(
+                        module: 'Reservation Management',
+                        action: 'Deleted',
+                        description:
+                            "Deleted reservation {$reservation->reservation_number}.",
+                        record: $reservation,
+                        oldValues:
+                            $deletedReservationValues
+                    );
+
+                    $reservation->delete();
+                }
+            );
             return response()->json([
                 'success' => true,
                 'message' => 'Reservation deleted successfully.',
@@ -889,17 +970,41 @@ class ReservationController extends Controller
                     $validator->validated()['ids']
                 )
                 ->get();
-            foreach ($reservations as $reservation) {
-                if (
-                    $reservation->routePlan ||
-                    $reservation->dispatch
+            DB::transaction(
+                function () use (
+                    $reservations,
+                    &$deletedIds
                 ) {
-                    continue;
+                    foreach ($reservations as $reservation) {
+                        if (
+                            $reservation->routePlan ||
+                            $reservation->dispatch
+                        ) {
+                            continue;
+                        }
+
+                        $deletedReservationValues =
+                            $this->getReservationAuditValues(
+                                $reservation
+                            );
+
+                        AuditLogService::log(
+                            module: 'Reservation Management',
+                            action: 'Deleted',
+                            description:
+                                "Deleted reservation {$reservation->reservation_number}.",
+                            record: $reservation,
+                            oldValues:
+                                $deletedReservationValues
+                        );
+
+                        $deletedIds[] =
+                            $reservation->id;
+
+                        $reservation->delete();
+                    }
                 }
-                $deletedIds[] =
-                    $reservation->id;
-                $reservation->delete();
-            }
+            );
             if (empty($deletedIds)) {
                 return response()->json([
                     'success' => false,
@@ -1046,5 +1151,150 @@ class ReservationController extends Controller
             'reservation_number' =>
                 $this->generateReservationNumber(),
         ]);
+    }
+
+    private function getReservationAuditValues(
+        Reservation $reservation
+    ): array {
+        /*
+        |--------------------------------------------------------------------------
+        | Audit-safe Reservation Snapshot
+        |--------------------------------------------------------------------------
+        |
+        | Do not unnecessarily store patient/contact/notes information
+        | inside the security audit trail.
+        |--------------------------------------------------------------------------
+        */
+        return [
+            'reservation_number' =>
+                $reservation->reservation_number,
+
+            'request_type' =>
+                $reservation->request_type,
+
+            'vehicle_id' =>
+                $reservation->vehicle_id,
+
+            'driver_id' =>
+                $reservation->driver_id,
+
+            'department' =>
+                $reservation->department,
+
+            'pickup_location' =>
+                $reservation->pickup_location,
+
+            'destination' =>
+                $reservation->destination,
+
+            'schedule_date' =>
+                $reservation->schedule_date
+                    ?->format('Y-m-d'),
+
+            'schedule_time' =>
+                $reservation->schedule_time,
+
+            'priority' =>
+                $reservation->priority,
+
+            'status' =>
+                $reservation->status,
+
+            'requested_by' =>
+                $reservation->requested_by,
+        ];
+    }
+
+    private function logReservationUpdate(
+        Reservation $reservation,
+        array $oldValues,
+        array $newValues
+    ): void {
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach ($newValues as $field => $newValue) {
+            $oldValue =
+                $oldValues[$field] ?? null;
+
+            if ((string) $oldValue !== (string) $newValue) {
+                $changedOldValues[$field] =
+                    $oldValue;
+
+                $changedNewValues[$field] =
+                    $newValue;
+            }
+        }
+
+        if (empty($changedNewValues)) {
+            return;
+        }
+
+        $oldStatus =
+            $oldValues['status'] ?? null;
+
+        $newStatus =
+            $newValues['status'] ?? null;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Determine Meaningful Reservation Action
+        |--------------------------------------------------------------------------
+        */
+        $action = 'Updated';
+
+        if (
+            $oldStatus !== $newStatus &&
+            $newStatus
+        ) {
+            $action = match ($newStatus) {
+                'Approved' =>
+                    'Approved',
+
+                'Rejected' =>
+                    'Rejected',
+
+                'Cancelled' =>
+                    'Cancelled',
+
+                'Scheduled' =>
+                    'Scheduled',
+
+                'Completed' =>
+                    'Completed',
+
+                default =>
+                    'Updated',
+            };
+        }
+
+        $description = match ($action) {
+            'Approved' =>
+                "Approved reservation {$reservation->reservation_number}.",
+
+            'Rejected' =>
+                "Rejected reservation {$reservation->reservation_number}.",
+
+            'Cancelled' =>
+                "Cancelled reservation {$reservation->reservation_number}.",
+
+            'Scheduled' =>
+                "Scheduled reservation {$reservation->reservation_number}.",
+
+            'Completed' =>
+                "Completed reservation {$reservation->reservation_number}.",
+
+            default =>
+                "Updated reservation {$reservation->reservation_number}.",
+        };
+
+        AuditLogService::log(
+            module: 'Reservation Management',
+            action: $action,
+            description: $description,
+            record: $reservation,
+            oldValues: $changedOldValues,
+            newValues: $changedNewValues
+        );
     }
 }

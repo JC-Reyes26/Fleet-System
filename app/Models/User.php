@@ -121,6 +121,13 @@ class User extends Authenticatable
             'requested_by'
         );
     }
+
+    public function auditLogs()
+    {
+        return $this->hasMany(
+            \App\Models\AuditLog::class
+        );
+    }
 }
 
 

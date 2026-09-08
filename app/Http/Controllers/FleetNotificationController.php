@@ -103,7 +103,40 @@ class FleetNotificationController extends Controller
 
         return response()->json([
             'notifications' =>
-                $notifications,
+                $notifications
+                    ->map(function ($notification) {
+                        return [
+                            'id' =>
+                                $notification->id,
+
+                            'user_id' =>
+                                $notification->user_id,
+
+                            'title' =>
+                                $notification->title,
+
+                            'message' =>
+                                $notification->message,
+
+                            'status' =>
+                                $notification->status,
+
+                            'event_key' =>
+                                $notification->event_key,
+
+                            'link' =>
+                                $notification->link,
+
+                            'created_at' =>
+                                $notification->created_at
+                                    ?->toIso8601String(),
+
+                            'created_at_timestamp' =>
+                                $notification->created_at
+                                    ?->getTimestamp(),
+                        ];
+                    })
+                    ->values(),
 
             'unread_count' =>
                 $notifications

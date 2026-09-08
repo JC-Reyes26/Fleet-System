@@ -42,6 +42,12 @@
     $canSettings =
         $sidebarUser?->canViewModule('settings') ?? false;
 
+    $canAuditLogs =
+        $sidebarUser?->hasRole(
+            'fleet_manager',
+            'it_admin'
+        ) ?? false;
+
     /*
     |--------------------------------------------------------------------------
     | Section Visibility
@@ -61,6 +67,10 @@
     $showAnalytics =
         $canCostAnalysis ||
         $canReports;
+
+    $showSystem =
+        $canAuditLogs ||
+        $canSettings;
 
     /*
     |--------------------------------------------------------------------------
@@ -415,28 +425,50 @@
 
 
             {{-- SYSTEM --}}
-            @if($canSettings)
-                <span class="nav-title">
-                    SYSTEM
-                </span>
+                @if($showSystem)
+                    <span class="nav-title">
+                        SYSTEM
+                    </span>
 
-                <ul>
-                    <li>
-                        <a
-                            href="{{ route('settings') }}"
-                            class="nav-link {{ request()->routeIs('settings', 'settings.*') ? 'active' : '' }}"
-                            data-page="settings"
-                            data-tooltip="Settings"
-                        >
-                            <i class="ph-fill ph-sliders-horizontal"></i>
+                    <ul>
 
-                            <span class="nav-label">
-                                Settings
-                            </span>
-                        </a>
-                    </li>
-                </ul>
-            @endif
+                        @if($canAuditLogs)
+                            <li>
+                                <a
+                                    href="{{ route('audit-logs.index') }}"
+                                    class="nav-link {{ request()->routeIs('audit-logs.*') ? 'active' : '' }}"
+                                    data-page="audit-logs"
+                                    data-tooltip="Audit Logs"
+                                >
+                                    <i class="ph-fill ph-shield-check"></i>
+
+                                    <span class="nav-label">
+                                        Audit Logs
+                                    </span>
+                                </a>
+                            </li>
+                        @endif
+
+
+                        @if($canSettings)
+                            <li>
+                                <a
+                                    href="{{ route('settings') }}"
+                                    class="nav-link {{ request()->routeIs('settings', 'settings.*') ? 'active' : '' }}"
+                                    data-page="settings"
+                                    data-tooltip="Settings"
+                                >
+                                    <i class="ph-fill ph-sliders-horizontal"></i>
+
+                                    <span class="nav-label">
+                                        Settings
+                                    </span>
+                                </a>
+                            </li>
+                        @endif
+
+                    </ul>
+                @endif
 
         </nav>
 

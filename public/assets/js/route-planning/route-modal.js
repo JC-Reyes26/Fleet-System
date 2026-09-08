@@ -902,8 +902,6 @@ function buildUpdateRoutePayload(data) {
         priority: data.priority,
         department: data.department,
         status: data.status,
-        departure_date: data.departureDate,
-        departure_time: data.departureTime,
         estimated_distance:
             data.estimatedDistance === ""
                 ? null
