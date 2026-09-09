@@ -2,29 +2,65 @@
    Vehicle Table 
 ========================================== */
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadVehicles();
+let vehicleLiveUpdateInterval = null;
+let vehicleLiveUpdateRunning = false;
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadVehicles();
+    startVehicleLiveUpdates();
 });
 
-function loadVehicles() {
-    fetch("/fleet", {
-        headers: {
-            Accept: "application/json",
-        },
-    })
-        .then((response) => response.json())
-        .then((data) => {
-            const vehicles = data.vehicles ?? data;
-
-            renderVehicleTable(vehicles);
-
-            if (typeof updateVehicleStats === "function") {
-                updateVehicleStats();
-            }
-        })
-        .catch((error) => {
-            console.error("VEHICLE LOAD ERROR:", error);
+async function loadVehicles() {
+    try {
+        const response = await fetch("/fleet", {
+            headers: {
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "same-origin",
+            cache: "no-store",
         });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || "Failed to load vehicles.");
+        }
+        const vehicles = Array.isArray(data.vehicles)
+            ? data.vehicles
+            : Array.isArray(data)
+              ? data
+              : [];
+        renderVehicleTable(vehicles);
+        if (typeof updateVehicleStats === "function") {
+            updateVehicleStats();
+        }
+        return vehicles;
+    } catch (error) {
+        console.error("VEHICLE LOAD ERROR:", error);
+
+        return [];
+    }
+}
+
+function startVehicleLiveUpdates() {
+    if (vehicleLiveUpdateInterval) {
+        return;
+    }
+    vehicleLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (vehicleLiveUpdateRunning) {
+            return;
+        }
+        vehicleLiveUpdateRunning = true;
+        try {
+            await loadVehicles();
+        } catch (error) {
+            console.error("Vehicle live update failed:", error);
+        } finally {
+            vehicleLiveUpdateRunning = false;
+        }
+    }, 10000);
 }
 
 function getVehicleStatusClass(status) {

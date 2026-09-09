@@ -1,22 +1,64 @@
 /* ==========================================
    Driver Table 
 ========================================== */
+let driverLiveUpdateInterval = null;
+let driverLiveUpdateRunning = false;
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadDrivers();
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadDrivers();
+    startDriverLiveUpdates();
 });
 
-function loadDrivers() {
-    fetch("/drivers")
-        .then(response => response.json())
-        .then(drivers => {
-            renderDriverTable(drivers);
-            if (typeof updateDriverStats === "function") {
-                updateDriverStats();
-            }
-        })
-        .catch(error => console.error(error));
+async function loadDrivers() {
+    try {
+        const response = await fetch("/drivers", {
+            headers: {
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "same-origin",
+            cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || "Failed to load drivers.");
+        }
+        const drivers = Array.isArray(data)
+            ? data
+            : Array.isArray(data.drivers)
+              ? data.drivers
+              : [];
+        renderDriverTable(drivers);
+        if (typeof updateDriverStats === "function") {
+            updateDriverStats();
+        }
+        return drivers;
+    } catch (error) {
+        console.error("DRIVER LOAD ERROR:", error);
+        return [];
+    }
+}
 
+function startDriverLiveUpdates() {
+    if (driverLiveUpdateInterval) {
+        return;
+    }
+    driverLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (driverLiveUpdateRunning) {
+            return;
+        }
+        driverLiveUpdateRunning = true;
+        try {
+            await loadDrivers();
+        } catch (error) {
+            console.error("Driver live update failed:", error);
+        } finally {
+            driverLiveUpdateRunning = false;
+        }
+    }, 10000);
 }
 
 function getDriverStatusClass(status) {

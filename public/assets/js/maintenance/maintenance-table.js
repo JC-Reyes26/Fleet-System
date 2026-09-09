@@ -2,43 +2,72 @@
    Maintenance Table :)
 ========================================== */
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadMaintenances();
-});
+let maintenanceLiveUpdateInterval = null;
+let maintenanceLiveUpdateRunning = false;
 
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadMaintenances();
+    startMaintenanceLiveUpdates();
+});
 
 async function loadMaintenances() {
     try {
         const response = await fetch("/maintenance", {
             headers: {
                 Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
             },
+            credentials: "same-origin",
+            cache: "no-store",
         });
-
         const data = await response.json();
-
         if (!response.ok) {
             throw new Error(
                 data.message || "Failed to load maintenance records.",
             );
         }
-
-        const maintenances = data.maintenances || [];
-
+        const maintenances = Array.isArray(data.maintenances)
+            ? data.maintenances
+            : Array.isArray(data)
+              ? data
+              : [];
         renderMaintenanceTable(maintenances);
-
         if (typeof updateMaintenanceStatistics === "function") {
             updateMaintenanceStatistics();
         }
-
         if (typeof updateMaintenancePagination === "function") {
             updateMaintenancePagination();
         }
+        return maintenances;
     } catch (error) {
         console.error("MAINTENANCE LOAD ERROR:", error);
+
+        return [];
     }
 }
 
+function startMaintenanceLiveUpdates() {
+    if (maintenanceLiveUpdateInterval) {
+        return;
+    }
+
+    maintenanceLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (maintenanceLiveUpdateRunning) {
+            return;
+        }
+        maintenanceLiveUpdateRunning = true;
+        try {
+            await loadMaintenances();
+        } catch (error) {
+            console.error("Maintenance live update failed:", error);
+        } finally {
+            maintenanceLiveUpdateRunning = false;
+        }
+    }, 10000);
+}
 
 function getMaintenanceStatusClass(status) {
     const value = (status || "")

@@ -252,6 +252,575 @@ function initDashboardFleetMap() {
 
 let dashboardInitialized = false;
 
+let dashboardLiveUpdateInterval = null;
+let dashboardLiveUpdateRunning = false;
+
+let dashboardMapDataSignature = "";
+
+async function loadDashboardLiveData() {
+    try {
+        const response = await fetch("/dashboard/data", {
+            headers: {
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "same-origin",
+            cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || "Failed to load dashboard data.");
+        }
+        await applyDashboardLiveData(data);
+        return data;
+    } catch (error) {
+        console.error("DASHBOARD LIVE UPDATE ERROR:", error);
+
+        return null;
+    }
+}
+
+function setDashboardLiveText(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function getDashboardVehicleStatusClass(status) {
+    switch (status) {
+        case "Available":
+            return "available";
+        case "On Trip":
+            return "trip";
+        case "Maintenance":
+            return "maintenance";
+        default:
+            return "inactive";
+    }
+}
+
+function getDashboardActivityIcon(title) {
+    const value = String(title || "").toLowerCase();
+
+    if (value.includes("maintenance")) {
+        return "ph-warning-circle";
+    }
+    if (value.includes("dispatch")) {
+        return "ph-truck";
+    }
+    if (value.includes("fuel")) {
+        return "ph-gas-pump";
+    }
+    if (value.includes("driver")) {
+        return "ph-user";
+    }
+    return "ph-check-circle";
+}
+
+function formatDashboardActivityAge(timestamp) {
+    const createdSeconds = Number(timestamp);
+
+    if (!Number.isFinite(createdSeconds)) {
+        return "Recently";
+    }
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const diffSeconds = Math.max(0, nowSeconds - createdSeconds);
+    if (diffSeconds < 60) {
+        return "Just now";
+    }
+    const minutes = Math.floor(diffSeconds / 60);
+    if (minutes < 60) {
+        return `${minutes}m ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+        return `${hours}h ago`;
+    }
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+}
+
+async function applyDashboardLiveData(data) {
+    /*
+    |--------------------------------------------------------------------------
+    | KPI
+    |--------------------------------------------------------------------------
+    */
+    setDashboardLiveText(
+        "dashboardAvailableVehicles",
+        Number(data.available_vehicles || 0).toLocaleString(),
+    );
+    setDashboardLiveText(
+        "dashboardActiveDispatches",
+        Number(data.active_dispatches || 0).toLocaleString(),
+    );
+    setDashboardLiveText(
+        "dashboardDriversOnDuty",
+        Number(data.drivers_on_duty || 0).toLocaleString(),
+    );
+    const fuel = Number(data.average_fuel_level || 0);
+    setDashboardLiveText("dashboardAverageFuelLevel", `${fuel}%`);
+    const fuelTrend = document.getElementById("dashboardFuelTrend");
+    if (fuelTrend) {
+        fuelTrend.textContent = fuel < 30 ? "Low fuel" : "Within range";
+        fuelTrend.classList.remove("kpi-trend--up", "kpi-trend--steady");
+        fuelTrend.classList.add(
+            fuel < 30 ? "kpi-trend--up" : "kpi-trend--steady",
+        );
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Weekly Activity
+    |--------------------------------------------------------------------------
+    */
+    const weekly = Array.isArray(data.weekly_activity)
+        ? data.weekly_activity
+        : [];
+    const weeklyMax = Math.max(1, Number(data.weekly_activity_max || 1));
+    const chart = document.getElementById("dashboardWeeklyChart");
+    const legend = document.getElementById("dashboardWeeklyLegend");
+    if (chart) {
+        chart.innerHTML = weekly
+            .map((activity) => {
+                const total = Number(activity.total || 0);
+
+                const height =
+                    total > 0
+                        ? Math.max(8, Math.round((total / weeklyMax) * 100))
+                        : 3;
+
+                return `
+                        <div
+                            class="bar"
+                            style="--bar-h: ${height}%"
+                            title="${escapeDashboardMapHtml(
+                                activity.day,
+                            )}: ${total} dispatches"
+                        ></div>
+                    `;
+            })
+            .join("");
+    }
+
+    if (legend) {
+        legend.innerHTML = weekly
+            .map(
+                (activity) => `
+                        <span>
+                            ${escapeDashboardMapHtml(activity.day)}
+                        </span>
+                    `,
+            )
+            .join("");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Dispatch Queue
+    |--------------------------------------------------------------------------
+    */
+    setDashboardLiveText(
+        "dashboardActiveDispatchBadge",
+        `${Number(data.active_dispatches || 0)} Active`,
+    );
+    const dispatchList = document.getElementById("dashboardDispatchList");
+    const dispatches = Array.isArray(data.dispatch_queue)
+        ? data.dispatch_queue
+        : [];
+    if (dispatchList) {
+        if (!dispatches.length) {
+            dispatchList.innerHTML = `
+                <div class="dashboard-empty-state">
+                    No active dispatches scheduled today.
+                </div>
+            `;
+        } else {
+            dispatchList.innerHTML = dispatches
+                .map((dispatch) => {
+                    const status = dispatch.status || "Pending";
+
+                    const statusClass =
+                        status === "Assigned" || status === "Arrived"
+                            ? "status-chip--success"
+                            : "status-chip--warning";
+
+                    const dotClass =
+                        status === "Assigned" || status === "Arrived"
+                            ? "green"
+                            : "yellow";
+
+                    const driver = String(dispatch.driver || "").trim();
+
+                    return `
+                                <div
+                                    class="dispatch-item"
+                                    data-dispatch-id="${escapeDashboardMapHtml(
+                                        dispatch.id,
+                                    )}"
+                                >
+                                    <div
+                                        class="dispatch-dot ${dotClass}"
+                                        aria-hidden="true"
+                                    ></div>
+
+                                    <div class="dispatch-body">
+                                        <div class="dispatch-row">
+                                            <strong>
+                                                ${escapeDashboardMapHtml(
+                                                    dispatch.title,
+                                                )}
+                                            </strong>
+
+                                            <span
+                                                class="status-chip ${statusClass}"
+                                            >
+                                                ${escapeDashboardMapHtml(
+                                                    status,
+                                                )}
+                                            </span>
+                                        </div>
+
+                                        <small>
+                                            ${escapeDashboardMapHtml(
+                                                dispatch.vehicle ||
+                                                    "No vehicle",
+                                            )}
+
+                                            ${
+                                                driver
+                                                    ? ` · ${escapeDashboardMapHtml(
+                                                          driver,
+                                                      )}`
+                                                    : ""
+                                            }
+                                        </small>
+                                    </div>
+                                </div>
+                            `;
+                })
+                .join("");
+        }
+        initDashboardDispatchQueue();
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Vehicle Status
+    |--------------------------------------------------------------------------
+    */
+    const vehicleBody = document.getElementById("dashboardVehicleTableBody");
+    const vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+    if (vehicleBody) {
+        if (!vehicles.length) {
+            vehicleBody.innerHTML = `
+                <tr>
+                    <td
+                        colspan="5"
+                        class="text-center"
+                    >
+                        No vehicle records found.
+                    </td>
+                </tr>
+            `;
+        } else {
+            vehicleBody.innerHTML = vehicles
+                .map(
+                    (vehicle) => `
+                            <tr>
+                                <td>
+                                    <strong>
+                                        ${escapeDashboardMapHtml(vehicle.label)}
+                                    </strong>
+
+                                    ${
+                                        vehicle.vehicle_type
+                                            ? `
+                                                <small class="d-block">
+                                                    ${escapeDashboardMapHtml(
+                                                        vehicle.vehicle_type,
+                                                    )}
+                                                </small>
+                                            `
+                                            : ""
+                                    }
+                                </td>
+
+                                <td>
+                                    ${escapeDashboardMapHtml(
+                                        vehicle.driver || "Unassigned",
+                                    )}
+                                </td>
+
+                                <td>
+                                    <span
+                                        class="status ${getDashboardVehicleStatusClass(
+                                            vehicle.status,
+                                        )}"
+                                    >
+                                        ${escapeDashboardMapHtml(
+                                            vehicle.status,
+                                        )}
+                                    </span>
+                                </td>
+
+                                <td>
+                                    ${
+                                        vehicle.fuel_percent !== null &&
+                                        vehicle.fuel_percent !== undefined
+                                            ? `${vehicle.fuel_percent}%`
+                                            : "—"
+                                    }
+                                </td>
+
+                                <td>
+                                    ${
+                                        canDashboardOpen("canOpenVehicles")
+                                            ? `
+                                                <a
+                                                    href="${DASHBOARD_ROUTES.vehicles}"
+                                                    class="table-btn"
+                                                >
+                                                    View
+                                                </a>
+                                            `
+                                            : ""
+                                    }
+                                </td>
+                            </tr>
+                        `,
+                )
+                .join("");
+        }
+        initDashboardVehicleStatus();
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Maintenance Alerts
+    |--------------------------------------------------------------------------
+    */
+    renderDashboardMaintenanceAlerts(data.maintenance_alerts);
+    /*
+    |--------------------------------------------------------------------------
+    | Recent Activity
+    |--------------------------------------------------------------------------
+    */
+    renderDashboardRecentActivity(data.recent_activity);
+    /*
+    |--------------------------------------------------------------------------
+    | Map
+    |--------------------------------------------------------------------------
+    */
+    const mapDispatches = Array.isArray(data.map_dispatches)
+        ? data.map_dispatches
+        : [];
+    const newSignature = JSON.stringify(mapDispatches);
+    if (newSignature !== dashboardMapDataSignature) {
+        dashboardMapDataSignature = newSignature;
+        window.DASHBOARD_MAP_DISPATCHES = mapDispatches;
+        if (dashboardFleetMap) {
+            await loadDashboardDispatchMarkers();
+        }
+    }
+}
+
+function renderDashboardMaintenanceAlerts(alerts) {
+    const list = document.getElementById("dashboardMaintenanceList");
+    if (!list) {
+        return;
+    }
+    const records = Array.isArray(alerts) ? alerts : [];
+    if (!records.length) {
+        list.innerHTML = `
+            <div class="dashboard-empty-state">
+                No active maintenance alerts.
+            </div>
+        `;
+
+        return;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    list.innerHTML = records
+        .map((maintenance) => {
+            const date = maintenance.maintenance_date
+                ? new Date(`${maintenance.maintenance_date}T00:00:00`)
+                : null;
+            let days = null;
+            if (date && !Number.isNaN(date.getTime())) {
+                days = Math.round((date - today) / 86400000);
+            }
+            const criticalPriority = ["Emergency", "High"].includes(
+                maintenance.priority,
+            );
+
+            let severity = "success";
+            let label = "Scheduled";
+            let chip = "status-chip--success";
+            let icon = "ph-calendar-check";
+
+            if (maintenance.status === "In Progress" && criticalPriority) {
+                severity = "critical";
+                label = "Critical";
+                chip = "status-chip--danger";
+                icon = "ph-warning-circle";
+            } else if (
+                maintenance.status === "Scheduled" &&
+                days !== null &&
+                days <= 0
+            ) {
+                severity = "critical";
+                label = "Critical";
+                chip = "status-chip--danger";
+                icon = "ph-warning-circle";
+            } else if (
+                maintenance.status === "Scheduled" &&
+                days !== null &&
+                days > 0 &&
+                days <= 3
+            ) {
+                severity = "warning";
+                label = "Due soon";
+                chip = "status-chip--warning";
+                icon = "ph-wrench";
+            } else if (maintenance.status === "In Progress") {
+                severity = "warning";
+                label = "In Progress";
+                chip = "status-chip--warning";
+                icon = "ph-wrench";
+            }
+
+            const dateLabel =
+                date && !Number.isNaN(date.getTime())
+                    ? date.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "2-digit",
+                          year: "numeric",
+                      })
+                    : "";
+
+            return `
+                    <div
+                        class="maintenance-item ${severity}"
+                        data-maintenance-id="${escapeDashboardMapHtml(
+                            maintenance.id,
+                        )}"
+                    >
+                        <div
+                            class="maintenance-icon"
+                            aria-hidden="true"
+                        >
+                            <i
+                                class="ph-fill ${icon}"
+                            ></i>
+                        </div>
+
+                        <div class="maintenance-body">
+                            <div class="dispatch-row">
+                                <strong>
+                                    ${escapeDashboardMapHtml(
+                                        maintenance.maintenance_type,
+                                    )}
+                                </strong>
+
+                                <span
+                                    class="status-chip ${chip}"
+                                >
+                                    ${label}
+                                </span>
+                            </div>
+
+                            <small>
+                                ${escapeDashboardMapHtml(
+                                    maintenance.vehicle || "Vehicle",
+                                )}
+
+                                ${dateLabel ? ` · ${dateLabel}` : ""}
+                            </small>
+                        </div>
+                    </div>
+                `;
+        })
+        .join("");
+    initDashboardMaintenanceAlerts();
+}
+
+function renderDashboardRecentActivity(activities) {
+    const list = document.getElementById("dashboardActivityList");
+    if (!list) {
+        return;
+    }
+    const records = Array.isArray(activities) ? activities : [];
+    if (!records.length) {
+        list.innerHTML = `
+            <div class="dashboard-empty-state">
+                No recent activity.
+            </div>
+        `;
+
+        return;
+    }
+    list.innerHTML = records
+        .map((activity) => {
+            const icon = getDashboardActivityIcon(activity.title);
+
+            return `
+                    <div
+                        class="activity-item"
+                        ${
+                            activity.link
+                                ? `data-href="${escapeDashboardMapHtml(
+                                      activity.link,
+                                  )}"`
+                                : ""
+                        }
+                    >
+                        <div
+                            class="activity-icon primary"
+                            aria-hidden="true"
+                        >
+                            <i
+                                class="ph-fill ${icon}"
+                            ></i>
+                        </div>
+
+                        <div class="activity-body">
+                            <strong>
+                                ${escapeDashboardMapHtml(activity.title)}
+                            </strong>
+
+                            <small>
+                                ${formatDashboardActivityAge(
+                                    activity.created_at_timestamp,
+                                )}
+                            </small>
+                        </div>
+                    </div>
+                `;
+        })
+        .join("");
+
+    initDashboardActivity();
+}
+
+function startDashboardLiveUpdates() {
+    if (dashboardLiveUpdateInterval) {
+        return;
+    }
+    dashboardLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (dashboardLiveUpdateRunning) {
+            return;
+        }
+        dashboardLiveUpdateRunning = true;
+        try {
+            await loadDashboardLiveData();
+        } finally {
+            dashboardLiveUpdateRunning = false;
+        }
+    }, 10000);
+}
+
 const DASHBOARD_ROUTES = {
     dashboard: "/dashboard",
     vehicles: "/fleet",
@@ -514,6 +1083,8 @@ function initDashboardPage() {
         initDashboardActivity();
         initDashboardKpiCards();
         initDashboardFleetMap();
+
+        startDashboardLiveUpdates();
     } catch (error) {
         console.error("Dashboard init failed:", error);
     }

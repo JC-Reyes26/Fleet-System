@@ -42,26 +42,26 @@ function getDriverDataRows(tableBody) {
 }
 
 function updateDriverNoResultsRow(tableBody, shouldShow) {
-  if (!tableBody) return;
-
-  const existingRow = tableBody.querySelector(".driver-no-results");
-
-  if (!shouldShow) {
-    existingRow?.remove();
-    return;
-  }
-
-  if (existingRow) return;
-
-  const row = document.createElement("tr");
-  const cell = document.createElement("td");
-
-  row.className = "driver-no-results";
-  cell.colSpan = 9;
-  cell.className = "text-center";
-  cell.textContent = "No drivers found.";
-  row.appendChild(cell);
-  tableBody.appendChild(row);
+    if (!tableBody) {
+        return;
+    }
+    const existingRow = tableBody.querySelector(".driver-no-results");
+    if (!shouldShow) {
+        existingRow?.remove();
+        return;
+    }
+    if (existingRow) {
+        return;
+    }
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    row.className = "driver-no-results";
+    row.dataset.helperRow = "true";
+    cell.colSpan = 9;
+    cell.className = "text-center";
+    cell.textContent = "No drivers found.";
+    row.appendChild(cell);
+    tableBody.appendChild(row);
 }
 
 function renderDriverFilterRows(matchingRows) {

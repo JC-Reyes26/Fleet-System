@@ -2078,19 +2078,16 @@ function initRoutePlanningModals() {
 
 async function initRoutePlanningPage() {
     const page = document.getElementById("routePlanningPage");
-
     if (!page) {
         return;
     }
     if (page.dataset.init === "true") {
         return;
     }
-
     page.dataset.init = "true";
     await loadRouteModuleSettings();
     initRoutePlanningPipeline();
     initRoutePlanningModals();
-
     if (typeof initRouteTemplates === "function") {
         initRouteTemplates();
     }
@@ -2101,6 +2098,7 @@ async function initRoutePlanningPage() {
         resetPage: true,
         reason: "init",
     });
+    startRoutePlanningLiveUpdates();
 }
 
 document.addEventListener("DOMContentLoaded", () => {

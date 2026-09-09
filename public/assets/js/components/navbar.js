@@ -95,6 +95,8 @@ let navbarGlobalEventsInitialized = false;
 let navbarObserverStarted = false;
 
 let navbarNotificationTimeInterval = null;
+
+let navbarNotificationPollInterval = null;
 /* ==========================================
    Routes
 ========================================== */
@@ -171,6 +173,25 @@ function fleetNavNotify(message, type = "info") {
     if (typeof window.showToast === "function") {
         window.showToast(message, type);
     }
+}
+
+function startNavbarNotificationPolling(refreshCallback) {
+    if (
+        navbarNotificationPollInterval ||
+        typeof refreshCallback !== "function"
+    ) {
+        return;
+    }
+    navbarNotificationPollInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        try {
+            await refreshCallback();
+        } catch (error) {
+            console.error("Notification live refresh failed:", error);
+        }
+    }, 10000);
 }
 
 /* ==========================================
@@ -609,8 +630,10 @@ function initNavbarNotifications() {
     }
 
     async function refreshNotifications() {
-        list.innerHTML =
-            '<div class="navbar-search-empty">Loading notifications...</div>';
+        if (!list.children.length) {
+            list.innerHTML =
+                '<div class="navbar-search-empty">Loading notifications...</div>';
+        }
         const data = await fetchNavbarNotifications();
         updateBadge(data.unreadCount);
         await processBrowserNotifications(data.notifications);
@@ -741,6 +764,8 @@ function initNavbarNotifications() {
         button.setAttribute("aria-expanded", "true");
         await refreshNotifications();
     });
+
+    startNavbarNotificationPolling(refreshNotifications);
 
     /*
     |--------------------------------------------------------------------------

@@ -64,7 +64,7 @@
                   </div>
                   <div class="stat-content">
                     <span class="kpi-label">Available Vehicles</span>
-                    <h2 class="kpi-value">
+                    <h2 class="kpi-value" id="dashboardAvailableVehicles" >
                         {{ number_format($availableVehicles) }}
                     </h2>
                     <div class="kpi-meta">
@@ -80,7 +80,7 @@
                   </div>
                   <div class="stat-content">
                     <span class="kpi-label">Active Dispatches</span>
-                    <h2 class="kpi-value">
+                    <h2 class="kpi-value" id="dashboardActiveDispatches">
                         {{ number_format($activeDispatches) }}
                     </h2>
                     <div class="kpi-meta">
@@ -96,7 +96,7 @@
                   </div>
                   <div class="stat-content">
                     <span class="kpi-label">Drivers On Duty</span>
-                    <h2 class="kpi-value">
+                    <h2 class="kpi-value" id="dashboardDriversOnDuty">
                         {{ number_format($driversOnDuty) }}
                     </h2>
                     <div class="kpi-meta">
@@ -114,11 +114,12 @@
                       <span class="kpi-label">
                           Average Fuel Level
                       </span>
-                      <h2 class="kpi-value">
+                      <h2 class="kpi-value" id="dashboardAverageFuelLevel">
                           {{ $averageFuelLevel }}%
                       </h2>
                       <div class="kpi-meta">
                           <span
+                              id="dashboardFuelTrend"
                               class="kpi-trend {{ $averageFuelLevel < 30 ? 'kpi-trend--up' : 'kpi-trend--steady' }}"
                           >
                               {{ $averageFuelLevel < 30 ? 'Low fuel' : 'Within range' }}
@@ -159,6 +160,7 @@
                   </div>
                   <div
                       class="chart-placeholder"
+                      id="dashboardWeeklyChart"
                       role="img"
                       aria-label="Weekly fleet dispatch activity"
                   >
@@ -185,7 +187,7 @@
                       @endforeach
                   </div>
 
-                  <div class="chart-legend" aria-hidden="true">
+                  <div class="chart-legend" id="dashboardWeeklyLegend" aria-hidden="true">
                       @foreach ($weeklyActivity as $activity)
                           <span>
                               {{ $activity['day'] }}
@@ -201,11 +203,11 @@
                       <h3>Today’s Dispatch Queue</h3>
                       <p class="card-subtitle">Priority trips awaiting completion</p>
                     </div>
-                    <span class="badge-green">
+                    <span class="badge-green" id="dashboardActiveDispatchBadge">
                         {{ $activeDispatches }} Active
                     </span>
                   </div>
-                  <div class="dispatch-list">
+                  <div class="dispatch-list" id="dashboardDispatchList">
                       @forelse ($dispatchQueue as $dispatch)
                           @php
                               $reservation = $dispatch->reservation;
@@ -314,7 +316,7 @@
                           <th scope="col"><span class="visually-hidden">Actions</span></th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody id="dashboardVehicleTableBody">
                         @forelse ($vehicles as $vehicle)
                             @php
                                 $statusClass = match ($vehicle->status) {
@@ -419,7 +421,7 @@
                       <p class="card-subtitle">Service items requiring attention</p>
                     </div>
                   </div>
-                 <div class="maintenance-list">
+                 <div class="maintenance-list" id="dashboardMaintenanceList">
                       @forelse ($maintenanceAlerts as $maintenance)
                           @php
                               $maintenanceDate = $maintenance->maintenance_date;
@@ -571,7 +573,7 @@
                       <p class="card-subtitle">Latest operational events</p>
                     </div>
                   </div>
-                  <div class="activity-list">
+                  <div class="activity-list" id="dashboardActivityList">
                   @forelse ($recentActivity as $activity)
                       @php
                           $icon = match (true) {

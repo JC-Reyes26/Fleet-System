@@ -12,15 +12,10 @@ use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request)
+    private function buildDashboardData(Request $request): array
     {
         $user = $request->user();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Dashboard Access
-        |--------------------------------------------------------------------------
-        */
         abort_unless(
             $user?->canViewModule('dashboard'),
             403
@@ -683,27 +678,256 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Return Dashboard
-        |--------------------------------------------------------------------------
-        */
-        return view(
-            'dashboard.index',
-            compact(
-                'availableVehicles',
-                'activeDispatches',
-                'driversOnDuty',
-                'averageFuelLevel',
-                'dispatchQueue',
-                'dashboardMapDispatches',
-                'vehicles',
-                'maintenanceAlerts',
-                'weeklyActivity',
-                'weeklyActivityMax',
-                'recentActivity',
-                'dashboardPermissions'
-            )
+        return compact(
+            'availableVehicles',
+            'activeDispatches',
+            'driversOnDuty',
+            'averageFuelLevel',
+            'dispatchQueue',
+            'dashboardMapDispatches',
+            'vehicles',
+            'maintenanceAlerts',
+            'weeklyActivity',
+            'weeklyActivityMax',
+            'recentActivity',
+            'dashboardPermissions'
         );
     }
+
+    public function index(Request $request)
+    {
+        return view(
+            'dashboard.index',
+            $this->buildDashboardData($request)
+        );
+    }
+
+    public function data(Request $request)
+    {
+        /*
+        |--------------------------------------------------------------------------
+        | Reuse the exact same scoped Dashboard data
+        |--------------------------------------------------------------------------
+        |
+        | This prevents the live endpoint from drifting away from the RBAC
+        | rules already enforced by index().
+        |--------------------------------------------------------------------------
+        */
+
+        $data =
+            $this->buildDashboardData($request);
+
+        $dispatchQueue =
+            collect(
+                $data['dispatchQueue'] ?? []
+            )
+                ->map(function ($dispatch) {
+                    $reservation =
+                        $dispatch->reservation;
+
+                    $vehicle =
+                        $reservation?->vehicle;
+
+                    $driver =
+                        $reservation?->driver;
+
+                    return [
+                        'id' =>
+                            $dispatch->id,
+
+                        'dispatch_number' =>
+                            $dispatch->dispatch_number,
+
+                        'status' =>
+                            $dispatch->trip_status,
+
+                        'title' =>
+                            $reservation?->request_type
+                            ?: $dispatch->dispatch_number,
+
+                        'vehicle' =>
+                            $vehicle?->display_label
+                            ?? 'No vehicle',
+
+                        'driver' =>
+                            trim(
+                                ($driver?->first_name ?? '') .
+                                ' ' .
+                                ($driver?->last_name ?? '')
+                            ),
+                    ];
+                })
+                ->values();
+
+        $vehicles =
+            collect(
+                $data['vehicles'] ?? []
+            )
+                ->map(function ($vehicle) {
+                    $driver =
+                        $vehicle->drivers
+                            ->first();
+
+                    $driverName =
+                        $driver
+                            ? trim(
+                                ($driver->first_name ?? '') .
+                                ' ' .
+                                ($driver->last_name ?? '')
+                            )
+                            : 'Unassigned';
+
+                    $vehicleLabel =
+                        trim(
+                            ($vehicle->brand ?? '') .
+                            ' ' .
+                            ($vehicle->model ?? '')
+                        );
+
+                    if ($vehicleLabel === '') {
+                        $vehicleLabel =
+                            $vehicle->vehicle_type
+                            ?? 'Vehicle';
+                    }
+
+                    $fuelPercent = null;
+
+                    if (
+                        $vehicle->tank_capacity !== null &&
+                        (float) $vehicle->tank_capacity > 0 &&
+                        $vehicle->current_fuel !== null
+                    ) {
+                        $fuelPercent =
+                            min(
+                                100,
+                                max(
+                                    0,
+                                    round(
+                                        (
+                                            (float) $vehicle->current_fuel
+                                            /
+                                            (float) $vehicle->tank_capacity
+                                        ) * 100
+                                    )
+                                )
+                            );
+                    }
+
+                    return [
+                        'id' =>
+                            $vehicle->id,
+
+                        'label' =>
+                            $vehicleLabel,
+
+                        'vehicle_type' =>
+                            $vehicle->vehicle_type,
+
+                        'driver' =>
+                            $driverName,
+
+                        'status' =>
+                            $vehicle->status,
+
+                        'fuel_percent' =>
+                            $fuelPercent,
+                    ];
+                })
+                ->values();
+
+        $maintenanceAlerts =
+            collect(
+                $data['maintenanceAlerts'] ?? []
+            )
+                ->map(function ($maintenance) {
+                    return [
+                        'id' =>
+                            $maintenance->id,
+
+                        'maintenance_type' =>
+                            $maintenance->maintenance_type,
+
+                        'status' =>
+                            $maintenance->status,
+
+                        'priority' =>
+                            $maintenance->priority,
+
+                        'maintenance_date' =>
+                            $maintenance->maintenance_date
+                                ? Carbon::parse(
+                                    $maintenance->maintenance_date
+                                )->toDateString()
+                                : null,
+
+                        'vehicle' =>
+                            $maintenance->vehicle
+                                ?->display_label
+                            ?? 'Vehicle',
+                    ];
+                })
+                ->values();
+
+        $recentActivity =
+            collect(
+                $data['recentActivity'] ?? []
+            )
+                ->map(function ($activity) {
+                    return [
+                        'id' =>
+                            $activity->id,
+
+                        'title' =>
+                            $activity->title,
+
+                        'link' =>
+                            $activity->link,
+
+                        'created_at_timestamp' =>
+                            $activity->created_at
+                                ?->getTimestamp(),
+                    ];
+                })
+                ->values();
+
+        return response()->json([
+            'available_vehicles' =>
+                $data['availableVehicles'] ?? 0,
+
+            'active_dispatches' =>
+                $data['activeDispatches'] ?? 0,
+
+            'drivers_on_duty' =>
+                $data['driversOnDuty'] ?? 0,
+
+            'average_fuel_level' =>
+                $data['averageFuelLevel'] ?? 0,
+
+            'dispatch_queue' =>
+                $dispatchQueue,
+
+            'vehicles' =>
+                $vehicles,
+
+            'maintenance_alerts' =>
+                $maintenanceAlerts,
+
+            'weekly_activity' =>
+                collect(
+                    $data['weeklyActivity'] ?? []
+                )->values(),
+
+            'weekly_activity_max' =>
+                $data['weeklyActivityMax'] ?? 1,
+
+            'recent_activity' =>
+                $recentActivity,
+
+            'map_dispatches' =>
+                collect(
+                    $data['dashboardMapDispatches'] ?? []
+                )->values(),
+        ]);
+    }
+
 }

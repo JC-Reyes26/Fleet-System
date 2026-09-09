@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FleetNotification extends Model
 {
-    public $timestamps = false;
+    public $timestamps = true;
+
+    const UPDATED_AT = null;
 
     protected $fillable = [
         'user_id',

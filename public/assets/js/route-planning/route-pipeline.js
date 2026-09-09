@@ -15,6 +15,9 @@ const ROUTE_ROWS_PER_PAGE = 5;
 let isRefreshingRoutes = false;
 let isLoadingRouteData = false;
 
+let routeLiveUpdateInterval = null;
+let routeLiveUpdateRunning = false;
+
 /* ==========================================
    LEAFLET / ROUTING STATE
 ========================================== */
@@ -142,6 +145,36 @@ function formatRouteDateTime(iso) {
         hour: "numeric",
         minute: "2-digit",
     });
+}
+
+function startRoutePlanningLiveUpdates() {
+    if (routeLiveUpdateInterval) {
+        return;
+    }
+    routeLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (
+            routeLiveUpdateRunning ||
+            isLoadingRouteData ||
+            isRefreshingRoutes
+        ) {
+            return;
+        }
+        routeLiveUpdateRunning = true;
+        try {
+            await reloadRoutePlanningData({
+                resetPage: false,
+                refreshMap: false,
+                reason: "live-update",
+            });
+        } catch (error) {
+            console.error("Route Planning live update failed:", error);
+        } finally {
+            routeLiveUpdateRunning = false;
+        }
+    }, 10000);
 }
 /**
  * Rebuild Vehicle and Driver filters
@@ -1732,7 +1765,9 @@ function refreshRoutePlanningTable(options = {}) {
             all[0] ||
             null;
 
-        void updateRouteMapPanel(panelRecord);
+        if (options.refreshMap !== false) {
+            void updateRouteMapPanel(panelRecord);
+        }
         updateOptimizationSummaryPanel(panelRecord);
 
         return matched;
@@ -1778,6 +1813,7 @@ async function reloadRoutePlanningData(options = {}) {
         return refreshRoutePlanningTable({
             resetPage: options.resetPage === true,
             focusId: options.focusId,
+            refreshMap: options.refreshMap !== false,
             reason: options.reason || "api-refresh",
         });
     } catch (error) {
@@ -1804,6 +1840,35 @@ async function reloadRoutePlanningData(options = {}) {
     } finally {
         isLoadingRouteData = false;
     }
+}
+
+function startRoutePlanningLiveUpdates() {
+    if (routeLiveUpdateInterval) {
+        return;
+    }
+    routeLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (
+            routeLiveUpdateRunning ||
+            isLoadingRouteData ||
+            isRefreshingRoutes
+        ) {
+            return;
+        }
+        routeLiveUpdateRunning = true;
+        try {
+            await reloadRoutePlanningData({
+                resetPage: false,
+                reason: "live-update",
+            });
+        } catch (error) {
+            console.error("Route Planning live update failed:", error);
+        } finally {
+            routeLiveUpdateRunning = false;
+        }
+    }, 10000);
 }
 
 function resetRoutePlanningFilters() {

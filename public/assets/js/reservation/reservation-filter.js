@@ -57,22 +57,15 @@ function updateReservationNoResultsRow(tableBody, shouldShow) {
     if (existingRow) {
         return;
     }
-    tableBody.insertAdjacentHTML(
-        "beforeend",
-        `
-            <tr
-                class="reservation-no-results"
-                data-helper-row="true"
-            >
-                <td
-                    colspan="10"
-                    class="text-center"
-                >
-                    No reservations found.
-                </td>
-            </tr>
-        `,
-    );
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    row.className = "reservation-no-results";
+    row.dataset.helperRow = "true";
+    cell.colSpan = 10;
+    cell.className = "text-center";
+    cell.textContent = "No reservations found.";
+    row.appendChild(cell);
+    tableBody.appendChild(row);
 }
 
 function renderReservationFilterRows(matchingRows) {

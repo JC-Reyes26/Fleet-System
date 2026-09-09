@@ -267,11 +267,15 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr class="audit-empty-row">
-                                <td colspan="8">
-                                    <div class="table-empty-state">
-                                        No audit logs found.
-                                    </div>
+                            <tr
+                                class="audit-no-results"
+                                data-helper-row="true"
+                            >
+                                <td
+                                    colspan="8"
+                                    class="text-center"
+                                >
+                                    No audit logs found.
                                 </td>
                             </tr>
                         @endforelse

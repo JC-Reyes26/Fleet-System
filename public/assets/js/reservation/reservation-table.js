@@ -1,32 +1,69 @@
 /* ==========================================
 Reservation Table
 ========================================== */
+let reservationLiveUpdateInterval = null;
+let reservationLiveUpdateRunning = false;
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadReservations();
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadReservations();
+
+    startReservationLiveUpdates();
 });
 
 async function loadReservations() {
     try {
         const response = await fetch("/reservation", {
             headers: {
-                "Accept": "application/json"
-            }
+                Accept: "application/json",
+            },
+            credentials: "same-origin",
+            cache: "no-store",
         });
-
         const data = await response.json();
-
         if (!response.ok) {
             throw new Error(data.message || "Failed to load reservations.");
         }
-
-        console.log("RESERVATIONS:", data);
-
-        renderReservationTable(data.reservations);
-
+        renderReservationTable(
+            Array.isArray(data.reservations) ? data.reservations : [],
+        );
+        return data.reservations;
     } catch (error) {
         console.error("RESERVATION LOAD ERROR:", error);
+
+        return [];
     }
+}
+
+function startReservationLiveUpdates() {
+    if (reservationLiveUpdateInterval) {
+        return;
+    }
+    reservationLiveUpdateInterval = window.setInterval(async () => {
+        /*
+            |--------------------------------------------------------------------------
+            | Do not poll while tab is hidden
+            |--------------------------------------------------------------------------
+            */
+        if (document.hidden) {
+            return;
+        }
+        /*
+            |--------------------------------------------------------------------------
+            | Prevent overlapping requests
+            |--------------------------------------------------------------------------
+            */
+        if (reservationLiveUpdateRunning) {
+            return;
+        }
+        reservationLiveUpdateRunning = true;
+        try {
+            await loadReservations();
+        } catch (error) {
+            console.error("Reservation live update failed:", error);
+        } finally {
+            reservationLiveUpdateRunning = false;
+        }
+    }, 10000);
 }
 
 function getReservationStatusClass(status) {

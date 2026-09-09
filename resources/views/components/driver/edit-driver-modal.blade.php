@@ -143,10 +143,6 @@
                 name="assigned_vehicle_id"
             >
               <option value="">Select Assigned Vehicle</option>
-              <option value="Ambulance 01">Ambulance 01</option>
-              <option value="Patient Van 02">Patient Van 02</option>
-              <option value="Service Vehicle 01">Service Vehicle 01</option>
-              <option value="Unassigned">Unassigned</option>
             </select>
           </div>
 

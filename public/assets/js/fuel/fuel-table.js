@@ -2,8 +2,12 @@
    Fuel Table
 ========================================== */
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadFuelRecords();
+let fuelLiveUpdateInterval = null;
+let fuelLiveUpdateRunning = false;
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadFuelRecords();
+    startFuelLiveUpdates();
 });
 
 
@@ -12,29 +16,55 @@ async function loadFuelRecords() {
         const response = await fetch("/fuel-records", {
             headers: {
                 Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
             },
+            credentials: "same-origin",
+            cache: "no-store",
         });
-
         const data = await response.json();
-
         if (!response.ok) {
             throw new Error(data.message || "Failed to load fuel records.");
         }
-
-        const fuelLogs = data.fuelLogs || [];
-
+        const fuelLogs = Array.isArray(data.fuelLogs)
+            ? data.fuelLogs
+            : Array.isArray(data)
+              ? data
+              : [];
         renderFuelTable(fuelLogs);
-
         if (typeof updateFuelStatistics === "function") {
             updateFuelStatistics(fuelLogs);
         }
-
         if (typeof refreshFuelBulkState === "function") {
             refreshFuelBulkState();
         }
+        return fuelLogs;
     } catch (error) {
         console.error("FUEL LOAD ERROR:", error);
+
+        return [];
     }
+}
+
+function startFuelLiveUpdates() {
+    if (fuelLiveUpdateInterval) {
+        return;
+    }
+    fuelLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (fuelLiveUpdateRunning) {
+            return;
+        }
+        fuelLiveUpdateRunning = true;
+        try {
+            await loadFuelRecords();
+        } catch (error) {
+            console.error("Fuel live update failed:", error);
+        } finally {
+            fuelLiveUpdateRunning = false;
+        }
+    }, 10000);
 }
 
 function formatFuelTableDate(date) {
@@ -318,10 +348,11 @@ function renderFuelTable(fuelLogs) {
     if (typeof refreshFuelBulkState === "function") {
         refreshFuelBulkState();
     }
-
+    /*
     if (typeof updateFuelStatistics === "function") {
         updateFuelStatistics();
     }
+    */
 }
 
 

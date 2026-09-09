@@ -8,8 +8,12 @@
    - Preserve existing filters / pagination / bulk tools
 ========================================== */
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadDispatches();
+let dispatchLiveUpdateInterval = null;
+let dispatchLiveUpdateRunning = false;
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadDispatches();
+    startDispatchLiveUpdates();
 });
 
 async function loadDispatches() {
@@ -19,6 +23,7 @@ async function loadDispatches() {
                 Accept: "application/json",
             },
             credentials: "same-origin",
+            cache: "no-store",
         });
         let data = {};
         try {
@@ -66,6 +71,28 @@ async function loadDispatches() {
 
         return [];
     }
+}
+
+function startDispatchLiveUpdates() {
+    if (dispatchLiveUpdateInterval) {
+        return;
+    }
+    dispatchLiveUpdateInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (dispatchLiveUpdateRunning) {
+            return;
+        }
+        dispatchLiveUpdateRunning = true;
+        try {
+            await loadDispatches();
+        } catch (error) {
+            console.error("Dispatch live update failed:", error);
+        } finally {
+            dispatchLiveUpdateRunning = false;
+        }
+    }, 10000);
 }
 
 /* ==========================================
@@ -221,10 +248,9 @@ function renderDispatchTable(dispatches) {
 
     if (!Array.isArray(dispatches) || dispatches.length === 0) {
         tableBody.innerHTML = "";
-
         if (typeof applyDispatchFilters === "function") {
             applyDispatchFilters({
-                resetPage: true,
+                resetPage: false,
             });
         }
         if (typeof refreshDispatchBulkState === "function") {
@@ -235,12 +261,11 @@ function renderDispatchTable(dispatches) {
         }
         if (typeof refreshDispatchPagination === "function") {
             refreshDispatchPagination({
-                reset: true,
+                reset: false,
             });
         } else if (typeof updateDispatchPagination === "function") {
             updateDispatchPagination();
         }
-
         return;
     }
 

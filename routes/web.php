@@ -46,7 +46,11 @@ require __DIR__.'/auth.php';
 | AUTHENTICATED FLEET ROUTES
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware([
+    'auth',
+    'verified',
+    'prevent.back.history',
+])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -104,6 +108,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             '/dashboard',
             [DashboardController::class, 'index']
         )->name('dashboard');
+
+        Route::get(
+            '/dashboard/data',
+            [DashboardController::class, 'data']
+        )->name('dashboard.data');
 
     });
 
