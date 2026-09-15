@@ -24,7 +24,11 @@ let routeLiveUpdateRunning = false;
 let routeLeafletMap = null;
 let routeLeafletRouteLayer = null;
 let routeLeafletMarkerLayer = null;
+let routeLeafletVehicleMarkerLayer = null;
+let routeLeafletVehicleMarker = null;
 let routeLeafletMapInitialized = false;
+let routeTrackingInterval = null;
+let routeTrackingRunning = false;
 let routeRoutingRequestToken = 0;
 let routeNextOriginalOrder = 0;
 const ROUTE_GEOCODE_CACHE_KEY =
@@ -1062,10 +1066,8 @@ async function initRouteLeafletMap() {
         attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(routeLeafletMap);
-    routeLeafletMarkerLayer =
-        L.layerGroup().addTo(
-            routeLeafletMap
-        );
+    routeLeafletMarkerLayer = L.layerGroup().addTo(routeLeafletMap);
+    routeLeafletVehicleMarkerLayer = L.layerGroup().addTo(routeLeafletMap);
     routeLeafletMapInitialized =
         true;
     window.setTimeout(
@@ -1135,6 +1137,150 @@ function createRouteMarkerIcon(type, label = "") {
         iconAnchor: [18, 18],
         popupAnchor: [0, -22],
     });
+}
+
+function createLiveVehicleIcon(heading = 0) {
+    const safeHeading = Number.isFinite(Number(heading)) ? Number(heading) : 0;
+
+    return L.divIcon({
+        className: "hims-live-vehicle-icon",
+        html: `
+            <div
+                class="route-live-vehicle-marker"
+                style="transform: rotate(${safeHeading}deg);"
+                aria-label="Live vehicle position"
+            >
+                <i class="ph-fill ph-navigation"></i>
+            </div>
+        `,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
+        popupAnchor: [0, -22],
+    });
+}
+
+async function loadRoutePlanningVehicleLocation(record) {
+    if (
+        !routeLeafletMap ||
+        !routeLeafletVehicleMarkerLayer ||
+        !record?.vehicleId
+    ) {
+        return;
+    }
+    try {
+        const response = await fetch("/tracking/vehicles", {
+            method: "GET",
+            headers: {
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "same-origin",
+            cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(
+                data.message || "Unable to load live vehicle location.",
+            );
+        }
+        const vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+        const trackedVehicle = vehicles.find(
+            (vehicle) =>
+                String(vehicle.vehicle_id) === String(record.vehicleId),
+        );
+
+        /*
+         * No GPS record yet.
+         */
+        if (
+            !trackedVehicle ||
+            !trackedVehicle.has_location ||
+            !trackedVehicle.location
+        ) {
+            if (routeLeafletVehicleMarker) {
+                routeLeafletVehicleMarker.remove();
+                routeLeafletVehicleMarker = null;
+            }
+
+            return;
+        }
+
+        const location = trackedVehicle.location;
+        const latitude = Number(location.latitude);
+        const longitude = Number(location.longitude);
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            return;
+        }
+
+        /*
+         * Ignore very old GPS readings.
+         *
+         * This prevents the map from showing a vehicle
+         * as "live" when the driver has gone offline.
+         */
+        const ageSeconds = Number(location.age_seconds);
+
+        if (Number.isFinite(ageSeconds) && ageSeconds > 120) {
+            if (routeLeafletVehicleMarker) {
+                routeLeafletVehicleMarker.remove();
+                routeLeafletVehicleMarker = null;
+            }
+
+            return;
+        }
+
+        const heading = Number(location.heading);
+        const driverName = String(location.driver || "").trim() || "Unassigned";
+        const speed =
+            location.speed !== null && location.speed !== undefined
+                ? `${Number(location.speed).toFixed(1)} km/h`
+                : "—";
+        const popupHtml = `
+            <strong>
+                ${escapeRouteHtml(trackedVehicle.vehicle_label || "Vehicle")}
+            </strong>
+            <br>
+            <strong>Plate:</strong>
+            ${escapeRouteHtml(trackedVehicle.plate_number || "—")}
+            <br>
+            <strong>Driver:</strong>
+            ${escapeRouteHtml(driverName)}
+            <br>
+            <strong>Status:</strong>
+            ${escapeRouteHtml(trackedVehicle.vehicle_status || "—")}
+            <br>
+            <strong>Speed:</strong>
+            ${escapeRouteHtml(speed)}
+            <br>
+            <strong>GPS Age:</strong>
+            ${
+                Number.isFinite(ageSeconds)
+                    ? `${Math.max(0, Math.floor(ageSeconds))}s ago`
+                    : "Unknown"
+            }
+        `;
+
+        if (!routeLeafletVehicleMarker) {
+            routeLeafletVehicleMarker = L.marker([latitude, longitude], {
+                icon: createLiveVehicleIcon(
+                    Number.isFinite(heading) ? heading : 0,
+                ),
+                zIndexOffset: 1000,
+            })
+                .addTo(routeLeafletVehicleMarkerLayer)
+                .bindPopup(popupHtml);
+        } else {
+            routeLeafletVehicleMarker.setLatLng([latitude, longitude]);
+            routeLeafletVehicleMarker.setIcon(
+                createLiveVehicleIcon(Number.isFinite(heading) ? heading : 0),
+            );
+
+            routeLeafletVehicleMarker.setPopupContent(popupHtml);
+        }
+    } catch (error) {
+        console.error("Route Planning vehicle tracking failed:", error);
+    }
 }
 
 function addRouteLeafletMarker(
@@ -1356,6 +1502,145 @@ function getOptimizedRouteStops(originalStops, waypoints) {
     entries.sort((a, b) => a.optimizedPosition - b.optimizedPosition);
     return entries;
 }
+
+/**
+ * Request a traffic-aware route from Laravel/TomTom.
+ *
+ * Coordinates are already geocoded by
+ * geocodeRouteRecord().
+ */
+async function requestTomTomRoute(
+    routeCoordinates,
+    record
+) {
+    const coordinates = [
+        routeCoordinates.origin,
+        ...routeCoordinates.stops.map(
+            (stop) => stop.coordinate
+        ),
+        routeCoordinates.destination,
+    ];
+    const payload = {
+        coordinates: coordinates.map(
+            (point) => ({
+                latitude: point.lat,
+                longitude: point.lng,
+            })
+        ),
+    };
+    /*
+    |--------------------------------------------------------------------------
+    | Use the RoutePlan scheduled departure time
+    |--------------------------------------------------------------------------
+    |
+    | TomTom supports departAt for time-aware routing.
+    |
+    */
+    if (
+        record?.departureDate &&
+        record?.departureTime
+    ) {
+        payload.depart_at =
+            `${record.departureDate}T${record.departureTime}:00`;
+    }
+    const data = await routeApiRequest(
+        `${ROUTE_API_BASE}/traffic-route`,
+        {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }
+    );
+    if (
+        !data.success ||
+        !Array.isArray(data.points) ||
+        data.points.length < 2
+    ) {
+        throw new Error(
+            data.message ||
+            "TomTom did not return usable route geometry."
+        );
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Convert TomTom points into Leaflet coordinates
+    |--------------------------------------------------------------------------
+    */
+    const latLngs = data.points
+        .map((point) => [
+            Number(point.latitude),
+            Number(point.longitude),
+        ])
+        .filter(
+            ([lat, lng]) =>
+                Number.isFinite(lat) &&
+                Number.isFinite(lng)
+        );
+    if (latLngs.length < 2) {
+        throw new Error(
+            "TomTom returned invalid route geometry."
+        );
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Create Leaflet-compatible GeoJSON
+    |--------------------------------------------------------------------------
+    */
+    const geometry = {
+        type: "LineString",
+        coordinates: data.points
+            .map((point) => [
+                Number(point.longitude),
+                Number(point.latitude),
+            ])
+            .filter(
+                ([lng, lat]) =>
+                    Number.isFinite(lng) &&
+                    Number.isFinite(lat)
+            ),
+    };
+    return {
+        provider: data.provider || "TomTom",
+        distanceKm:
+            data.distance_km !== null &&
+            data.distance_km !== undefined
+                ? Number(data.distance_km)
+                : null,
+        durationMinutes:
+            data.travel_time_minutes !== null &&
+            data.travel_time_minutes !== undefined
+                ? Math.ceil(
+                    Number(
+                        data.travel_time_minutes
+                    )
+                )
+                : null,
+        trafficDelayMinutes:
+            data.traffic_delay_minutes !== null &&
+            data.traffic_delay_minutes !== undefined
+                ? Number(
+                    data.traffic_delay_minutes
+                )
+                : 0,
+        noTrafficTravelTimeSeconds:
+            data.no_traffic_travel_time_seconds,
+        historicTrafficTravelTimeSeconds:
+            data.historic_traffic_travel_time_seconds,
+        liveTrafficTravelTimeSeconds:
+            data.live_traffic_travel_time_seconds,
+        trafficLengthMeters:
+            data.traffic_length_meters,
+        optimizedWaypoints:
+            Array.isArray(
+                data.optimized_waypoints
+            )
+                ? data.optimized_waypoints
+                : [],
+        points: latLngs,
+        geometry,
+        raw: data,
+    };
+}
+
 /**
  * Request an actual driving route from OSRM.
  *
@@ -1540,10 +1825,177 @@ async function calculateRouteWithOsrm(
     }
 }
 
+/**
+ * Traffic-aware routing with OSRM fallback.
+ *
+ * Primary:
+ * TomTom
+ *
+ * Fallback:
+ * Existing OSRM
+ */
+async function calculateRouteWithTraffic(record, options = {}) {
+    const map = await initRouteLeafletMap();
+    if (options.draw !== false && !map) {
+        return null;
+    }
+    if (!record || !record.origin || !record.destination) {
+        return null;
+    }
+    const requestToken = ++routeRoutingRequestToken;
+    try {
+        /*
+        |--------------------------------------------------------------------------
+        | Geocode route locations
+        |--------------------------------------------------------------------------
+        */
+        const routeCoordinates = await geocodeRouteRecord(record);
+        if (requestToken !== routeRoutingRequestToken) {
+            return null;
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Primary: TomTom Traffic-Aware Routing
+        |--------------------------------------------------------------------------
+        */
+        try {
+            const trafficRoute = await requestTomTomRoute(
+                routeCoordinates,
+                record,
+            );
+            if (requestToken !== routeRoutingRequestToken) {
+                return null;
+            }
+            /*
+            |--------------------------------------------------------------------------
+            | Rebuild optimized stop coordinates
+            |--------------------------------------------------------------------------
+            |
+            | TomTom optimizedWaypoints contains the relationship:
+            |
+            | providedIndex → original stop
+            | optimizedIndex → new stop position
+            |
+            */
+            let optimizedRouteCoordinates = routeCoordinates;
+            const originalStops = Array.isArray(routeCoordinates.stops)
+                ? routeCoordinates.stops
+                : [];
+
+            const optimizedWaypoints = Array.isArray(
+                trafficRoute.optimizedWaypoints,
+            )
+                ? trafficRoute.optimizedWaypoints
+                : [];
+
+            if (
+                originalStops.length >= 2 &&
+                optimizedWaypoints.length === originalStops.length
+            ) {
+                const reorderedEntries = optimizedWaypoints
+                    .map((waypoint) => ({
+                        providedIndex: Number(waypoint?.providedIndex),
+                        optimizedIndex: Number(waypoint?.optimizedIndex),
+                    }))
+                    .filter(
+                        (waypoint) =>
+                            Number.isFinite(waypoint.providedIndex) &&
+                            Number.isFinite(waypoint.optimizedIndex) &&
+                            originalStops[waypoint.providedIndex],
+                    )
+                    .sort((a, b) => a.optimizedIndex - b.optimizedIndex);
+                if (reorderedEntries.length === originalStops.length) {
+                    optimizedRouteCoordinates = {
+                        origin: routeCoordinates.origin,
+                        stops: reorderedEntries.map(
+                            (entry) => originalStops[entry.providedIndex],
+                        ),
+                        destination: routeCoordinates.destination,
+                    };
+                }
+            }
+            /*
+            |--------------------------------------------------------------------------
+            | Draw optimized TomTom route
+            |--------------------------------------------------------------------------
+            */
+            if (options.draw !== false) {
+                drawRouteOnLeaflet(
+                    {
+                        geometry: trafficRoute.geometry,
+                    },
+                    optimizedRouteCoordinates,
+                    record,
+                );
+            }
+            return {
+                ...trafficRoute,
+                routeCoordinates: optimizedRouteCoordinates,
+                originalRouteCoordinates: routeCoordinates,
+                fallback: false,
+                liveTrafficTravelTimeSeconds:
+                    trafficRoute.liveTrafficTravelTimeSeconds,
+                noTrafficTravelTimeSeconds:
+                    trafficRoute.noTrafficTravelTimeSeconds,
+            };
+        } catch (tomTomError) {
+            console.warn(
+                "TomTom routing failed. Falling back to OSRM:",
+                tomTomError?.message || tomTomError,
+            );
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Fallback: Existing OSRM
+        |--------------------------------------------------------------------------
+        */
+        const osrmRoute = await requestOsrmRoute(routeCoordinates);
+        if (requestToken !== routeRoutingRequestToken) {
+            return null;
+        }
+        const distanceMeters = Number(osrmRoute.distance || 0);
+        const durationSeconds = Number(osrmRoute.duration || 0);
+        const distanceKm = distanceMeters > 0 ? distanceMeters / 1000 : null;
+        const durationMinutes =
+            durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : null;
+        if (options.draw !== false) {
+            drawRouteOnLeaflet(osrmRoute, routeCoordinates, record);
+        }
+        return {
+            provider: "OSRM",
+            distanceKm:
+                distanceKm !== null ? Number(distanceKm.toFixed(2)) : null,
+            durationMinutes,
+            trafficDelayMinutes: 0,
+            liveTrafficTravelTimeSeconds: null,
+            noTrafficTravelTimeSeconds: null,
+            optimizedWaypoints: [],
+            route: osrmRoute,
+            routeCoordinates,
+            originalRouteCoordinates: routeCoordinates,
+            fallback: true,
+        };
+    } catch (error) {
+        if (options.silent !== true) {
+            console.error("Traffic-aware route calculation failed:", error);
+        }
+
+        throw error;
+    }
+}
+
 /* ==========================================
    MAP PANEL
 ========================================== */
+let currentRoutePlanningMapRecord = null;
+
+function getCurrentRoutePlanningMapRecord() {
+    return currentRoutePlanningMapRecord;
+}
+
 async function updateRouteMapPanel(record) {
+    currentRoutePlanningMapRecord = record || null;
+
     const distanceEl = document.getElementById("mapDistanceLabel");
     const etaEl = document.getElementById("mapEtaLabel");
     const statusEl = document.getElementById("mapStatusLabel");
@@ -1598,13 +2050,40 @@ async function updateRouteMapPanel(record) {
     |--------------------------------------------------------------------------
     */
     try {
-        await calculateRouteWithOsrm(record, {
+        await calculateRouteWithTraffic(record, {
             draw: true,
             silent: true,
         });
     } catch (error) {
         console.warn("Route preview unavailable:", error?.message || error);
     }
+
+    void loadRoutePlanningVehicleLocation(record);
+}
+
+function startRouteVehicleTracking() {
+    if (routeTrackingInterval) {
+        return;
+    }
+    routeTrackingInterval = window.setInterval(async () => {
+        if (document.hidden) {
+            return;
+        }
+        if (routeTrackingRunning) {
+            return;
+        }
+        routeTrackingRunning = true;
+        try {
+            const currentRecord = getCurrentRoutePlanningMapRecord?.();
+            if (currentRecord) {
+                await loadRoutePlanningVehicleLocation(currentRecord);
+            }
+        } catch (error) {
+            console.error("Route vehicle live update failed:", error);
+        } finally {
+            routeTrackingRunning = false;
+        }
+    }, 10000);
 }
 
 function updateOptimizationSummaryPanel(record) {
@@ -1636,6 +2115,19 @@ function updateOptimizationSummaryPanel(record) {
         record.optimizationScore != null
             ? String(record.optimizationScore)
             : "—",
+    );
+}
+
+function getSelectedRoutePlanningRecord(records) {
+    const selectedRecord = getCurrentRoutePlanningMapRecord?.();
+    if (!selectedRecord?.id) {
+        return null;
+    }
+    const list = Array.isArray(records) ? records : [];
+    return (
+        list.find(
+            (record) => String(record.id) === String(selectedRecord.id),
+        ) || null
     );
 }
 
@@ -1756,19 +2248,30 @@ function refreshRoutePlanningTable(options = {}) {
     */
 
         const focusId = options.focusId;
+
+        /*
+|--------------------------------------------------------------------------
+| Preserve currently selected route
+|--------------------------------------------------------------------------
+|
+| Pagination, filtering, sorting, and table refreshes
+| must NOT silently change the selected map/summary route.
+|
+*/
+        const selectedRecord = getSelectedRoutePlanningRecord(all);
         const panelRecord =
             (focusId &&
                 matched.find(
                     (record) => String(record.id) === String(focusId),
                 )) ||
-            matched[0] ||
-            all[0] ||
+            selectedRecord ||
             null;
-
-        if (options.refreshMap !== false) {
+        if (options.refreshMap !== false && panelRecord) {
             void updateRouteMapPanel(panelRecord);
         }
-        updateOptimizationSummaryPanel(panelRecord);
+        if (panelRecord) {
+            updateOptimizationSummaryPanel(panelRecord);
+        }
 
         return matched;
     } catch (error) {
@@ -1840,35 +2343,6 @@ async function reloadRoutePlanningData(options = {}) {
     } finally {
         isLoadingRouteData = false;
     }
-}
-
-function startRoutePlanningLiveUpdates() {
-    if (routeLiveUpdateInterval) {
-        return;
-    }
-    routeLiveUpdateInterval = window.setInterval(async () => {
-        if (document.hidden) {
-            return;
-        }
-        if (
-            routeLiveUpdateRunning ||
-            isLoadingRouteData ||
-            isRefreshingRoutes
-        ) {
-            return;
-        }
-        routeLiveUpdateRunning = true;
-        try {
-            await reloadRoutePlanningData({
-                resetPage: false,
-                reason: "live-update",
-            });
-        } catch (error) {
-            console.error("Route Planning live update failed:", error);
-        } finally {
-            routeLiveUpdateRunning = false;
-        }
-    }, 10000);
 }
 
 function resetRoutePlanningFilters() {

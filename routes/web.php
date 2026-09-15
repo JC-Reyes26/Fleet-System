@@ -19,7 +19,7 @@ use App\Http\Controllers\CostAnalysisController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserAccountController;
 use App\Http\Controllers\AuditLogController;
-
+use App\Http\Controllers\VehicleTrackingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -464,6 +464,11 @@ Route::middleware([
             [RoutePlanController::class, 'nextNumber']
         )->name('route-planning.nextNumber');
 
+        Route::post(
+            '/route-planning/traffic-route',
+            [RoutePlanController::class, 'trafficRoute']
+        )->name('route-planning.traffic-route');
+        
         Route::get(
             '/route-planning/{routePlan}',
             [RoutePlanController::class, 'show']
@@ -645,5 +650,30 @@ Route::middleware([
         )->name('settings.accounts.destroy');
 
     });
-    
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TRACKING LOCATION
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/tracking/location', [
+        \App\Http\Controllers\VehicleTrackingController::class,
+        'store',
+    ])
+        ->middleware('throttle:120,1')
+        ->name('tracking.location.store');
+
+    Route::get('/tracking/vehicles', [
+        \App\Http\Controllers\VehicleTrackingController::class,
+        'vehicles',
+    ])
+        ->name('tracking.vehicles');
+
+    Route::get('/tracking/active-dispatch', [
+        \App\Http\Controllers\VehicleTrackingController::class,
+        'activeDispatch',
+    ])
+        ->name('tracking.active-dispatch');
+
 });

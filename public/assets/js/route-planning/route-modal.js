@@ -125,6 +125,7 @@ function canDuplicateRoute() {
 }
 
 let routeLastOptimization = null;
+let routePendingOptimization = null;
 
 /* ==========================================
    SELECT HELPERS 
@@ -350,7 +351,8 @@ function resetRouteOptimization() {
     const strategy = document.getElementById("routeOptStrategy");
     const score = document.getElementById("routeOptScore");
     const summary = document.getElementById("routeOptimizeSummary");
-
+    const applyButton = document.getElementById("applyRouteOptimizationBtn");
+    routePendingOptimization = null;
     if (distance) {
         distance.value = "";
         distance.dataset.raw = "";
@@ -369,6 +371,9 @@ function resetRouteOptimization() {
     if (summary) {
         summary.hidden = true;
         summary.innerHTML = "";
+    }
+    if (applyButton) {
+        applyButton.disabled = true;
     }
 }
 
@@ -484,8 +489,25 @@ async function populateRouteReservations(selectedReservation = null) {
 function collectRouteFormData() {
     const get = (id) => document.getElementById(id)?.value?.trim() || "";
     const stops = getRouteStopsFromForm();
-    const routeCoordinates = routeLastOptimization?.routeCoordinates || null;
-
+    const optimization = routeLastOptimization;
+    /*
+    |--------------------------------------------------------------------------
+    | Coordinate source
+    |--------------------------------------------------------------------------
+    |
+    | Applied optimization:
+    |     optimized coordinate order
+    |
+    | Preview only:
+    |     original coordinate order
+    |
+    */
+    const routeCoordinates =
+        optimization?.optimizationApplied === true
+            ? optimization.routeCoordinates || null
+            : optimization?.originalRouteCoordinates ||
+              optimization?.routeCoordinates ||
+              null;
     return {
         reservationId: get("routeReservation"),
         routeNumber: get("routeNumber"),
@@ -511,26 +533,10 @@ function collectRouteFormData() {
         optimizationStrategy: get("routeOptStrategy"),
         optimizationScore:
             document.getElementById("routeOptScore")?.dataset.raw || "",
-
-        /*
-        |--------------------------------------------------------------------------
-        | Persisted origin coordinates
-        |--------------------------------------------------------------------------
-        */
         originLatitude: routeCoordinates?.origin?.lat ?? null,
         originLongitude: routeCoordinates?.origin?.lng ?? null,
-        /*
-        |--------------------------------------------------------------------------
-        | Persisted destination coordinates
-        |--------------------------------------------------------------------------
-        */
         destinationLatitude: routeCoordinates?.destination?.lat ?? null,
         destinationLongitude: routeCoordinates?.destination?.lng ?? null,
-        /*
-        |--------------------------------------------------------------------------
-        | Stop coordinates aligned with current optimized DOM order
-        |--------------------------------------------------------------------------
-        */
         stopCoordinates: stops.map((location, index) => {
             const stopCoordinate = routeCoordinates?.stops?.[index];
             return {
@@ -542,6 +548,132 @@ function collectRouteFormData() {
     };
 }
 
+/**
+ * Calculate an explainable Route Planning score.
+ *
+ * This is an application-level score.
+ * TomTom does not provide this score directly.
+ *
+ * Factors:
+ * - Traffic condition
+ * - Waypoint optimization
+ * - Routing provider availability
+ */
+function calculateRouteOptimizationScore({
+    provider,
+    fallback,
+    trafficDelayMinutes,
+    liveTrafficTravelTimeSeconds,
+    noTrafficTravelTimeSeconds,
+    stopsCount,
+    optimizedWaypoints,
+}) {
+    let score = 100;
+    /*
+    |--------------------------------------------------------------------------
+    | Fallback penalty
+    |--------------------------------------------------------------------------
+    |
+    | If TomTom is unavailable and OSRM is used,
+    | traffic-aware routing could not be evaluated.
+    |
+    */
+    if (fallback === true) {
+        score -= 15;
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Traffic penalty
+    |--------------------------------------------------------------------------
+    |
+    | Prefer the actual live-vs-no-traffic travel time
+    | when both values are available.
+    |
+    */
+    const liveTime =
+        Number(
+            liveTrafficTravelTimeSeconds
+        );
+    const noTrafficTime =
+        Number(
+            noTrafficTravelTimeSeconds
+        );
+    let trafficPenalty = 0;
+    if (
+        provider === "TomTom" &&
+        Number.isFinite(liveTime) &&
+        Number.isFinite(noTrafficTime) &&
+        liveTime > 0 &&
+        noTrafficTime > 0
+    ) {
+        const delayRatio =
+            Math.max(
+                0,
+                (liveTime - noTrafficTime) /
+                    liveTime
+            );
+        /*
+        | Up to 30 points can be lost
+        | from traffic congestion.
+        */
+        trafficPenalty = Math.min(
+            30,
+            delayRatio * 100
+        );
+    } else if (
+        provider === "TomTom" &&
+        Number.isFinite(
+            Number(trafficDelayMinutes)
+        ) &&
+        Number(trafficDelayMinutes) > 0
+    ) {
+        /*
+        | Fallback when TomTom's explicit
+        | traffic delay is the only available metric.
+        */
+        trafficPenalty = Math.min(
+            30,
+            Number(trafficDelayMinutes) * 1.5
+        );
+    }
+    score -= trafficPenalty;
+    /*
+    |--------------------------------------------------------------------------
+    | Waypoint optimization
+    |--------------------------------------------------------------------------
+    |
+    | This is only a small supporting factor.
+    | It does not claim that TomTom's result is
+    | globally optimal.
+    |
+    */
+    if (
+        provider === "TomTom" &&
+        Number(stopsCount) >= 2
+    ) {
+        const waypointCount =
+            Array.isArray(
+                optimizedWaypoints
+            )
+                ? optimizedWaypoints.length
+                : 0;
+
+        if (
+            waypointCount ===
+            Number(stopsCount)
+        ) {
+            score += 2;
+        }
+    }
+    return Math.max(
+        0,
+        Math.min(
+            100,
+            Math.round(score)
+        )
+    );
+}
+
 async function optimizeRouteWithOsrm(data) {
     if (!data.origin || !data.destination) {
         throw new Error("Origin and destination are required.");
@@ -549,166 +681,170 @@ async function optimizeRouteWithOsrm(data) {
     const stops = Array.isArray(data.stops)
         ? data.stops.map((stop) => String(stop || "").trim()).filter(Boolean)
         : [];
-
     /*
     |--------------------------------------------------------------------------
-    | First geocode all locations
+    | TomTom Traffic-Aware Routing
     |--------------------------------------------------------------------------
+    |
+    | calculateRouteWithTraffic() handles:
+    |
+    | 1. Geocoding
+    | 2. TomTom traffic routing
+    | 3. Waypoint optimization
+    | 4. OSRM fallback
+    |
     */
-    const routeCoordinates = await geocodeRouteRecord({
-        origin: data.origin,
-        destination: data.destination,
-        stops,
-    });
-    let estimatedDistance = null;
-    let estimatedTravelTimeMinutes = null;
-    let optimizationStrategy = "";
-    let optimizationScore = null;
-    let optimizedStops = stops.slice();
-    let optimizedRouteCoordinates = {
-        origin: routeCoordinates.origin,
-        stops: routeCoordinates.stops,
-        destination: routeCoordinates.destination,
-    };
-
-    let routeGeometry = null;
-    /*
-    |--------------------------------------------------------------------------
-    | 2+ Stops → true waypoint optimization
-    |--------------------------------------------------------------------------
-    */
-    if (stops.length >= 2) {
-        const optimized = await requestOsrmOptimizedTrip(routeCoordinates);
-        const trip = optimized.trip;
-        const optimizedStopEntries = getOptimizedRouteStops(
-            stops,
-            optimized.waypoints,
-        );
-        optimizedStops = optimizedStopEntries.map((entry) => entry.location);
-        /*
-        |--------------------------------------------------------------------------
-        | Coordinates must follow optimized stop order
-        |--------------------------------------------------------------------------
-        */
-        optimizedRouteCoordinates = {
-            origin: routeCoordinates.origin,
-            stops: optimizedStopEntries.map((entry) => ({
-                location: entry.location,
-                coordinate:
-                    routeCoordinates.stops[entry.originalStopIndex]
-                        ?.coordinate ?? null,
-            })),
-
-            destination: routeCoordinates.destination,
-        };
-        const distanceMeters = Number(trip.distance || 0);
-        const durationSeconds = Number(trip.duration || 0);
-        if (distanceMeters <= 0 || durationSeconds <= 0) {
-            throw new Error(
-                "The optimized route returned incomplete route information.",
-            );
-        }
-        estimatedDistance = Number((distanceMeters / 1000).toFixed(2));
-        estimatedTravelTimeMinutes = Math.max(
-            1,
-            Math.ceil(durationSeconds / 60),
-        );
-        optimizationStrategy = "OSRM Optimized Waypoints";
-        optimizationScore = 95;
-        routeGeometry = trip.geometry || null;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Draw optimized route
-        |--------------------------------------------------------------------------
-        */
-        drawRouteOnLeaflet(trip, optimizedRouteCoordinates, {
+    const result = await calculateRouteWithTraffic(
+        {
             origin: data.origin,
-
+            originLatitude: data.originLatitude,
+            originLongitude: data.originLongitude,
             destination: data.destination,
-        });
-    } else {
-        /*
-        |--------------------------------------------------------------------------
-        | 0–1 Stop → normal route
-        |--------------------------------------------------------------------------
-        */
-        const routeResult = await calculateRouteWithOsrm(
-            {
-                origin: data.origin,
-                destination: data.destination,
-                stops,
-            },
-            {
-                draw: true,
-                /*
-                    |--------------------------------------------------------------------------
-                    | Let this function's caller handle errors once.
-                    |--------------------------------------------------------------------------
-                    */
-                silent: true,
-            },
-        );
-        if (!routeResult) {
-            throw new Error("Unable to calculate the route.");
-        }
-        estimatedDistance = Number(routeResult.distanceKm);
-        estimatedTravelTimeMinutes = Number(routeResult.durationMinutes);
-        optimizationStrategy =
-            stops.length === 1 ? "OSRM Multi-stop Route" : "OSRM Fastest Route";
-        optimizationScore = stops.length === 1 ? 92 : 95;
-        routeGeometry = routeResult.route?.geometry || null;
-        /*
-        |--------------------------------------------------------------------------
-        | calculateRouteWithOsrm() already returns the geocoded coordinates
-        |--------------------------------------------------------------------------
-        */
-        optimizedRouteCoordinates =
-            routeResult.routeCoordinates || routeCoordinates;
+            destinationLatitude: data.destinationLatitude,
+            destinationLongitude: data.destinationLongitude,
+            stops,
+            stopCoordinates: data.stopCoordinates,
+            departureDate: data.departureDate,
+            departureTime: data.departureTime,
+        },
+        {
+            draw: true,
+            silent: true,
+        },
+    );
+
+    if (!result) {
+        throw new Error("Unable to calculate the route.");
     }
     /*
     |--------------------------------------------------------------------------
-    | Final validation
+    | Route coordinates
     |--------------------------------------------------------------------------
     */
+    const routeCoordinates = result.routeCoordinates || null;
+    /*
+    |--------------------------------------------------------------------------
+    | Determine optimized stop order
+    |--------------------------------------------------------------------------
+    */
+    let optimizedStops = stops.slice();
+
     if (
-        !Number.isFinite(estimatedDistance) ||
-        estimatedDistance <= 0 ||
+        result.provider === "TomTom" &&
+        stops.length >= 2 &&
+        Array.isArray(result.optimizedWaypoints) &&
+        result.optimizedWaypoints.length === stops.length
+    ) {
+        const entries = result.optimizedWaypoints
+            .map((waypoint) => ({
+                providedIndex: Number(waypoint?.providedIndex),
+
+                optimizedIndex: Number(waypoint?.optimizedIndex),
+            }))
+            .filter(
+                (waypoint) =>
+                    Number.isFinite(waypoint.providedIndex) &&
+                    Number.isFinite(waypoint.optimizedIndex) &&
+                    stops[waypoint.providedIndex] !== undefined,
+            )
+            .sort((a, b) => a.optimizedIndex - b.optimizedIndex);
+
+        if (entries.length === stops.length) {
+            optimizedStops = entries.map((entry) => stops[entry.providedIndex]);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate route values
+    |--------------------------------------------------------------------------
+    */
+    const estimatedDistance = Number(result.distanceKm);
+    const estimatedTravelTimeMinutes = Number(result.durationMinutes);
+
+    if (!Number.isFinite(estimatedDistance) || estimatedDistance <= 0) {
+        throw new Error("The routing service returned an invalid distance.");
+    }
+
+    if (
         !Number.isFinite(estimatedTravelTimeMinutes) ||
         estimatedTravelTimeMinutes <= 0
     ) {
-        throw new Error(
-            "The routing service returned incomplete route information.",
-        );
+        throw new Error("The routing service returned an invalid travel time.");
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Strategy label
+    |--------------------------------------------------------------------------
+    */
+    let optimizationStrategy;
+
+    if (result.provider === "TomTom") {
+        if (stops.length >= 2) {
+            optimizationStrategy = "TomTom Traffic-Aware Optimized";
+        } else if (stops.length === 1) {
+            optimizationStrategy = "TomTom Traffic-Aware Multi-stop";
+        } else {
+            optimizationStrategy = "TomTom Traffic-Aware Fastest";
+        }
+    } else {
+        if (stops.length >= 2) {
+            optimizationStrategy = "OSRM Optimized Waypoints (Fallback)";
+        } else if (stops.length === 1) {
+            optimizationStrategy = "OSRM Multi-stop Route (Fallback)";
+        } else {
+            optimizationStrategy = "OSRM Fastest Route (Fallback)";
+        }
+    }
+
+    const optimizationScore = calculateRouteOptimizationScore({
+        provider: result.provider || "OSRM",
+        fallback: result.fallback === true,
+        trafficDelayMinutes: result.trafficDelayMinutes,
+        liveTrafficTravelTimeSeconds: result.liveTrafficTravelTimeSeconds,
+        noTrafficTravelTimeSeconds: result.noTrafficTravelTimeSeconds,
+        stopsCount: stops.length,
+        optimizedWaypoints: result.optimizedWaypoints,
+    });
+    /*
+    |--------------------------------------------------------------------------
+    | Assigned Reservation resources
+    |--------------------------------------------------------------------------
+    */
     const vehicleSelect = document.getElementById("routeVehicle");
     const driverSelect = document.getElementById("routeDriver");
-
+    /*
+    |--------------------------------------------------------------------------
+    | Traffic metadata
+    |--------------------------------------------------------------------------
+    */
+    const trafficDelayMinutes = Number(result.trafficDelayMinutes);
     return {
         estimatedDistance,
         estimatedTravelTimeMinutes,
         estimatedTravelTime: formatRouteMinutes(estimatedTravelTimeMinutes),
         optimizationStrategy,
-        /*
-        |--------------------------------------------------------------------------
-        | Application-generated score.
-        | OSRM itself does not provide this score.
-        |--------------------------------------------------------------------------
-        */
         optimizationScore,
         recommendedVehicle:
             vehicleSelect?.selectedOptions?.[0]?.textContent?.trim() || "—",
         recommendedDriver:
             driverSelect?.selectedOptions?.[0]?.textContent?.trim() || "—",
         optimizedStops,
-        routeGeometry,
-        /*
-        |--------------------------------------------------------------------------
-        | Important for backend coordinate persistence
-        |--------------------------------------------------------------------------
-        */
-        routeCoordinates: optimizedRouteCoordinates,
+        routeGeometry: result.geometry || null,
+        routeCoordinates,
+        originalRouteCoordinates:
+            result.originalRouteCoordinates || routeCoordinates,
+        provider: result.provider || "OSRM",
+        fallback: result.fallback === true,
+        trafficDelayMinutes: Number.isFinite(trafficDelayMinutes)
+            ? trafficDelayMinutes
+            : 0,
+        liveTrafficTravelTimeSeconds: result.liveTrafficTravelTimeSeconds,
+        noTrafficTravelTimeSeconds: result.noTrafficTravelTimeSeconds,
+        optimizedWaypoints: Array.isArray(result.optimizedWaypoints)
+            ? result.optimizedWaypoints
+            : [],
     };
 }
 
@@ -717,47 +853,73 @@ async function optimizeRouteWithOsrm(data) {
 ========================================== */
 function applyOptimizationToForm(result) {
     routeLastOptimization = result;
-
     const distance = document.getElementById("routeEstimatedDistance");
     const time = document.getElementById("routeEstimatedTime");
     const strategy = document.getElementById("routeOptStrategy");
     const score = document.getElementById("routeOptScore");
     const summary = document.getElementById("routeOptimizeSummary");
-
     if (distance) {
         distance.value = formatRouteDistance(result.estimatedDistance);
+
         distance.dataset.raw = String(result.estimatedDistance);
     }
     if (time) {
         time.value = result.estimatedTravelTime;
+
         time.dataset.minutes = String(result.estimatedTravelTimeMinutes);
     }
     if (strategy) {
         strategy.value = result.optimizationStrategy;
     }
     if (score) {
-        score.value = String(result.optimizationScore);
-        score.dataset.raw = String(result.optimizationScore);
+        score.value =
+            result.optimizationScore != null
+                ? String(result.optimizationScore)
+                : "";
+        score.dataset.raw =
+            result.optimizationScore != null
+                ? String(result.optimizationScore)
+                : "";
     }
     if (summary) {
+        const provider = result.provider || "Routing Service";
+        const trafficDelay = Number(result.trafficDelayMinutes);
+        const trafficLabel = result.fallback
+            ? "Traffic data unavailable — OSRM fallback used."
+            : Number.isFinite(trafficDelay) && trafficDelay > 0
+              ? `${Math.round(trafficDelay)} min traffic delay detected.`
+              : "No significant traffic delay detected.";
         summary.hidden = false;
         summary.innerHTML = `
-            <strong>Route Calculation Complete</strong>
-
+            <strong>
+                Route Calculation Complete
+            </strong>
+            <p>
+                Provider:
+                ${escapeRouteHtml(provider)}
+            </p>
             <p>
                 Strategy:
-                ${escapeRouteHtml(result.optimizationStrategy)}
-                · Score:
-                ${escapeRouteHtml(result.optimizationScore)}
+                ${escapeRouteHtml(result.optimizationStrategy || "—")}
+                ${
+                    result.optimizationScore != null
+                        ? ` · Score:
+                           ${escapeRouteHtml(result.optimizationScore)}`
+                        : ""
+                }
             </p>
-
             <p>
                 Distance:
-                ${escapeRouteHtml(formatRouteDistance(result.estimatedDistance))}
+                ${escapeRouteHtml(
+                    formatRouteDistance(result.estimatedDistance),
+                )}
                 · Time:
-                ${escapeRouteHtml(result.estimatedTravelTime)}
+                ${escapeRouteHtml(result.estimatedTravelTime || "—")}
             </p>
-
+            <p>
+                Traffic:
+                ${escapeRouteHtml(trafficLabel)}
+            </p>
             <p>
                 Assigned vehicle:
                 ${escapeRouteHtml(result.recommendedVehicle || "—")}
@@ -766,6 +928,102 @@ function applyOptimizationToForm(result) {
             </p>
         `;
     }
+}
+
+function applyPendingRouteOptimization({ showToast = true } = {}) {
+    if (!routePendingOptimization) {
+        return false;
+    }
+    const result = routePendingOptimization;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mark as applied
+    |--------------------------------------------------------------------------
+    */
+    routeLastOptimization = {
+        ...result,
+        optimizationApplied: true,
+    };
+    /*
+    |--------------------------------------------------------------------------
+    | Render TomTom's optimized stop order
+    |--------------------------------------------------------------------------
+    */
+    if (Array.isArray(result.optimizedStops)) {
+        renderRouteStops(result.optimizedStops);
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Disable Apply button
+    |--------------------------------------------------------------------------
+    */
+    const applyButton = document.getElementById("applyRouteOptimizationBtn");
+    if (applyButton) {
+        applyButton.disabled = true;
+    }
+    routePendingOptimization = null;
+    /*
+    |--------------------------------------------------------------------------
+    | Update summary state
+    |--------------------------------------------------------------------------
+    */
+    const summary = document.getElementById("routeOptimizeSummary");
+    if (summary) {
+        const provider = result.provider || "Routing Service";
+        const trafficDelay = Number(result.trafficDelayMinutes);
+        const trafficLabel = result.fallback
+            ? "Traffic data unavailable — OSRM fallback used."
+            : Number.isFinite(trafficDelay) && trafficDelay > 0
+              ? `${Math.round(trafficDelay)} min traffic delay detected.`
+              : "No significant traffic delay detected.";
+
+        summary.innerHTML = `
+            <strong>
+                Optimization Applied
+            </strong>
+
+            <p>
+                Provider:
+                ${escapeRouteHtml(provider)}
+            </p>
+
+            <p>
+                Strategy:
+                ${escapeRouteHtml(result.optimizationStrategy || "—")}
+                ${
+                    result.optimizationScore != null
+                        ? ` · Score:
+                           ${escapeRouteHtml(result.optimizationScore)}`
+                        : ""
+                }
+            </p>
+
+            <p>
+                Distance:
+                ${escapeRouteHtml(
+                    formatRouteDistance(result.estimatedDistance),
+                )}
+
+                · Time:
+                ${escapeRouteHtml(result.estimatedTravelTime || "—")}
+            </p>
+
+            <p>
+                Traffic:
+                ${escapeRouteHtml(trafficLabel)}
+            </p>
+
+            <p>
+                The optimized stop order is now
+                applied to this route.
+            </p>
+        `;
+    }
+    if (showToast && typeof showToast === "function") {
+        showToast("Route optimization applied.", "success");
+    }
+    return true;
 }
 
 /* ==========================================
@@ -940,6 +1198,13 @@ async function openRouteFormModal(mode, record = null) {
     routeFormMode = mode;
     routeEditingId = mode === "edit" && record ? record.id : null;
     routeLastOptimization = null;
+    routePendingOptimization = null;
+    const applyOptimizationButton = document.getElementById(
+        "applyRouteOptimizationBtn",
+    );
+    if (applyOptimizationButton) {
+        applyOptimizationButton.disabled = true;
+    }
     clearRouteFieldErrors(form);
     populateRouteFormOptions();
     const reservationSelect = document.getElementById("routeReservation");
@@ -1103,6 +1368,7 @@ async function openRouteFormModal(mode, record = null) {
             optimizedStops: Array.isArray(fullRoute.stops)
                 ? fullRoute.stops.slice()
                 : [],
+            optimizationApplied: true,
             routeCoordinates: {
                 origin: hasOriginCoordinates
                     ? {
@@ -1209,6 +1475,13 @@ function closeRouteFormModal() {
     routeEditingId = null;
     routeFormMode = "add";
     routeLastOptimization = null;
+    routePendingOptimization = null;
+    const applyOptimizationButton = document.getElementById(
+        "applyRouteOptimizationBtn",
+    );
+    if (applyOptimizationButton) {
+        applyOptimizationButton.disabled = true;
+    }
 }
 
 /* ==========================================
@@ -1418,6 +1691,16 @@ async function saveRouteFromForm() {
     |
     */
     let data = collectRouteFormData();
+    if (routePendingOptimization) {
+        if (typeof showToast === "function") {
+            showToast(
+                "Apply the route optimization before saving this route.",
+                "warning",
+            );
+        }
+        document.getElementById("applyRouteOptimizationBtn")?.focus();
+        return;
+    }
     const needsOptimization =
         data.origin &&
         data.destination &&
@@ -1427,6 +1710,9 @@ async function saveRouteFromForm() {
         try {
             await runRouteOptimization({
                 showSuccessToast: false,
+            });
+            applyPendingRouteOptimization({
+                showToast: false,
             });
             /*
             |--------------------------------------------------------------------------
@@ -1644,13 +1930,13 @@ async function runRouteOptimization({ showSuccessToast = true } = {}) {
     */
     applyOptimizationToForm(result);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Render optimized stop order into form.
-    |--------------------------------------------------------------------------
-    */
-    if (Array.isArray(result.optimizedStops)) {
-        renderRouteStops(result.optimizedStops);
+    routePendingOptimization = {
+        ...result,
+        optimizationApplied: false,
+    };
+    const applyButton = document.getElementById("applyRouteOptimizationBtn");
+    if (applyButton) {
+        applyButton.disabled = false;
     }
     /*
     |--------------------------------------------------------------------------
@@ -1694,7 +1980,10 @@ async function runRouteOptimization({ showSuccessToast = true } = {}) {
         driver: result.recommendedDriver,
     });
     if (showSuccessToast && typeof showToast === "function") {
-        showToast("Route optimized successfully.", "success");
+        showToast(
+            "Route optimized. Review the result, then apply the optimization.",
+            "success",
+        );
     }
     return result;
 }
@@ -1829,6 +2118,13 @@ function initRoutePlanningModals() {
             }
         });
     document
+        .getElementById("applyRouteOptimizationBtn")
+        ?.addEventListener("click", () => {
+            applyPendingRouteOptimization({
+                showToast: true,
+            });
+        });
+    document
         .getElementById("routeForm")
         ?.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -1856,7 +2152,7 @@ function initRoutePlanningModals() {
             }
             if (viewButton) {
                 openViewRouteModal(record);
-                updateRouteMapPanel(record);
+                await updateRouteMapPanel(record);
                 updateOptimizationSummaryPanel(record);
                 return;
             }

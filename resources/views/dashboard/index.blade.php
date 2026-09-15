@@ -560,9 +560,8 @@
                   ></div>
 
                   <p class="settings-note dashboard-map-note">
-                      Map markers represent active dispatch pickup and destination
-                      locations based on reservation data. Live GPS vehicle tracking
-                      is not enabled.
+                     The map shows active dispatch locations and live vehicle positions
+                     reported by assigned drivers.
                   </p>
                 </div>
 

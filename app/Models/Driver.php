@@ -51,4 +51,9 @@ class Driver extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function locations(): HasMany
+    {
+        return $this->hasMany(VehicleLocation::class);
+    }
 }

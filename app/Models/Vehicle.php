@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Reservation;
 use App\Models\Maintenance;
+use App\Models\VehicleLocation;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -96,5 +97,16 @@ class Vehicle extends Model
                     $query->where('status', 'Completed');
                 }
             );
+    }
+
+    public function locations(): HasMany
+    {
+        return $this->hasMany(VehicleLocation::class);
+    }
+
+    public function latestLocation(): HasOne
+    {
+        return $this->hasOne(VehicleLocation::class)
+            ->ofMany('recorded_at', 'max');
     }
 }

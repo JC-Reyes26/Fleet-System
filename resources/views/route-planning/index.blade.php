@@ -221,8 +221,8 @@
                       </div>
                   </div>
                   <p class="route-map-note">
-                      Route distance and estimated travel time are calculated
-                      using OpenStreetMap routing data.
+                      Route calculations use traffic-aware TomTom routing with
+                      OpenStreetMap map visualization and OSRM fallback.
                   </p>
               </div>
 
@@ -458,9 +458,22 @@
                 <button type="button" class="btn-outline" id="saveRouteTemplateFromForm">
                   Save as Template
                 </button>
-                <button type="button" class="btn-outline" id="optimizeRouteBtn">
-                  <i class="ph ph-path"></i>
-                  Optimize Route
+                <button
+                    type="button"
+                    class="btn-outline"
+                    id="optimizeRouteBtn"
+                >
+                    <i class="ph ph-path"></i>
+                    Optimize Route
+                </button>
+                <button
+                    type="button"
+                    class="btn-outline"
+                    id="applyRouteOptimizationBtn"
+                    disabled
+                >
+                    <i class="ph ph-check"></i>
+                    Apply Optimization
                 </button>
                 <button type="submit" class="btn-primary" id="saveRouteBtn">Save Route</button>
               </div>

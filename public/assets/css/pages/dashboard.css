@@ -636,3 +636,22 @@
         min-height: 320px;
     }
 }
+
+.hims-dashboard-vehicle-icon {
+    background: transparent;
+    border: 0;
+}
+
+.dashboard-live-vehicle-marker {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 22px;
+    background: var(--viz-accent-bg);
+    color: var(--viz-accent);
+    border: 2px solid var(--viz-accent);
+    box-sizing: border-box;
+}

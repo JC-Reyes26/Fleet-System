@@ -936,6 +936,143 @@ async function fetchRoutePlanningStats() {
 }
 
 /* ==========================================
+   TRAFFIC-AWARE ROUTING
+========================================== */
+
+/**
+ * Build ordered coordinates for route calculation.
+ *
+ * Order:
+ * Origin → Stops → Destination
+ */
+function buildRouteCoordinates(input) {
+    const coordinates = [];
+
+    const originLatitude = Number(input.originLatitude);
+    const originLongitude = Number(input.originLongitude);
+
+    if (
+        Number.isFinite(originLatitude) &&
+        Number.isFinite(originLongitude)
+    ) {
+        coordinates.push({
+            latitude: originLatitude,
+            longitude: originLongitude,
+        });
+    }
+
+    const stopCoordinates = Array.isArray(input.stopCoordinates)
+        ? input.stopCoordinates
+        : [];
+
+    stopCoordinates.forEach((stop) => {
+        const latitude = Number(stop?.latitude);
+        const longitude = Number(stop?.longitude);
+
+        if (
+            Number.isFinite(latitude) &&
+            Number.isFinite(longitude)
+        ) {
+            coordinates.push({
+                latitude,
+                longitude,
+            });
+        }
+    });
+
+    const destinationLatitude = Number(
+        input.destinationLatitude,
+    );
+
+    const destinationLongitude = Number(
+        input.destinationLongitude,
+    );
+
+    if (
+        Number.isFinite(destinationLatitude) &&
+        Number.isFinite(destinationLongitude)
+    ) {
+        coordinates.push({
+            latitude: destinationLatitude,
+            longitude: destinationLongitude,
+        });
+    }
+
+    return coordinates;
+}
+
+/**
+ * Calculate a traffic-aware route through Laravel.
+ *
+ * Laravel remains responsible for communicating
+ * with the TomTom API.
+ */
+async function calculateTrafficRouteApi(
+    coordinates,
+    departAt = null,
+) {
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        throw new Error(
+            "At least an origin and destination are required.",
+        );
+    }
+    const payload = {
+        coordinates,
+    };
+    if (departAt) {
+        payload.depart_at = departAt;
+    }
+    return routeApiRequest(
+        `${ROUTE_API_BASE}/traffic-route`,
+        {
+            method: "POST",
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+/**
+ * Calculate the best available route.
+ *
+ * Primary:
+ * TomTom traffic-aware routing
+ *
+ * Fallback:
+ * Existing OSRM routing
+ */
+async function calculateRouteWithTrafficFallback(
+    input,
+) {
+    const coordinates =
+        buildRouteCoordinates(input);
+    if (coordinates.length < 2) {
+        throw new Error(
+            "Route coordinates are incomplete.",
+        );
+    }
+    try {
+        const result =
+            await calculateTrafficRouteApi(
+                coordinates,
+                input.departAt || null,
+            );
+        return {
+            ...result,
+            fallback: false,
+            provider:
+                result.provider || "TomTom",
+        };
+    } catch (tomTomError) {
+        console.warn(
+            "TomTom traffic routing failed. Existing OSRM fallback should be used by the pipeline.",
+            tomTomError,
+        );
+
+        throw tomTomError;
+    }
+}
+
+/* ==========================================
    LEGACY COMPATIBILITY HELPERS
 ========================================== */
 

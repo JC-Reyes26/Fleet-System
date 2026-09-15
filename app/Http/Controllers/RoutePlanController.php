@@ -6,6 +6,7 @@ use App\Models\Reservation;
 use App\Models\RoutePlan;
 use App\Models\FleetSetting;
 use App\Services\AuditLogService;
+use App\Services\TomTomRoutingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -1311,6 +1312,143 @@ class RoutePlanController extends Controller
                 'message' =>
                     $e->getMessage(),
             ], 422);
+        }
+    }
+
+    /**
+    * Calculate a traffic-aware route using TomTom.
+    */
+    public function trafficRoute(
+        Request $request,
+        TomTomRoutingService $tomTom
+    ) {
+        $this->authorize('viewAny', RoutePlan::class);
+
+        $validator = Validator::make(
+            $request->all(),
+            [
+                'coordinates' => [
+                    'required',
+                    'array',
+                    'min:2',
+                ],
+
+                'coordinates.*.latitude' => [
+                    'required',
+                    'numeric',
+                    'between:-90,90',
+                ],
+
+                'coordinates.*.longitude' => [
+                    'required',
+                    'numeric',
+                    'between:-180,180',
+                ],
+
+                'depart_at' => [
+                    'nullable',
+                    'date',
+                ],
+            ]
+        );
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Please provide valid route coordinates.',
+                'errors' =>
+                    $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $validated =
+                $validator->validated();
+
+            $result =
+                $tomTom->calculateRoute(
+                    $validated['coordinates'],
+                    $validated['depart_at'] ?? null
+                );
+
+            return response()->json([
+                'success' => true,
+
+                'provider' =>
+                    $result['provider'],
+
+                'distance_meters' =>
+                    $result['distance_meters'],
+
+                'distance_km' =>
+                    $result['distance_meters'] !== null
+                        ? round(
+                            $result['distance_meters'] / 1000,
+                            2
+                        )
+                        : null,
+
+                'travel_time_seconds' =>
+                    $result['travel_time_seconds'],
+
+                'travel_time_minutes' =>
+                    $result['travel_time_seconds'] !== null
+                        ? round(
+                            $result['travel_time_seconds'] / 60,
+                            1
+                        )
+                        : null,
+
+                'traffic_delay_seconds' =>
+                    $result['traffic_delay_seconds'],
+
+                'traffic_delay_minutes' =>
+                    $result['traffic_delay_seconds'] !== null
+                        ? round(
+                            $result['traffic_delay_seconds'] / 60,
+                            1
+                        )
+                        : null,
+
+                'traffic_length_meters' =>
+                    $result['traffic_length_meters'],
+
+                'no_traffic_travel_time_seconds' =>
+                    $result['no_traffic_travel_time_seconds'],
+
+                'historic_traffic_travel_time_seconds' =>
+                    $result['historic_traffic_travel_time_seconds'],
+
+                'live_traffic_travel_time_seconds' =>
+                    $result['live_traffic_travel_time_seconds'],
+
+                'departure_time' =>
+                    $result['departure_time'],
+
+                'arrival_time' =>
+                    $result['arrival_time'],
+
+                'optimized_waypoints' =>
+                    $result['optimized_waypoints'],
+
+                'points' =>
+                    $result['points'],
+            ]);
+
+        } catch (\Throwable $e) {
+
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Traffic-aware route calculation failed.',
+                'error' =>
+                    config('app.debug')
+                        ? $e->getMessage()
+                        : null,
+            ], 502);
         }
     }
     /**
