@@ -95,6 +95,207 @@
             />
           </div>
 
+          <!-- AI Recommendation -->
+          <div class="form-group full-width">
+            <div
+                id="dispatchAiRecommendation"
+                class="dispatch-ai-recommendation"
+                hidden
+                aria-live="polite"
+            >
+                <div class="dispatch-ai-recommendation-header">
+                    <div>
+                        <strong>AI Dispatch Recommendation</strong>
+                        <small>
+                            System-generated recommendation based on current fleet data.
+                        </small>
+                    </div>
+
+                    <span
+                        id="dispatchAiScoreBadge"
+                        class="status-badge scheduled"
+                    >
+                        —
+                    </span>
+                </div>
+
+                <div class="dispatch-ai-assignment-grid">
+                    <div>
+                        <label>Recommended Vehicle</label>
+                        <strong id="dispatchAiVehicle">—</strong>
+                    </div>
+
+                    <div>
+                        <label>Recommended Driver</label>
+                        <strong id="dispatchAiDriver">—</strong>
+                    </div>
+
+                    <div>
+                        <label>Distance to Pickup</label>
+                        <strong id="dispatchAiDistance">—</strong>
+                    </div>
+
+                    <div>
+                        <label>Traffic ETA</label>
+                        <strong id="dispatchAiEta">—</strong>
+                    </div>
+
+                    <div>
+                        <label>Traffic Delay</label>
+                        <strong id="dispatchAiTrafficDelay">—</strong>
+                    </div>
+
+                    <div>
+                        <label>Traffic</label>
+                        <strong id="dispatchAiTraffic">—</strong>
+                    </div>
+
+                    <div>
+                        <label>GPS Status</label>
+                        <strong id="dispatchAiGps">—</strong>
+                    </div>
+                </div>
+
+                <div class="dispatch-ai-reasons">
+                    <label>Recommendation Reasons</label>
+                    <ul id="dispatchAiReasons"></ul>
+                </div>
+
+                <!-- Score Breakdown -->
+                <div class="dispatch-ai-score-breakdown-toggle">
+                    <button
+                        type="button"
+                        class="btn-outline"
+                        id="toggleDispatchAiScoreBreakdown"
+                        aria-expanded="false"
+                        aria-controls="dispatchAiScoreBreakdown"
+                    >
+                        <i class="ph ph-chart-bar"></i>
+                        View Score Breakdown
+                    </button>
+                </div>
+
+                <div
+                    id="dispatchAiScoreBreakdown"
+                    class="dispatch-ai-score-breakdown"
+                    hidden
+                >
+                    <div class="dispatch-ai-score-breakdown-header">
+                        <div>
+                            <strong>Recommendation Score</strong>
+                            <small>
+                                How the system calculated the overall recommendation.
+                            </small>
+                        </div>
+
+                        <span id="dispatchAiBreakdownTotal">0/100</span>
+                    </div>
+
+                    <div
+                        id="dispatchAiScoreBreakdownList"
+                        class="dispatch-ai-score-breakdown-list"
+                    ></div>
+                </div>
+
+                <div
+                    id="dispatchAiMessage"
+                    class="dispatch-ai-message"
+                ></div>
+
+                <!-- Gemini AI Explanation -->
+                <div
+                    id="dispatchAiGemini"
+                    class="dispatch-ai-gemini"
+                    hidden
+                >
+                    <div class="dispatch-ai-gemini-header">
+                        <div class="dispatch-ai-gemini-title">
+                            <i class="ph ph-sparkle"></i>
+
+                            <div>
+                                <strong>Gemini AI Explanation</strong>
+                                <small>
+                                    AI-generated explanation of the system recommendation.
+                                </small>
+                            </div>
+                        </div>
+
+                        <span class="dispatch-ai-gemini-badge">
+                            AI
+                        </span>
+                    </div>
+
+                    <!-- Summary -->
+                    <div class="dispatch-ai-gemini-section">
+                        <div class="dispatch-ai-gemini-section-label">
+                            <i class="ph ph-info"></i>
+                            Summary
+                        </div>
+
+                        <p
+                            id="dispatchAiGeminiSummary"
+                            class="dispatch-ai-gemini-summary"
+                        ></p>
+                    </div>
+
+                    <!-- Key Factors -->
+                    <div
+                        id="dispatchAiGeminiFactorsSection"
+                        class="dispatch-ai-gemini-section"
+                        hidden
+                    >
+                        <div class="dispatch-ai-gemini-section-label">
+                            <i class="ph ph-check-circle"></i>
+                            Key Factors
+                        </div>
+
+                        <ul
+                            id="dispatchAiGeminiFactors"
+                            class="dispatch-ai-gemini-list"
+                        ></ul>
+                    </div>
+
+                    <!-- Limitations -->
+                    <div
+                        id="dispatchAiGeminiLimitationsSection"
+                        class="dispatch-ai-gemini-section"
+                        hidden
+                    >
+                        <div class="dispatch-ai-gemini-section-label">
+                            <i class="ph ph-warning"></i>
+                            Limitations
+                        </div>
+
+                        <ul
+                            id="dispatchAiGeminiLimitations"
+                            class="dispatch-ai-gemini-list dispatch-ai-gemini-limitations"
+                        ></ul>
+                    </div>
+                </div>
+
+                <div class="dispatch-ai-actions">
+                    <button
+                        type="button"
+                        class="btn-outline"
+                        id="applyDispatchAiRecommendation"
+                        hidden
+                    >
+                        <i class="ph ph-magic-wand"></i>
+                        Use Recommendation
+                    </button>
+                </div>
+            </div>
+
+            <div
+                id="dispatchAiLoading"
+                class="dispatch-ai-loading"
+                hidden
+            >
+                <i class="ph ph-spinner"></i>
+                Evaluating available fleet resources...
+            </div>
+        </div>
+
           <!-- Pickup -->
           <div class="form-group">
             <label for="dispatchPickup">Pickup Location</label>

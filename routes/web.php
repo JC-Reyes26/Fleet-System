@@ -229,6 +229,11 @@ Route::middleware([
             ReservationController::class
         );
 
+        Route::post(
+            '/reservation/{reservation}/apply-dispatch-recommendation',
+            [ReservationController::class, 'applyDispatchRecommendation']
+        )->name('reservation.apply-dispatch-recommendation');
+
     });
 
 
@@ -248,6 +253,11 @@ Route::middleware([
             '/dispatch/available-reservations',
             [DispatchController::class, 'availableReservations']
         )->name('dispatch.availableReservations');
+
+        Route::get(
+            '/dispatch/recommendation/{reservation}',
+            [DispatchController::class, 'recommendation']
+        )->name('dispatch.recommendation');
 
         Route::get(
             '/dispatch/next-number',

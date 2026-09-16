@@ -7,6 +7,8 @@ use App\Models\Reservation;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
 use App\Services\AuditLogService;
+use App\Services\DispatchRecommendationService;
+use App\Services\GeminiDispatchExplanationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -259,6 +261,213 @@ class DispatchController extends Controller
         return view(
             'dispatch.index',
             compact('dispatchPermissions')
+        );
+    }
+
+    /**
+    * Generate an explainable AI-based dispatch recommendation
+    * for an approved Reservation.
+    */
+    public function recommendation(
+        Reservation $reservation,
+        DispatchRecommendationService $recommendationService,
+        GeminiDispatchExplanationService $geminiService
+    ) {
+        $this->authorize('create', Dispatch::class);
+
+        $reservation->load([
+            'vehicle',
+            'driver',
+            'routePlan.stops',
+        ]);
+
+        if ($reservation->status !== 'Approved') {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Only Approved reservations can receive a dispatch recommendation.',
+            ], 422);
+        }
+
+        if (!$reservation->routePlan) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'A Route Plan is required before generating a dispatch recommendation.',
+            ], 422);
+        }
+
+        if (
+            $reservation->routePlan->status !==
+            'Ready For Dispatch'
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'The Route Plan must be Ready For Dispatch before generating a dispatch recommendation.',
+            ], 422);
+        }
+
+        if ($reservation->dispatch()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'This reservation already has a Dispatch.',
+            ], 422);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Generate Smart Dispatch Recommendation
+        |--------------------------------------------------------------------------
+        */
+        $recommendation =
+            $recommendationService->recommend(
+                $reservation
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Gemini Explanation
+        |--------------------------------------------------------------------------
+        |
+        | Gemini explains the already-computed recommendation.
+        | Gemini does NOT select the vehicle or driver.
+        |
+        */
+        $recommendation['gemini_available'] = false;
+        $recommendation['gemini_explanation'] = null;
+
+        if (!empty($recommendation['recommended'])) {
+            $recommended =
+                $recommendation['recommended'];
+
+            try {
+                $recommendation['gemini_explanation'] =
+                    $geminiService->explain([
+                        'reservation_number' =>
+                            $reservation->reservation_number,
+
+                        'priority' =>
+                            $reservation->priority,
+
+                        'vehicle_label' =>
+                            $recommended['vehicle_label']
+                                ?? 'Unavailable',
+
+                        'driver_name' =>
+                            $recommended['driver_name']
+                                ?? 'Unavailable',
+
+                        'score' =>
+                            $recommended['score']
+                                ?? 0,
+
+                        'availability_score' =>
+                            25,
+
+                        'proximity_score' =>
+                            $recommended['proximity_score']
+                                ?? 0,
+
+                        'assigned_fit_score' =>
+                            $recommended['assigned_fit_score']
+                                ?? 0,
+
+                        'priority_score' =>
+                            $recommended['priority_score']
+                                ?? 0,
+
+                        'gps_freshness_score' =>
+                            $recommended['gps_freshness_score']
+                                ?? 0,
+
+                        'traffic_score' =>
+                            $recommended['traffic_score']
+                                ?? 0,
+
+                        'fuel_score' =>
+                            $recommended['fuel_score']
+                                ?? 0,
+
+                        'fuel_percentage' =>
+                            $recommended['fuel_percentage']
+                                ?? null,
+
+                        'vehicle_suitability_score' =>
+                            $recommended['vehicle_suitability_score']
+                                ?? 0,
+
+                        'maintenance_score' =>
+                            $recommended['maintenance_score']
+                                ?? 0,
+
+                        'maintenance_status' =>
+                            $recommended['maintenance_status']
+                                ?? 'Unavailable',
+
+                        'maintenance_next_schedule' =>
+                            $recommended['maintenance_next_schedule']
+                                ?? null,
+
+                        'distance_to_pickup_km' =>
+                            $recommended['distance_to_pickup_km']
+                                ?? 'Unavailable',
+
+                        'traffic_eta_minutes' =>
+                            $recommended['traffic_eta_minutes']
+                                ?? 'Unavailable',
+
+                        'traffic_delay_minutes' =>
+                            $recommended['traffic_delay_minutes']
+                                ?? 'Unavailable',
+
+                        'traffic_provider' =>
+                            $recommended['traffic_provider']
+                                ?? 'Unavailable',
+
+                        'has_live_location' =>
+                            $recommended['has_live_location']
+                                ?? false,
+
+                        'location_age_seconds' =>
+                            $recommended['location_age_seconds']
+                                ?? null,
+
+                        'reasons' =>
+                            $recommended['reasons']
+                                ?? [],
+                    ]);
+                
+                $recommendation['gemini_summary'] =
+                    $recommendation['gemini_explanation']['summary']
+                        ?? null;
+
+                $recommendation['gemini_factors'] =
+                    $recommendation['gemini_explanation']['key_factors']
+                        ?? [];
+
+                $recommendation['gemini_limitations'] =
+                    $recommendation['gemini_explanation']['limitations']
+                        ?? [];
+
+                $recommendation['gemini_available'] = true;
+
+            } catch (\Throwable $e) {
+                report($e);
+                /*
+                |--------------------------------------------------------------------------
+                | Gemini Failure Must NOT Break Dispatch Recommendation
+                |--------------------------------------------------------------------------
+                */
+                $recommendation['gemini_available'] = false;
+                $recommendation['gemini_explanation'] = null;
+                $recommendation['gemini_error'] = $e->getMessage();
+            }
+        }
+
+        return response()->json(
+            $recommendation
         );
     }
 

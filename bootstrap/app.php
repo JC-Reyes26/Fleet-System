@@ -15,6 +15,24 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        /*
+        |--------------------------------------------------------------------------
+        | Trusted Proxies
+        |--------------------------------------------------------------------------
+        |
+        | The application is deployed behind a reverse proxy/container
+        | network. Trust forwarded client IP information so Request::ip()
+        | can resolve the original client address.
+        |
+        */
+        $middleware->trustProxies(
+            at: '*',
+            headers: Request::HEADER_X_FORWARDED_FOR |
+                Request::HEADER_X_FORWARDED_HOST |
+                Request::HEADER_X_FORWARDED_PORT |
+                Request::HEADER_X_FORWARDED_PROTO
+        );
+
         $middleware->alias([
             'fleet.module' => FleetModuleAccess::class,
             'fleet.action' => FleetModuleAction::class,

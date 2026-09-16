@@ -874,6 +874,239 @@ class ReservationController extends Controller
     }
 
     /**
+     * Apply AI Dispatch Recommendation to a reservation.
+     */
+    public function applyDispatchRecommendation(
+        Request $request,
+        Reservation $reservation
+    ) {
+        $this->authorize('update', $reservation);
+
+        $reservation->load([
+            'routePlan',
+            'dispatch',
+            'vehicle',
+            'driver',
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Reservation must still be eligible for dispatch assignment
+        |--------------------------------------------------------------------------
+        */
+        if ($reservation->dispatch) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'This reservation can no longer accept an AI recommendation because a dispatch already exists.',
+            ], 422);
+        }
+
+        if (!$reservation->routePlan) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'A route plan is required before applying an AI dispatch recommendation.',
+            ], 422);
+        }
+
+        if ($reservation->status !== 'Approved') {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Only approved reservations can accept an AI dispatch recommendation.',
+            ], 422);
+        }
+
+        if ($reservation->routePlan->status !== 'Ready For Dispatch') {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'The route plan must be Ready For Dispatch before applying an AI recommendation.',
+            ], 422);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Request
+        |--------------------------------------------------------------------------
+        */
+        $validator = Validator::make(
+            $request->all(),
+            [
+                'vehicle_id' => [
+                    'required',
+                    'integer',
+                    'exists:vehicles,id',
+                ],
+                'driver_id' => [
+                    'required',
+                    'integer',
+                    'exists:drivers,id',
+                ],
+            ]
+        );
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Invalid AI recommendation assignment.',
+                'errors' =>
+                    $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $validated = $validator->validated();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Validate Vehicle + Driver
+            |--------------------------------------------------------------------------
+            */
+            $vehicle = Vehicle::find(
+                $validated['vehicle_id']
+            );
+
+            $driver = Driver::find(
+                $validated['driver_id']
+            );
+
+            if (!$vehicle || !$driver) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        'The recommended vehicle or driver no longer exists.',
+                ], 422);
+            }
+
+            if ($vehicle->status !== 'Available') {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        "Vehicle {$vehicle->brand} {$vehicle->model} is currently {$vehicle->status} and cannot be assigned.",
+                ], 422);
+            }
+
+            if ($driver->status !== 'Available') {
+                $driverName = trim(
+                    ($driver->first_name ?? '') . ' ' .
+                    ($driver->last_name ?? '')
+                );
+
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        "Driver {$driverName} is currently {$driver->status} and cannot be assigned.",
+                ], 422);
+            }
+
+            if (
+                (int) $driver->assigned_vehicle_id !==
+                (int) $vehicle->id
+            ) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        'The recommended driver is not assigned to the recommended vehicle.',
+                ], 422);
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Capture Audit State
+            |--------------------------------------------------------------------------
+            */
+            $oldAuditValues =
+                $this->getReservationAuditValues(
+                    $reservation
+                );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Apply Recommendation Atomically
+            |--------------------------------------------------------------------------
+            */
+            DB::transaction(function () use (
+                $reservation,
+                $vehicle,
+                $driver
+            ) {
+                $reservation->update([
+                    'vehicle_id' => $vehicle->id,
+                    'driver_id' => $driver->id,
+                ]);
+            });
+
+            $reservation->refresh();
+
+            $newAuditValues =
+                $this->getReservationAuditValues(
+                    $reservation
+                );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Audit
+            |--------------------------------------------------------------------------
+            */
+            $changedOldValues = [];
+            $changedNewValues = [];
+
+            foreach ($newAuditValues as $field => $newValue) {
+                $oldValue =
+                    $oldAuditValues[$field] ?? null;
+
+                if ((string) $oldValue !== (string) $newValue) {
+                    $changedOldValues[$field] =
+                        $oldValue;
+
+                    $changedNewValues[$field] =
+                        $newValue;
+                }
+            }
+
+            AuditLogService::log(
+                module: 'Dispatch Management',
+                action: 'AI Recommendation Applied',
+                description:
+                    "Applied AI dispatch recommendation to reservation {$reservation->reservation_number}.",
+                record: $reservation,
+                oldValues: $changedOldValues,
+                newValues: $changedNewValues
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Return Updated Reservation
+            |--------------------------------------------------------------------------
+            */
+            $reservation->load([
+                'vehicle',
+                'driver',
+                'requester',
+                'routePlan',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                    'AI dispatch recommendation applied successfully.',
+                'reservation' =>
+                    $reservation,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
      * Remove the specified reservation.
      */
     public function destroy(Reservation $reservation)

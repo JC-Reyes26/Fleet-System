@@ -39,6 +39,15 @@ return [
         'key' => env('TOMTOM_API_KEY'),
     ],
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
+        'fallback_model' => env(
+            'GEMINI_FALLBACK_MODEL',
+            'gemini-3.5-flash-lite'
+        ),
+    ],
+
     'google_maps' => [
         'key' => env('GOOGLE_MAPS_API_KEY'),
     ],
