@@ -118,6 +118,14 @@
                   <option value="professional">Professional</option>
                   <option value="non-professional">Non-Professional</option>
                 </select>
+
+                <label class="driver-archived-toggle">
+                    <input
+                        type="checkbox"
+                        id="showArchivedDrivers"
+                    >
+                    <span>Show Archived</span>
+                </label>
               </div>
 
               <div class="toolbar-right">
@@ -129,7 +137,7 @@
             </div>
 
             <!-- Bulk Toolbar -->
-            @if($driverPermissions['canBulkDelete'] ?? false)
+            @if($driverPermissions['canBulkArchive'] ?? false)
                 <div
                     class="bulk-toolbar"
                     id="driverBulkToolbar"
@@ -149,11 +157,11 @@
 
                         <button
                             type="button"
-                            id="deleteSelectedDrivers"
+                            id="archiveSelectedDrivers"
                             class="btn-danger"
                         >
-                            <i class="ph ph-trash"></i>
-                            Delete Selected
+                            <i class="ph ph-archive"></i>
+                            Archive Selected
                         </button>
                     </div>
                 </div>
@@ -231,7 +239,7 @@
                   <thead>
                     <tr>
                       <th>
-                          @if($driverPermissions['canBulkDelete'] ?? false)
+                          @if($driverPermissions['canBulkArchive'] ?? false)
                               <input
                                   type="checkbox"
                                   id="selectAllDrivers"
@@ -319,7 +327,10 @@
         @include('components.driver.edit-driver-modal')
     @endif
 
-    @if($driverPermissions['canDelete'] ?? false)
+    @if(
+        ($driverPermissions['canArchive'] ?? false) ||
+        ($driverPermissions['canRestore'] ?? false)
+    )
         @include('components.driver.delete-driver-modal')
     @endif
 

@@ -108,6 +108,14 @@
                     <option value="Maintenance">Maintenance</option>
                     <option value="Out of Service">Out of Service</option>
                   </select>
+
+                  <label class="vehicle-archived-toggle">
+                      <input
+                          type="checkbox"
+                          id="showArchivedVehicles"
+                      >
+                      <span>Show Archived</span>
+                  </label>
                 </div>
 
                 <div class="toolbar-right">
@@ -117,7 +125,7 @@
                   </button>
                 </div>
               </div>
-              @if($vehiclePermissions['canBulkDelete'] ?? false)
+              @if($vehiclePermissions['canBulkArchive'] ?? false)
                   <div class="bulk-toolbar" id="bulkToolbar">
                       <span id="selectedCount">
                           0 vehicles selected
@@ -132,11 +140,11 @@
                           </button>
                           <button
                               type="button"
-                              id="deleteSelected"
+                              id="archiveSelected"
                               class="btn-danger"
                           >
-                              <i class="ph ph-trash"></i>
-                              Delete Selected
+                              <i class="ph ph-archive"></i>
+                              Archive Selected
                           </button>
                       </div>
                   </div>
@@ -215,7 +223,7 @@
                   <thead>
                     <tr>
                       <th>
-                        @if($vehiclePermissions['canBulkDelete'] ?? false)
+                        @if($vehiclePermissions['canBulkArchive'] ?? false)
                             <input
                                 type="checkbox"
                                 id="selectAllVehicles"
@@ -295,7 +303,10 @@
         @include('components.vehicle.edit-vehicle-modal')
     @endif
 
-    @if($vehiclePermissions['canDelete'] ?? false)
+    @if(
+        ($vehiclePermissions['canArchive'] ?? false) ||
+        ($vehiclePermissions['canRestore'] ?? false)
+    )
         @include('components.vehicle.delete-vehicle-modal')
     @endif
 

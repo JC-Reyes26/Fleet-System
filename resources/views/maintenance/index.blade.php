@@ -131,6 +131,14 @@
                   id="maintenanceDateFilter"
                   aria-label="Filter maintenance by scheduled date"
                 />
+
+                <label class="maintenance-archived-toggle">
+                    <input
+                        type="checkbox"
+                        id="showArchivedMaintenances"
+                    >
+                    <span>Show Archived</span>
+                </label>
               </div>
 
               <div class="toolbar-right">
@@ -146,7 +154,7 @@
             </div>
 
             <!-- Bulk Toolbar -->
-            @if($maintenancePermissions['canBulkDelete'] ?? false)
+            @if($maintenancePermissions['canBulkArchive'] ?? false)
                 <div
                     class="bulk-toolbar"
                     id="maintenanceBulkToolbar"
@@ -164,12 +172,12 @@
                         </button>
                         <button
                             type="button"
-                            id="deleteSelectedMaintenance"
+                            id="archiveSelectedMaintenance"
                             class="btn-danger"
-                            aria-label="Delete selected maintenance records"
+                            aria-label="Archive selected maintenance records"
                         >
-                            <i class="ph ph-trash"></i>
-                            Delete Selected
+                            <i class="ph ph-archive"></i>
+                            Archive Selected
                         </button>
                     </div>
                 </div>
@@ -247,7 +255,7 @@
                   <thead>
                     <tr>
                       <th>
-                          @if($maintenancePermissions['canBulkDelete'] ?? false)
+                          @if($maintenancePermissions['canBulkArchive'] ?? false)
                               <input
                                   type="checkbox"
                                   id="selectAllMaintenance"
@@ -342,7 +350,10 @@
         @include('components.maintenance.edit-maintenance-modal')
     @endif
 
-    @if($maintenancePermissions['canDelete'] ?? false)
+    @if(
+        ($maintenancePermissions['canArchive'] ?? false) ||
+        ($maintenancePermissions['canRestore'] ?? false)
+    )
         @include('components.maintenance.delete-maintenance-modal')
     @endif
 

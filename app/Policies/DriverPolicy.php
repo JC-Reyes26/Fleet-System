@@ -65,7 +65,7 @@ class DriverPolicy
         );
     }
 
-    public function delete(
+    public function archive(
         User $user,
         Driver $driver
     ): bool {
@@ -75,8 +75,18 @@ class DriverPolicy
         );
     }
 
-    public function deleteAny(User $user): bool
+    public function archiveAny(User $user): bool
     {
+        return $user->hasRole(
+            'fleet_manager',
+            'dispatcher'
+        );
+    }
+
+    public function restore(
+        User $user,
+        Driver $driver
+    ): bool {
         return $user->hasRole(
             'fleet_manager',
             'dispatcher'

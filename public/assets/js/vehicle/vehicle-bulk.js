@@ -85,16 +85,16 @@ function initBulkActions() {
   const toolbar = document.getElementById("bulkToolbar");
   const selectedCount = document.getElementById("selectedCount");
   const clearButton = document.getElementById("clearSelection");
-  const deleteButton = document.getElementById("deleteSelected");
+  const archiveButton = document.getElementById("archiveSelected");
 
   if (
-    !tableBody ||
-    !selectAll ||
-    !toolbar ||
-    !selectedCount ||
-    !deleteButton
+      !tableBody ||
+      !selectAll ||
+      !toolbar ||
+      !selectedCount ||
+      !archiveButton
   ) {
-    return;
+      return;
   }
 
   if (tableBody.dataset.vehicleBulkInitialized === "true") {
@@ -126,41 +126,70 @@ function initBulkActions() {
 
   clearButton?.addEventListener("click", clearVehicleSelection);
 
-  deleteButton.addEventListener("click", () => {
+  archiveButton.addEventListener("click", async () => {
       const ids = getVehicleBulkCheckboxes()
-          .filter(cb => cb.checked)
-          .map(cb => cb.dataset.id);
+          .filter((cb) => cb.checked)
+          .map((cb) => cb.dataset.id);
 
-      if(ids.length === 0) return;
+      if (ids.length === 0) {
+          return;
+      }
 
-      fetch("/fleet/bulk-delete", {
-          method: "DELETE",
-          headers: {
-              "Content-Type": "application/json",
-              "X-CSRF-TOKEN": document
-                  .querySelector('meta[name="csrf-token"]')
-                  .content,
-          },
-          body: JSON.stringify({
-              ids: ids
-          })
-      })
-      .then(response => response.json())
-      .then(data => {
+      archiveButton.disabled = true;
 
-          if (!data.success) return;
+      try {
+          const response = await fetch("/fleet/bulk-archive", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                  "X-CSRF-TOKEN":
+                      document.querySelector('meta[name="csrf-token"]')
+                          ?.content || "",
+                  "X-Requested-With": "XMLHttpRequest",
+              },
+              credentials: "same-origin",
+              body: JSON.stringify({
+                  ids: ids,
+              }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+              throw new Error(
+                  data.message || "Unable to archive selected vehicles.",
+              );
+          }
+
           clearVehicleSelection();
-          applyVehicleFilters();
 
-          window.showToast(
-              data.message,
-              "success"
-          );
+          if (typeof applyVehicleFilters === "function") {
+              applyVehicleFilters();
+          }
 
-          loadVehicles();
-      })
-      .catch(error => console.error(error));
+          if (typeof window.showToast === "function") {
+              window.showToast(
+                  data.message || "Selected vehicles archived successfully.",
+                  "success",
+              );
+          }
 
+          if (typeof loadVehicles === "function") {
+              await loadVehicles();
+          }
+      } catch (error) {
+          console.error("BULK VEHICLE ARCHIVE ERROR:", error);
+
+          if (typeof window.showToast === "function") {
+              window.showToast(
+                  error.message || "Unable to archive selected vehicles.",
+                  "error",
+              );
+          }
+      } finally {
+          archiveButton.disabled = false;
+      }
   });
 
   refreshVehicleBulkState();

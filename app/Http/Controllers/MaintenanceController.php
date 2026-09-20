@@ -260,7 +260,20 @@ class MaintenanceController extends Controller
         $warningDays =
             $maintenanceSettings['overdueWarnDays'];
 
+        $showArchived =
+            $request->boolean('show_archived');
+
         $maintenances = Maintenance::with('vehicle')
+            ->when(
+                $showArchived,
+                fn ($query) =>
+                    $query->whereNotNull('archived_at')
+            )
+            ->when(
+                !$showArchived,
+                fn ($query) =>
+                    $query->whereNull('archived_at')
+            )
             ->orderBy('id', 'asc')
             ->get()
             ->map(function ($maintenance) use ($warningDays) {
@@ -334,12 +347,17 @@ class MaintenanceController extends Controller
                     'fleet_manager',
                     'maintenance'
                 ),
-            'canDelete' =>
+            'canArchive' =>
                 $user->hasRole(
                     'fleet_manager',
                     'maintenance'
                 ),
-            'canBulkDelete' =>
+            'canBulkArchive' =>
+                $user->hasRole(
+                    'fleet_manager',
+                    'maintenance'
+                ),
+            'canRestore' =>
                 $user->hasRole(
                     'fleet_manager',
                     'maintenance'
@@ -358,7 +376,9 @@ class MaintenanceController extends Controller
     {
         $this->authorize('create', Maintenance::class);
 
-        $vehicles = Vehicle::where('status', 'Available')
+        $vehicles = Vehicle::query()
+            ->where('status', 'Available')
+            ->whereNull('archived_at')
             ->orderBy('brand')
             ->orderBy('model')
             ->get();
@@ -499,6 +519,12 @@ class MaintenanceController extends Controller
                 | Vehicle must be Available for a new maintenance record
                 |--------------------------------------------------------------------------
                 */
+                if ($vehicle->archived_at) {
+                    throw new \Exception(
+                        "Vehicle {$vehicle->brand} {$vehicle->model} is archived and cannot be scheduled for maintenance."
+                    );
+                }
+
                 if ($vehicle->status !== 'Available') {
                     throw new \Exception(
                         "Vehicle {$vehicle->brand} {$vehicle->model} is currently {$vehicle->status} and cannot be scheduled for maintenance."
@@ -596,6 +622,14 @@ class MaintenanceController extends Controller
         Maintenance $maintenance
     ) {
         $this->authorize('update', $maintenance);
+
+        if ($maintenance->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Archived maintenance records cannot be modified.',
+            ], 422);
+        }
         
         $maintenanceSettings =
             $this->getMaintenanceSettings();
@@ -709,13 +743,20 @@ class MaintenanceController extends Controller
                     ->findOrFail($maintenance->vehicle_id);
 
                 $validated = $validator->validated();
-
+                /*
                 $maintenance->fill($validated);
 
                 $newVehicleId = (int) $validated['vehicle_id'];
                 $currentVehicleId = (int) $maintenance->vehicle_id;
 
                 $currentStatus = $maintenance->status;
+                $newStatus = $validated['status'];
+                */
+                $newVehicleId = (int) $validated['vehicle_id'];
+                $currentVehicleId = (int) $maintenance->vehicle_id;
+
+                $currentStatus = $maintenance->status;
+                $maintenance->fill($validated);
                 $newStatus = $validated['status'];
 
                 if (
@@ -782,6 +823,12 @@ class MaintenanceController extends Controller
 
                     $newVehicle = Vehicle::lockForUpdate()
                         ->findOrFail($newVehicleId);
+
+                    if ($newVehicle->archived_at) {
+                        throw new \Exception(
+                            "Vehicle {$newVehicle->brand} {$newVehicle->model} is archived and cannot be assigned."
+                        );
+                    }
 
                     if ($newVehicle->status !== 'Available') {
                         throw new \Exception(
@@ -968,71 +1015,163 @@ class MaintenanceController extends Controller
     /**
      * Remove the specified maintenance record.
      */
-    public function destroy(Maintenance $maintenance)
-    {
-        $this->authorize('delete', $maintenance);
+    public function archive(
+        Request $request,
+        Maintenance $maintenance
+    ) {
+        $this->authorize(
+            'archive',
+            $maintenance
+        );
 
         try {
-            DB::transaction(function () use ($maintenance) {
-                $maintenance->load('vehicle');
+            DB::transaction(function () use (
+                $request,
+                $maintenance
+            ) {
+                $maintenance =
+                    Maintenance::with('vehicle')
+                        ->lockForUpdate()
+                        ->findOrFail(
+                            $maintenance->id
+                        );
 
-                /*
-                |--------------------------------------------------------------------------
-                | Do not delete active maintenance
-                |--------------------------------------------------------------------------
-                */
-                if ($maintenance->status === 'In Progress') {
+                if ($maintenance->archived_at) {
                     throw new \Exception(
-                        'In-progress maintenance cannot be deleted.'
+                        'Maintenance record is already archived.'
                     );
                 }
 
-                $vehicle = $maintenance->vehicle;
+                /*
+                |--------------------------------------------------------------------------
+                | In Progress Protection
+                |--------------------------------------------------------------------------
+                */
+                if (
+                    $maintenance->status ===
+                    'In Progress'
+                ) {
+                    throw new \Exception(
+                        "Maintenance {$maintenance->maintenance_number} cannot be archived while In Progress."
+                    );
+                }
 
-                $deletedValues =
+                $oldValues =
                     $this->getMaintenanceAuditValues(
                         $maintenance
                     );
 
+                $maintenance->update([
+                    'archived_at' =>
+                        now(),
+
+                    'archived_by' =>
+                        $request->user()->id,
+                ]);
+
                 AuditLogService::log(
                     module: 'Maintenance Management',
-                    action: 'Deleted',
+                    action: 'Archived',
                     description:
-                        "Deleted maintenance record {$maintenance->maintenance_number}.",
+                        "Archived maintenance record {$maintenance->maintenance_number}.",
                     record: $maintenance,
                     oldValues:
-                        $deletedValues
+                        $oldValues,
+                    newValues: [
+                        'archived_at' =>
+                            $maintenance->archived_at
+                                ?->toDateTimeString(),
+
+                        'archived_by' =>
+                            $request->user()->id,
+                    ]
                 );
-
-                $maintenance->delete();
-
-                $maintenance->delete();
-
-                /*
-                |--------------------------------------------------------------------------
-                | If the deleted record was controlling the vehicle,
-                | release the vehicle.
-                |--------------------------------------------------------------------------
-                */
-                if (
-                    $vehicle &&
-                    $vehicle->status === 'Maintenance'
-                ) {
-                    $vehicle->update([
-                        'status' => 'Available',
-                    ]);
-                }
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Maintenance record deleted successfully.',
+                'message' =>
+                    'Maintenance record archived successfully.',
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' =>
+                    $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function restore(
+        Request $request,
+        Maintenance $maintenance
+    ) {
+        $this->authorize(
+            'restore',
+            $maintenance
+        );
+
+        try {
+            DB::transaction(function () use (
+                $maintenance
+            ) {
+                $maintenance =
+                    Maintenance::lockForUpdate()
+                        ->findOrFail(
+                            $maintenance->id
+                        );
+
+                if (!$maintenance->archived_at) {
+                    throw new \Exception(
+                        'Maintenance record is not archived.'
+                    );
+                }
+
+                $oldValues = [
+                    'archived_at' =>
+                        $maintenance->archived_at
+                            ?->toDateTimeString(),
+
+                    'archived_by' =>
+                        $maintenance->archived_by,
+                ];
+
+                $maintenance->update([
+                    'archived_at' => null,
+                    'archived_by' => null,
+                ]);
+
+                AuditLogService::log(
+                    module: 'Maintenance Management',
+                    action: 'Restored',
+                    description:
+                        "Restored maintenance record {$maintenance->maintenance_number}.",
+                    record: $maintenance,
+                    oldValues: $oldValues,
+                    newValues: [
+                        'archived_at' => null,
+                        'archived_by' => null,
+                    ]
+                );
+            });
+
+            $maintenance->refresh();
+            $maintenance->load('vehicle');
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                    'Maintenance record restored successfully.',
+                'maintenance' =>
+                    $maintenance,
+            ]);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    $e->getMessage(),
             ], 422);
         }
     }
@@ -1040,10 +1179,14 @@ class MaintenanceController extends Controller
     /**
      * Bulk delete maintenance records.
      */
-    public function bulkDelete(Request $request)
-    {
-        $this->authorize('deleteAny', Maintenance::class);
-        
+    public function bulkArchive(
+        Request $request
+    ) {
+        $this->authorize(
+            'archiveAny',
+            Maintenance::class
+        );
+
         $validator = Validator::make(
             $request->all(),
             [
@@ -1063,86 +1206,129 @@ class MaintenanceController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please select valid maintenance records.',
-                'errors' => $validator->errors(),
+                'message' =>
+                    'Please select valid maintenance records.',
+                'errors' =>
+                    $validator->errors(),
             ], 422);
         }
 
         try {
-            $deletedIds = [];
+            $archivedIds = [];
+            $skippedInProgressIds = [];
 
             DB::transaction(function () use (
                 $validator,
-                &$deletedIds
+                &$archivedIds,
+                &$skippedInProgressIds,
+                $request
             ) {
                 $maintenanceIds =
-                    $validator->validated()['maintenance_ids'];
+                    $validator->validated()[
+                        'maintenance_ids'
+                    ];
 
-                $maintenances = Maintenance::with('vehicle')
-                    ->whereIn('id', $maintenanceIds)
-                    ->lockForUpdate()
-                    ->get();
+                $maintenances =
+                    Maintenance::query()
+                        ->whereIn(
+                            'id',
+                            $maintenanceIds
+                        )
+                        ->whereNull('archived_at')
+                        ->lockForUpdate()
+                        ->get();
 
-                foreach ($maintenances as $maintenance) {
-                    if ($maintenance->status === 'In Progress') {
+                foreach (
+                    $maintenances as $maintenance
+                ) {
+                    if (
+                        $maintenance->status ===
+                        'In Progress'
+                    ) {
+                        $skippedInProgressIds[] =
+                            $maintenance->id;
+
                         continue;
                     }
 
-                    $vehicle = $maintenance->vehicle;
-
-                    $deletedValues =
+                    $oldValues =
                         $this->getMaintenanceAuditValues(
                             $maintenance
                         );
 
+                    $maintenance->update([
+                        'archived_at' =>
+                            now(),
+
+                        'archived_by' =>
+                            $request->user()->id,
+                    ]);
+
                     AuditLogService::log(
                         module: 'Maintenance Management',
-                        action: 'Deleted',
+                        action: 'Archived',
                         description:
-                            "Deleted maintenance record {$maintenance->maintenance_number}.",
+                            "Archived maintenance record {$maintenance->maintenance_number}.",
                         record: $maintenance,
                         oldValues:
-                            $deletedValues
+                            $oldValues,
+                        newValues: [
+                            'archived_at' =>
+                                $maintenance->archived_at
+                                    ?->toDateTimeString(),
+
+                            'archived_by' =>
+                                $request->user()->id,
+                        ]
                     );
 
-                    $maintenance->delete();
-
-                    if (
-                        $vehicle &&
-                        $vehicle->status === 'Maintenance'
-                    ) {
-                        $vehicle->update([
-                            'status' => 'Available',
-                        ]);
-                    }
-
-                    $deletedIds[] = $maintenance->id;
+                    $archivedIds[] =
+                        $maintenance->id;
                 }
             });
 
-            if (empty($deletedIds)) {
+            if (empty($archivedIds)) {
                 return response()->json([
                     'success' => false,
                     'message' =>
-                        'In-progress maintenance records cannot be deleted.',
-                    'deleted_ids' => [],
+                        'Only maintenance records that are not In Progress can be archived.',
+                    'archived_ids' => [],
+                    'skipped_in_progress_ids' =>
+                        $skippedInProgressIds,
                 ], 422);
+            }
+
+            $message =
+                count($archivedIds) === 1
+                    ? 'Maintenance record archived successfully.'
+                    : count($archivedIds) .
+                        ' maintenance records archived successfully.';
+
+            if (
+                !empty(
+                    $skippedInProgressIds
+                )
+            ) {
+                $message .=
+                    ' In-progress maintenance record(s) were skipped.';
             }
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    count($deletedIds) === 1
-                        ? 'Maintenance record deleted successfully.'
-                        : count($deletedIds) . ' maintenance records deleted successfully.',
-                'deleted_ids' => $deletedIds,
+                'message' => $message,
+                'archived_ids' =>
+                    $archivedIds,
+                'skipped_in_progress_ids' =>
+                    $skippedInProgressIds,
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete maintenance records.',
-                'error' => $e->getMessage(),
+                'message' =>
+                    'Failed to archive maintenance records.',
+                'error' =>
+                    $e->getMessage(),
             ], 500);
         }
     }

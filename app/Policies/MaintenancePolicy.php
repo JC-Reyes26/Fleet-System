@@ -43,7 +43,7 @@ class MaintenancePolicy
         );
     }
 
-    public function delete(
+    public function archive(
         User $user,
         Maintenance $maintenance
     ): bool {
@@ -53,8 +53,19 @@ class MaintenancePolicy
         );
     }
 
-    public function deleteAny(User $user): bool
-    {
+    public function archiveAny(
+        User $user
+    ): bool {
+        return $user->hasRole(
+            'fleet_manager',
+            'maintenance'
+        );
+    }
+
+    public function restore(
+        User $user,
+        Maintenance $maintenance
+    ): bool {
         return $user->hasRole(
             'fleet_manager',
             'maintenance'

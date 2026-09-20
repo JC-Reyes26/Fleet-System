@@ -173,12 +173,17 @@ class DriverController extends Controller
                     'fleet_manager',
                     'dispatcher'
                 ),
-            'canDelete' =>
+            'canArchive' =>
                 $user->hasRole(
                     'fleet_manager',
                     'dispatcher'
                 ),
-            'canBulkDelete' =>
+            'canBulkArchive' =>
+                $user->hasRole(
+                    'fleet_manager',
+                    'dispatcher'
+                ),
+            'canRestore' =>
                 $user->hasRole(
                     'fleet_manager',
                     'dispatcher'
@@ -931,197 +936,261 @@ class DriverController extends Controller
         ]);
     }
 
-    public function destroy(
+    public function archive(
+        Request $request,
         Driver $driver
     ) {
         $this->authorize(
-            'delete',
+            'archive',
             $driver
         );
 
-        $driver->loadMissing(
-            'user'
-        );
-
-        $user =
-            $driver->user;
-
-        $deletedEmail =
-            $user?->email;
-
-        $deletedName =
-            $user?->first_name
-            ?: $user?->name
-            ?: $driver->first_name
-            ?: 'Driver';
-        
-        $deletedDriverValues =
-            $this->getDriverAuditValues(
+        try {
+            DB::transaction(function () use (
+                $request,
                 $driver
-            );
-        
-        DB::transaction(
-            function () use (
-                $driver,
-                $user
             ) {
+                $driver = Driver::query()
+                    ->lockForUpdate()
+                    ->findOrFail($driver->id);
+
+                if ($driver->archived_at) {
+                    throw new \Exception(
+                        'Driver is already archived.'
+                    );
+                }
+
+                if ($driver->status === 'On Duty') {
+                    throw new \Exception(
+                        'This driver cannot be archived while On Duty.'
+                    );
+                }
+
+                $oldValues =
+                    $this->getDriverAuditValues(
+                        $driver
+                    );
+
+                $driver->update([
+                    'archived_at' =>
+                        now(),
+
+                    'archived_by' =>
+                        $request->user()->id,
+                ]);
+
                 AuditLogService::log(
                     module: 'Driver Management',
-                    action: 'Deleted',
+                    action: 'Archived',
                     description:
-                        "Deleted driver {$driver->driver_number}.",
+                        "Archived driver {$driver->driver_number}.",
                     record: $driver,
                     oldValues:
-                        $deletedDriverValues
+                        $oldValues,
+                    newValues: [
+                        'archived_at' =>
+                            $driver->archived_at
+                                ?->toDateTimeString(),
+
+                        'archived_by' =>
+                            $request->user()->id,
+                    ]
                 );
+            });
 
-                $driver->delete();
+            return response()->json([
+                'success' => true,
+                'message' =>
+                    'Driver archived successfully.',
+            ]);
 
-                if (
-                    $user &&
-                    $user->role === 'driver'
-                ) {
-                    $user->delete();
-                }
-            }
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Account Deleted Email
-        |--------------------------------------------------------------------------
-        */
-        if ($deletedEmail) {
-            try {
-                Notification::route(
-                    'mail',
-                    $deletedEmail
-                )->notify(
-                    new AccountDeletedNotification(
-                        $deletedName
-                    )
-                );
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    $e->getMessage(),
+            ], 422);
         }
-
-        return response()->json([
-            'success' => true,
-
-            'message' =>
-                'Driver and linked account deleted successfully.',
-        ]);
     }
 
-    public function bulkDelete(Request $request)
+    public function restore(
+        Request $request,
+        Driver $driver
+    ) {
+        $this->authorize(
+            'restore',
+            $driver
+        );
+
+        try {
+            DB::transaction(function () use (
+                $driver
+            ) {
+                $driver = Driver::query()
+                    ->lockForUpdate()
+                    ->findOrFail($driver->id);
+
+                if (!$driver->archived_at) {
+                    throw new \Exception(
+                        'Driver is not archived.'
+                    );
+                }
+
+                $oldValues = [
+                    'archived_at' =>
+                        $driver->archived_at
+                            ?->toDateTimeString(),
+
+                    'archived_by' =>
+                        $driver->archived_by,
+                ];
+
+                $driver->update([
+                    'archived_at' => null,
+                    'archived_by' => null,
+                ]);
+
+                AuditLogService::log(
+                    module: 'Driver Management',
+                    action: 'Restored',
+                    description:
+                        "Restored driver {$driver->driver_number}.",
+                    record: $driver,
+                    oldValues:
+                        $oldValues,
+                    newValues: [
+                        'archived_at' => null,
+                        'archived_by' => null,
+                    ]
+                );
+            });
+
+            $driver->refresh();
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                    'Driver restored successfully.',
+                'driver' =>
+                    $driver,
+            ]);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function bulkArchive(Request $request)
     {
-        $this->authorize('deleteAny', Driver::class);
+        $this->authorize(
+            'archiveAny',
+            Driver::class
+        );
 
         $request->validate([
             'ids' => [
                 'required',
                 'array',
+                'min:1',
             ],
+
             'ids.*' => [
+                'integer',
                 'exists:drivers,id',
             ],
         ]);
 
-        $deletedAccounts = [];
+        try {
+            $archivedIds = [];
 
-        $drivers =
-            Driver::with('user')
-                ->whereIn(
-                    'id',
-                    $request->ids
-                )
-                ->get();
+            DB::transaction(function () use (
+                $request,
+                &$archivedIds
+            ) {
+                $drivers = Driver::query()
+                    ->whereIn(
+                        'id',
+                        $request->ids
+                    )
+                    ->whereNull('archived_at')
+                    ->lockForUpdate()
+                    ->get();
 
-        $deletedAccounts =
-            $drivers
-                ->map(function ($driver) {
-                    $user =
-                        $driver->user;
+                foreach ($drivers as $driver) {
 
-                    if (
-                        !$user ||
-                        $user->role !== 'driver'
-                    ) {
-                        return null;
+                    if ($driver->status === 'On Duty') {
+                        continue;
                     }
 
-                    return [
-                        'email' =>
-                            $user->email,
-
-                        'name' =>
-                            $user->first_name
-                            ?: $user->name
-                            ?: 'Driver',
-                    ];
-                })
-                ->filter()
-                ->values();
-
-        DB::transaction(
-            function () use ($drivers) {
-                foreach (
-                    $drivers as $driver
-                ) {
-                    $user =
-                        $driver->user;
-
-                    $deletedDriverValues =
+                    $oldValues =
                         $this->getDriverAuditValues(
                             $driver
                         );
 
+                    $driver->update([
+                        'archived_at' =>
+                            now(),
+
+                        'archived_by' =>
+                            $request->user()->id,
+                    ]);
+
                     AuditLogService::log(
                         module: 'Driver Management',
-                        action: 'Deleted',
+                        action: 'Archived',
                         description:
-                            "Deleted driver {$driver->driver_number}.",
+                            "Archived driver {$driver->driver_number}.",
                         record: $driver,
                         oldValues:
-                            $deletedDriverValues
+                            $oldValues,
+                        newValues: [
+                            'archived_at' =>
+                                $driver->archived_at
+                                    ?->toDateTimeString(),
+
+                            'archived_by' =>
+                                $request->user()->id,
+                        ]
                     );
 
-                    $driver->delete();
-
-                    if (
-                        $user &&
-                        $user->role === 'driver'
-                    ) {
-                        $user->delete();
-                    }
+                    $archivedIds[] =
+                        $driver->id;
                 }
-            }
-        );
+            });
 
-        foreach (
-            $deletedAccounts
-            as $account
-        ) {
-            try {
-                Notification::route(
-                    'mail',
-                    $account['email']
-                )->notify(
-                    new AccountDeletedNotification(
-                        $account['name']
-                    )
-                );
-            } catch (\Throwable $e) {
-                report($e);
+            if (empty($archivedIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        'Only drivers who are not On Duty can be archived.',
+                    'archived_ids' => [],
+                ], 422);
             }
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                    count($archivedIds) === 1
+                        ? 'Driver archived successfully.'
+                        : count($archivedIds) .
+                            ' drivers archived successfully.',
+                'archived_ids' =>
+                    $archivedIds,
+            ]);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Failed to archive drivers.',
+                'error' =>
+                    $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'message' =>
-                'Driver(s) and linked account(s) deleted successfully.',
-        ]);
     }
 
     public function getDrivers(
@@ -1141,6 +1210,12 @@ class DriverController extends Controller
             'user',
         ])
             ->latest();
+
+        if ($request->boolean('show_archived')) {
+            $query->whereNotNull('archived_at');
+        } else {
+            $query->whereNull('archived_at');
+        }
         /*
         |--------------------------------------------------------------------------
         | Driver self-scope

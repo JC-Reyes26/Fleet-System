@@ -163,18 +163,13 @@ class RoutePlanController extends Controller
                     'fleet_manager',
                     'dispatcher'
                 ),
-            'canDelete' =>
-                $user->hasRole(
-                    'fleet_manager',
-                    'dispatcher'
-                ),
             'canArchive' =>
                 $user->hasRole(
                     'fleet_manager',
                     'dispatcher'
                 ),
             'canRestore' =>
-                $user->hasRole(
+                $request->user()->hasRole(
                     'fleet_manager',
                     'dispatcher'
                 ),
@@ -1023,87 +1018,7 @@ class RoutePlanController extends Controller
     /**
      * Delete route plan.
      */
-    public function destroy(RoutePlan $routePlan)
-    {
-        $this->authorize('delete', $routePlan);
-
-        $routePlan->load([
-            'reservation.dispatch',
-        ]);
-        /*
-        |--------------------------------------------------------------------------
-        | Only Draft or Planned Routes Can Be Deleted
-        |--------------------------------------------------------------------------
-        */
-        if (
-            !in_array(
-                $routePlan->status,
-                [
-                    'Draft',
-                    'Planned',
-                ],
-                true
-            )
-        ) {
-            return response()->json([
-                'success' => false,
-                'message' =>
-                    'Only Draft or Planned routes can be deleted.',
-            ], 422);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent deletion when Dispatch exists
-        |--------------------------------------------------------------------------
-        | A dispatched route must remain available as part of the trip history.
-        */
-        if (
-            $routePlan->reservation &&
-            $routePlan->reservation->dispatch
-        ) {
-            return response()->json([
-                'success' => false,
-                'message' =>
-                    'This route plan cannot be deleted because a dispatch already exists for its reservation.',
-            ], 422);
-        }
-
-        $deletedValues =
-            $this->getRoutePlanAuditValues(
-                $routePlan
-            );
-        /*
-        |--------------------------------------------------------------------------
-        | Delete Route Plan
-        |--------------------------------------------------------------------------
-        | Related route stops will be deleted automatically because
-        | route_stops.route_plan_id uses cascadeOnDelete().
-        */
-        DB::transaction(
-            function () use (
-                $routePlan,
-                $deletedValues
-            ) {
-                AuditLogService::log(
-                    module: 'Route Planning',
-                    action: 'Deleted',
-                    description:
-                        "Deleted route plan {$routePlan->route_number}.",
-                    record: $routePlan,
-                    oldValues:
-                        $deletedValues
-                );
-
-                $routePlan->delete();
-            }
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Route plan deleted successfully.',
-        ]);
-    }
+    
 
     /**
      * Duplicate a route plan using another approved reservation.

@@ -31,12 +31,17 @@ class VehiclePolicy
         );
     }
 
-    public function delete(User $user, Vehicle $vehicle): bool
+    public function archive(User $user, Vehicle $vehicle): bool
     {
         return $user->hasRole('fleet_manager');
     }
 
-    public function deleteAny(User $user): bool
+    public function archiveAny(User $user): bool
+    {
+        return $user->hasRole('fleet_manager');
+    }
+
+    public function restore(User $user, Vehicle $vehicle): bool
     {
         return $user->hasRole('fleet_manager');
     }

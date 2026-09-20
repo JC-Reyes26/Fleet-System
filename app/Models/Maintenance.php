@@ -25,6 +25,8 @@ class Maintenance extends Model
         'cost',
         'status',
         'notes',
+        'archived_at',
+        'archived_by',
     ];
 
     protected $casts = [
@@ -33,10 +35,19 @@ class Maintenance extends Model
         'next_schedule' => 'date:Y-m-d',
         'cost' => 'decimal:2',
         'odometer' => 'integer',
+        'archived_at' => 'datetime',
     ];
 
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+    
+    public function archivedBy()
+    {
+        return $this->belongsTo(
+            User::class,
+            'archived_by'
+        );
     }
 }

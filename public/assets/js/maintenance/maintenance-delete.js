@@ -1,13 +1,14 @@
 /* ==========================================
-   Maintenance Delete
+   Maintenance Archive / Restore
 ========================================== */
 
-let deleteMaintenanceInitialized = false;
+let maintenanceActionInitialized = false;
 
-const deleteMaintenanceModal = {
+const maintenanceActionModal = {
     currentRow: null,
     opener: null,
-    mode: "single", // "single" | "bulk"
+    mode: "single", // single | bulk
+    action: "archive",
     bulkIds: [],
 };
 
@@ -15,184 +16,185 @@ function getMaintenanceDatabaseId(row) {
     if (!row) {
         return "";
     }
-
     const id = (row.dataset.id || "").trim();
-
     if (!id || !/^\d+$/.test(id)) {
         return "";
     }
-
     return id;
 }
 
-function populateDeleteMaintenance(row) {
-    if (!row) {
-        return;
-    }
+/* ==========================================
+   Populate Single Archive / Restore Modal
+========================================== */
 
-    const getText = (selector, fallback = "Not available") => {
-        const el = row.querySelector(selector);
-
-        return el ? el.textContent.trim() : fallback;
-    };
-
-    const setText = (id, value) => {
-        const el = document.getElementById(id);
-
-        if (el) {
-            el.textContent = value;
-        }
-    };
-
-    const number = getText(".maintenance-number");
-
-    const vehicle = getText(".maintenance-vehicle");
-
-    setText("deleteMaintenanceNumber", number);
-
-    setText("deleteMaintenanceVehicle", vehicle);
-
+function populateMaintenanceAction(row, action) {
+    const number =
+        row?.querySelector(".maintenance-number")?.textContent?.trim() ||
+        "this maintenance record";
+    const vehicle =
+        row?.querySelector(".maintenance-vehicle")?.textContent?.trim() ||
+        "this vehicle";
     const title = document.getElementById("deleteMaintenanceModalTitle");
-
     const description = document.getElementById(
         "deleteMaintenanceModalDescription",
     );
-
+    const note = document.getElementById("deleteMaintenanceMessageText");
+    const numberElement = document.getElementById("deleteMaintenanceNumber");
+    const vehicleElement = document.getElementById("deleteMaintenanceVehicle");
     const confirmButton = document.getElementById("confirmDeleteMaintenance");
+    if (numberElement) {
+        numberElement.textContent = number;
+    }
+    if (vehicleElement) {
+        vehicleElement.textContent = vehicle;
+    }
+    if (action === "restore") {
+        if (title) {
+            title.textContent = "Restore Maintenance Record";
+        }
+        if (description) {
+            description.innerHTML =
+                "Are you sure you want to restore " +
+                `<strong>${number}</strong> ` +
+                "for " +
+                `<strong>${vehicle}</strong>?`;
+        }
+        if (note) {
+            note.textContent =
+                "This maintenance record will become active again.";
+        }
+        if (confirmButton) {
+            confirmButton.classList.remove("btn-danger");
+            confirmButton.classList.add("btn-primary");
+            confirmButton.innerHTML =
+                '<i class="ph ph-arrow-counter-clockwise"></i> Restore Maintenance';
+        }
+
+        return;
+    }
 
     if (title) {
-        title.textContent = "Delete Maintenance Record";
+        title.textContent = "Archive Maintenance Record";
     }
 
     if (description) {
         description.innerHTML =
-            "Are you sure you want to delete " +
-            "<strong>" +
-            number +
-            "</strong> for <strong>" +
-            vehicle +
-            "</strong>?";
+            "Are you sure you want to archive " +
+            `<strong>${number}</strong> ` +
+            "for " +
+            `<strong>${vehicle}</strong>?`;
+    }
+
+    if (note) {
+        note.textContent =
+            "The maintenance record will be archived and preserved in the system.";
     }
 
     if (confirmButton) {
+        confirmButton.classList.remove("btn-primary");
+        confirmButton.classList.add("btn-danger");
         confirmButton.innerHTML =
-            '<i class="ph ph-trash"></i> Delete Maintenance';
+            '<i class="ph ph-archive"></i> Archive Maintenance';
     }
 }
 
 /* ==========================================
-   Populate Bulk Delete Modal
+   Populate Bulk Archive Modal
 ========================================== */
 
-function populateBulkDeleteMaintenance(count) {
+function populateBulkArchiveMaintenance(count) {
     const title = document.getElementById("deleteMaintenanceModalTitle");
-
     const description = document.getElementById(
         "deleteMaintenanceModalDescription",
     );
-
+    const note = document.getElementById("deleteMaintenanceMessageText");
     const confirmButton = document.getElementById("confirmDeleteMaintenance");
-
     const safeCount = Number(count) || 0;
 
     if (title) {
-        title.textContent = "Delete Selected Maintenance Records";
+        title.textContent = "Archive Selected Maintenance Records";
     }
-
     if (description) {
         description.textContent =
-            "Delete " +
+            "Archive " +
             safeCount +
             " selected maintenance record" +
             (safeCount === 1 ? "" : "s") +
             "?";
     }
+    if (note) {
+        note.textContent =
+            "Selected records will be archived and preserved in the system. In-progress records cannot be archived.";
+    }
 
     if (confirmButton) {
-        confirmButton.innerHTML = '<i class="ph ph-trash"></i> Delete Selected';
+        confirmButton.classList.remove("btn-primary");
+        confirmButton.classList.add("btn-danger");
+        confirmButton.innerHTML =
+            '<i class="ph ph-archive"></i> Archive Selected';
     }
 }
 
 /* ==========================================
-   Open Single Delete Modal
+   Open Single Modal
 ========================================== */
 
-function openDeleteMaintenanceModal(row, opener) {
+function openMaintenanceActionModal(row, opener, action = "archive") {
     const modal = document.getElementById("deleteMaintenanceModal");
-
     if (!modal || !row) {
         return;
     }
-
     const maintenanceId = getMaintenanceDatabaseId(row);
-
     if (!maintenanceId) {
-        console.error("Invalid maintenance database ID:", row.dataset.id);
-
         if (typeof showToast === "function") {
             showToast("Invalid maintenance record ID.", "error");
         }
-
         return;
     }
 
-    deleteMaintenanceModal.mode = "single";
-
-    deleteMaintenanceModal.bulkIds = [];
-
-    deleteMaintenanceModal.currentRow = row;
-
-    deleteMaintenanceModal.opener = opener || null;
-
+    maintenanceActionModal.mode = "single";
+    maintenanceActionModal.action =
+        action === "restore" ? "restore" : "archive";
+    maintenanceActionModal.bulkIds = [];
+    maintenanceActionModal.currentRow = row;
+    maintenanceActionModal.opener = opener || null;
     modal.dataset.maintenanceId = maintenanceId;
-
-    populateDeleteMaintenance(row);
-
+    populateMaintenanceAction(row, maintenanceActionModal.action);
     modal.classList.add("show");
-
     document.body.style.overflow = "hidden";
-
-    const cancelBtn = document.getElementById("cancelDeleteMaintenance");
-
-    if (cancelBtn) {
-        cancelBtn.focus();
-    }
+    document.getElementById("cancelDeleteMaintenance")?.focus();
 }
 
-function openBulkDeleteMaintenanceModal(ids, opener) {
-    const modal = document.getElementById("deleteMaintenanceModal");
+/* ==========================================
+   Open Bulk Archive Modal
+========================================== */
 
+function openBulkArchiveMaintenanceModal(ids, opener = null) {
+    const modal = document.getElementById("deleteMaintenanceModal");
     if (!modal) {
         return;
     }
-
     const bulkIds = Array.isArray(ids)
         ? ids.map((id) => String(id).trim()).filter((id) => /^\d+$/.test(id))
         : [];
+    const uniqueIds = [...new Set(bulkIds)];
 
-    if (bulkIds.length === 0) {
+    if (uniqueIds.length === 0) {
         return;
     }
 
-    deleteMaintenanceModal.mode = "bulk";
+    maintenanceActionModal.mode = "bulk";
+    maintenanceActionModal.action = "archive";
+    maintenanceActionModal.bulkIds = uniqueIds;
+    maintenanceActionModal.currentRow = null;
+    maintenanceActionModal.opener = opener || null;
+    delete modal.dataset.maintenanceId;
 
-    deleteMaintenanceModal.bulkIds = [...new Set(bulkIds)];
-
-    deleteMaintenanceModal.currentRow = null;
-
-    deleteMaintenanceModal.opener = opener || null;
-
-    populateBulkDeleteMaintenance(deleteMaintenanceModal.bulkIds.length);
+    populateBulkArchiveMaintenance(uniqueIds.length);
 
     modal.classList.add("show");
-
     document.body.style.overflow = "hidden";
-
-    const cancelBtn = document.getElementById("cancelDeleteMaintenance");
-
-    if (cancelBtn) {
-        cancelBtn.focus();
-    }
+    document.getElementById("cancelDeleteMaintenance")?.focus();
 }
 
 /* ==========================================
@@ -201,118 +203,122 @@ function openBulkDeleteMaintenanceModal(ids, opener) {
 
 function closeDeleteMaintenanceModal(opener = null) {
     const modal = document.getElementById("deleteMaintenanceModal");
-
     if (!modal || !modal.classList.contains("show")) {
         return;
     }
-
     modal.classList.remove("show");
-
     document.body.style.overflow = "";
-
-    deleteMaintenanceModal.currentRow = null;
-
-    deleteMaintenanceModal.bulkIds = [];
-
-    deleteMaintenanceModal.mode = "single";
-
     delete modal.dataset.maintenanceId;
-
-    const focusTarget = opener || deleteMaintenanceModal.opener;
-
-    deleteMaintenanceModal.opener = null;
-
+    const focusTarget = opener || maintenanceActionModal.opener;
+    maintenanceActionModal.currentRow = null;
+    maintenanceActionModal.opener = null;
+    maintenanceActionModal.mode = "single";
+    maintenanceActionModal.action = "archive";
+    maintenanceActionModal.bulkIds = [];
     if (focusTarget && focusTarget.isConnected) {
         focusTarget.focus();
     }
 }
 
-async function confirmSingleMaintenanceDelete() {
-    const row = deleteMaintenanceModal.currentRow;
+/* ==========================================
+   Single Archive / Restore
+========================================== */
 
-    const opener = deleteMaintenanceModal.opener;
-
-    if (!row || !row.isConnected) {
-        closeDeleteMaintenanceModal(opener);
+async function confirmSingleMaintenanceAction() {
+    const modal = document.getElementById("deleteMaintenanceModal");
+    const row = maintenanceActionModal.currentRow;
+    if (!modal || !row) {
+        closeDeleteMaintenanceModal();
 
         return;
     }
-
     const maintenanceId = getMaintenanceDatabaseId(row);
-
     if (!maintenanceId) {
-        closeDeleteMaintenanceModal(opener);
-
+        closeDeleteMaintenanceModal();
         if (typeof showToast === "function") {
             showToast("Invalid maintenance record ID.", "error");
         }
-
         return;
     }
-
+    const action =
+        maintenanceActionModal.action === "restore" ? "restore" : "archive";
     const confirmButton = document.getElementById("confirmDeleteMaintenance");
-
     if (confirmButton) {
         confirmButton.disabled = true;
-
-        confirmButton.innerHTML = '<i class="ph ph-spinner"></i> Deleting...';
+        confirmButton.innerHTML =
+            action === "restore"
+                ? '<i class="ph ph-spinner"></i> Restoring...'
+                : '<i class="ph ph-spinner"></i> Archiving...';
     }
 
     try {
-        const response = await fetch(`/maintenance/${maintenanceId}`, {
-            method: "DELETE",
-
+        const endpoint =
+            action === "restore"
+                ? `/maintenance/${encodeURIComponent(maintenanceId)}/restore`
+                : `/maintenance/${encodeURIComponent(maintenanceId)}/archive`;
+        const response = await fetch(endpoint, {
+            method: "POST",
             headers: {
                 Accept: "application/json",
-
-                "X-CSRF-TOKEN": document
-                    .querySelector('meta[name="csrf-token"]')
-                    ?.getAttribute("content"),
+                "X-CSRF-TOKEN":
+                    document
+                        .querySelector('meta[name="csrf-token"]')
+                        ?.getAttribute("content") || "",
             },
+            credentials: "same-origin",
         });
-
-        const data = await response.json();
-
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (error) {
+            data = {};
+        }
         if (!response.ok) {
             throw new Error(
-                data.message || "Failed to delete maintenance record.",
+                data.message ||
+                    (action === "restore"
+                        ? "Failed to restore maintenance record."
+                        : "Failed to archive maintenance record."),
             );
         }
 
+        const opener = maintenanceActionModal.opener;
         closeDeleteMaintenanceModal(opener);
-
         if (typeof loadMaintenances === "function") {
             await loadMaintenances();
         }
-
         if (typeof loadAvailableMaintenanceVehicles === "function") {
             await loadAvailableMaintenanceVehicles();
         }
-
         if (typeof updateMaintenanceStatistics === "function") {
             updateMaintenanceStatistics();
         }
-
-        if (typeof updateMaintenancePagination === "function") {
+        if (typeof refreshMaintenancePagination === "function") {
+            refreshMaintenancePagination();
+        } else if (typeof updateMaintenancePagination === "function") {
             updateMaintenancePagination();
         }
-
         if (typeof refreshMaintenanceBulkState === "function") {
             refreshMaintenanceBulkState();
         }
-
         if (typeof showToast === "function") {
             showToast(
-                data.message || "Maintenance record deleted successfully.",
+                data.message ||
+                    (action === "restore"
+                        ? "Maintenance record restored successfully."
+                        : "Maintenance record archived successfully."),
                 "success",
             );
         }
     } catch (error) {
-        console.error("Maintenance delete error:", error);
+        console.error(`Maintenance ${action} error:`, error);
 
         if (typeof showToast === "function") {
             showToast(
-                error.message || "Failed to delete maintenance record.",
+                error.message ||
+                    (action === "restore"
+                        ? "Failed to restore maintenance record."
+                        : "Failed to archive maintenance record."),
                 "error",
             );
         }
@@ -320,18 +326,30 @@ async function confirmSingleMaintenanceDelete() {
         if (confirmButton) {
             confirmButton.disabled = false;
 
-            confirmButton.innerHTML =
-                '<i class="ph ph-trash"></i> Delete Maintenance';
+            if (action === "restore") {
+                confirmButton.classList.remove("btn-danger");
+                confirmButton.classList.add("btn-primary");
+                confirmButton.innerHTML =
+                    '<i class="ph ph-arrow-counter-clockwise"></i> Restore Maintenance';
+            } else {
+                confirmButton.classList.remove("btn-primary");
+                confirmButton.classList.add("btn-danger");
+                confirmButton.innerHTML =
+                    '<i class="ph ph-archive"></i> Archive Maintenance';
+            }
         }
     }
 }
 
-async function confirmBulkMaintenanceDelete() {
-    const opener = deleteMaintenanceModal.opener;
+/* ==========================================
+   Bulk Archive
+========================================== */
 
+async function confirmBulkMaintenanceArchive() {
+    const opener = maintenanceActionModal.opener;
     const bulkIds = [
         ...new Set(
-            deleteMaintenanceModal.bulkIds
+            maintenanceActionModal.bulkIds
                 .map((id) => String(id).trim())
                 .filter((id) => /^\d+$/.test(id)),
         ),
@@ -339,7 +357,6 @@ async function confirmBulkMaintenanceDelete() {
 
     if (bulkIds.length === 0) {
         closeDeleteMaintenanceModal(opener);
-
         return;
     }
 
@@ -347,167 +364,239 @@ async function confirmBulkMaintenanceDelete() {
 
     if (confirmButton) {
         confirmButton.disabled = true;
-
-        confirmButton.innerHTML = '<i class="ph ph-spinner"></i> Deleting...';
+        confirmButton.innerHTML = '<i class="ph ph-spinner"></i> Archiving...';
     }
 
     try {
-        const response = await fetch("/maintenance/bulk-delete", {
-            method: "DELETE",
-
+        const response = await fetch("/maintenance/bulk-archive", {
+            method: "POST",
             headers: {
                 "Content-Type": "application/json",
-
                 Accept: "application/json",
-
-                "X-CSRF-TOKEN": document
-                    .querySelector('meta[name="csrf-token"]')
-                    ?.getAttribute("content"),
+                "X-CSRF-TOKEN":
+                    document
+                        .querySelector('meta[name="csrf-token"]')
+                        ?.getAttribute("content") || "",
             },
-
+            credentials: "same-origin",
             body: JSON.stringify({
                 maintenance_ids: bulkIds,
             }),
         });
 
-        const data = await response.json();
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch (error) {
+            data = {};
+        }
 
         if (!response.ok) {
             throw new Error(
-                data.message || "Failed to delete maintenance records.",
+                data.message || "Failed to archive maintenance records.",
             );
         }
 
-        const deletedIds = (data.deleted_ids || []).map((id) => String(id));
+        const archivedIds = Array.isArray(data.archived_ids)
+            ? data.archived_ids.map((id) => String(id))
+            : [];
+        const skippedIds = Array.isArray(data.skipped_in_progress_ids)
+            ? data.skipped_in_progress_ids.map((id) => String(id))
+            : [];
+        const focusTarget = opener;
 
-        closeDeleteMaintenanceModal(opener);
+        /*
+        |--------------------------------------------------------------------------
+        | Remove only successfully archived IDs
+        |--------------------------------------------------------------------------
+        */
+        if (typeof removeMaintenanceSelectionId === "function") {
+            archivedIds.forEach((id) => removeMaintenanceSelectionId(id));
+        }
+
+        closeDeleteMaintenanceModal(focusTarget);
 
         if (typeof loadMaintenances === "function") {
             await loadMaintenances();
         }
-
         if (typeof loadAvailableMaintenanceVehicles === "function") {
             await loadAvailableMaintenanceVehicles();
         }
-
         if (typeof updateMaintenanceStatistics === "function") {
             updateMaintenanceStatistics();
         }
-
-        if (typeof updateMaintenancePagination === "function") {
+        if (typeof refreshMaintenancePagination === "function") {
+            refreshMaintenancePagination();
+        } else if (typeof updateMaintenancePagination === "function") {
             updateMaintenancePagination();
         }
-
         if (typeof refreshMaintenanceBulkState === "function") {
             refreshMaintenanceBulkState();
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Toast
+        |--------------------------------------------------------------------------
+        */
         if (typeof showToast === "function") {
-            showToast(
-                data.message ||
-                    (deletedIds.length === 1
-                        ? "Maintenance record deleted successfully."
-                        : deletedIds.length +
-                          " maintenance records deleted successfully."),
-                "success",
-            );
+            if (archivedIds.length > 0) {
+                showToast(
+                    data.message ||
+                        `${archivedIds.length} maintenance record${
+                            archivedIds.length === 1 ? "" : "s"
+                        } archived successfully.`,
+                    "success",
+                );
+            } else if (skippedIds.length > 0) {
+                showToast(
+                    "In-progress maintenance records cannot be archived.",
+                    "error",
+                );
+            } else {
+                showToast(
+                    "No selected maintenance records could be archived.",
+                    "error",
+                );
+            }
         }
     } catch (error) {
-        console.error("Bulk maintenance delete error:", error);
+        console.error("Bulk maintenance archive error:", error);
 
         if (typeof showToast === "function") {
             showToast(
-                error.message || "Failed to delete maintenance records.",
+                error.message || "Failed to archive maintenance records.",
                 "error",
             );
         }
     } finally {
         if (confirmButton) {
             confirmButton.disabled = false;
-
+            confirmButton.classList.remove("btn-primary");
+            confirmButton.classList.add("btn-danger");
             confirmButton.innerHTML =
-                '<i class="ph ph-trash"></i> Delete Selected';
+                '<i class="ph ph-archive"></i> Archive Selected';
         }
     }
 }
 
+/* ==========================================
+   Initialize Modal
+========================================== */
+
 function initDeleteMaintenanceModal() {
-    if (deleteMaintenanceInitialized) {
+    if (maintenanceActionInitialized) {
         return;
     }
-
     const modal = document.getElementById("deleteMaintenanceModal");
-
     if (!modal || modal.dataset.deleteMaintenanceModalInitialized === "true") {
         return;
     }
-
     modal.dataset.deleteMaintenanceModalInitialized = "true";
 
-    deleteMaintenanceModal.currentRow = null;
-
-    deleteMaintenanceModal.bulkIds = [];
-
-    deleteMaintenanceModal.mode = "single";
-
+    /*
+    |--------------------------------------------------------------------------
+    | Single Archive / Restore
+    |--------------------------------------------------------------------------
+    */
     document.addEventListener("click", (event) => {
-        const deleteButton = event.target.closest(
-            ".action-btn.delete-maintenance",
+        const archiveButton = event.target.closest(
+            ".action-btn.archive-maintenance",
         );
+        const restoreButton = event.target.closest(
+            ".action-btn.restore-maintenance",
+        );
+        const actionButton = archiveButton || restoreButton;
+        if (!actionButton) {
+            return;
+        }
+        const row = actionButton.closest("tr");
+        if (!row) {
+            return;
+        }
+        const action = archiveButton ? "archive" : "restore";
 
-        if (!deleteButton) {
+        /*
+            |--------------------------------------------------------------------------
+            | In Progress Protection
+            |--------------------------------------------------------------------------
+            */
+        if (
+            action === "archive" &&
+            String(row.dataset.status || "").trim() === "In Progress"
+        ) {
+            if (typeof showToast === "function") {
+                showToast(
+                    "This maintenance record cannot be archived while In Progress.",
+                    "error",
+                );
+            }
+
             return;
         }
 
-        const row = deleteButton.closest("tr");
-
-        if (row) {
-            openDeleteMaintenanceModal(row, deleteButton);
-        }
+        openMaintenanceActionModal(row, actionButton, action);
     });
 
-    const closeButton = document.getElementById("closeDeleteMaintenanceModal");
+    /*
+    |--------------------------------------------------------------------------
+    | Confirm Button
+    |--------------------------------------------------------------------------
+    */
+    document
+        .getElementById("confirmDeleteMaintenance")
+        ?.addEventListener("click", async () => {
+            if (maintenanceActionModal.mode === "bulk") {
+                await confirmBulkMaintenanceArchive();
 
-    if (closeButton) {
-        closeButton.addEventListener("click", () => {
-            closeDeleteMaintenanceModal(deleteMaintenanceModal.opener);
-        });
-    }
-
-    const cancelButton = document.getElementById("cancelDeleteMaintenance");
-
-    if (cancelButton) {
-        cancelButton.addEventListener("click", () => {
-            closeDeleteMaintenanceModal(deleteMaintenanceModal.opener);
-        });
-    }
-
-    modal.addEventListener("click", (event) => {
-        if (event.target === modal) {
-            closeDeleteMaintenanceModal(deleteMaintenanceModal.opener);
-        }
-    });
-
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && modal.classList.contains("show")) {
-            closeDeleteMaintenanceModal(deleteMaintenanceModal.opener);
-        }
-    });
-
-    const confirmButton = document.getElementById("confirmDeleteMaintenance");
-
-    if (confirmButton) {
-        confirmButton.addEventListener("click", async () => {
-            if (deleteMaintenanceModal.mode === "bulk") {
-                await confirmBulkMaintenanceDelete();
                 return;
             }
 
-            await confirmSingleMaintenanceDelete();
+            await confirmSingleMaintenanceAction();
         });
-    }
 
-    deleteMaintenanceInitialized = true;
+    /*
+    |--------------------------------------------------------------------------
+    | Close button
+    |--------------------------------------------------------------------------
+    */
+    document
+        .getElementById("closeDeleteMaintenanceModal")
+        ?.addEventListener("click", () => closeDeleteMaintenanceModal());
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cancel
+    |--------------------------------------------------------------------------
+    */
+    document
+        .getElementById("cancelDeleteMaintenance")
+        ?.addEventListener("click", () => closeDeleteMaintenanceModal());
+
+    /*
+    |--------------------------------------------------------------------------
+    | Click outside
+    |--------------------------------------------------------------------------
+    */
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+            closeDeleteMaintenanceModal();
+        }
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | ESC
+    |--------------------------------------------------------------------------
+    */
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && modal.classList.contains("show")) {
+            closeDeleteMaintenanceModal();
+        }
+    });
+
+    maintenanceActionInitialized = true;
 }
 
 document.addEventListener("DOMContentLoaded", () => {

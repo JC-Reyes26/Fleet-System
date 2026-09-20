@@ -11,23 +11,39 @@
       <i class="ph-fill ph-warning-circle"></i>
     </div>
 
-    <h2 id="deleteReservationModalTitle">Delete Reservation</h2>
+    <h2 id="deleteReservationModalTitle">
+      Archive Reservation
+    </h2>
 
     <p id="deleteReservationModalDescription">
-      Are you sure you want to delete
-      <strong id="deleteReservationName">this reservation</strong>?
+      <span id="deleteReservationMessageText">
+        Are you sure you want to archive
+      </span>
+      <strong id="deleteReservationName">
+        this reservation
+      </strong>?
     </p>
 
-    <p class="delete-note">This action cannot be undone.</p>
+    <p class="delete-note">
+      The reservation will be removed from the active list while its records and history are preserved.
+    </p>
 
     <div class="modal-footer">
-      <button type="button" class="btn-outline" id="cancelDeleteReservation">
+      <button
+        type="button"
+        class="btn-outline"
+        id="cancelDeleteReservation"
+      >
         Cancel
       </button>
 
-      <button type="button" class="btn-danger" id="confirmDeleteReservation">
-        <i class="ph ph-trash"></i>
-        Delete Reservation
+      <button
+        type="button"
+        class="btn-danger"
+        id="confirmDeleteReservation"
+      >
+        <i class="ph ph-archive"></i>
+        Archive Reservation
       </button>
     </div>
   </div>

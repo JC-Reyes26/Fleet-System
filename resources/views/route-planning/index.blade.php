@@ -574,28 +574,6 @@
         </div>
       </div>
 
-      @if($routePermissions['canDelete'] ?? false)
-          <!-- Delete Route Modal -->
-          <div id="deleteRouteModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="deleteRouteModalTitle">
-            <div class="custom-modal delete-modal">
-              <button type="button" class="modal-close" id="closeDeleteRouteModal" aria-label="Close delete route modal">
-                <i class="ph ph-x"></i>
-              </button>
-              <div class="delete-icon"><i class="ph-fill ph-warning-circle"></i></div>
-              <h2 id="deleteRouteModalTitle">Delete Route</h2>
-              <p id="deleteRouteModalDescription">Are you sure you want to delete this route?</p>
-              <p class="delete-note">This action cannot be undone.</p>
-              <div class="modal-footer">
-                <button type="button" class="btn-outline" id="cancelDeleteRoute">Cancel</button>
-                <button type="button" class="btn-danger" id="confirmDeleteRoute">
-                  <i class="ph ph-trash"></i>
-                  Delete Route
-                </button>
-              </div>
-            </div>
-          </div>
-      @endif
-
     <script>
         window.FLEET_RBAC = window.FLEET_RBAC || {};
         window.FLEET_RBAC.role =

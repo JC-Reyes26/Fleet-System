@@ -620,6 +620,7 @@
     overflow: hidden;
     border: 1px solid var(--color-border);
     background: var(--color-surface-muted);
+    z-index: 1;
 }
 
 .dashboard-map-note {

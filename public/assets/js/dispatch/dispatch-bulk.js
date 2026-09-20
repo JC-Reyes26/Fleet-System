@@ -1,17 +1,237 @@
-async function handleDeleteSelected() {
+/* ==========================================
+   HIMS Fleet - Dispatch Bulk Actions
+========================================== */
+
+function getSelectedDispatchRows() {
+    return Array.from(
+        document.querySelectorAll(
+            "#dispatchTableBody .dispatch-checkbox:checked",
+        ),
+    )
+        .map((checkbox) => checkbox.closest("tr"))
+        .filter(Boolean);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Update Selected Count
+|--------------------------------------------------------------------------
+*/
+function updateDispatchSelectedCount() {
+    const countElement = document.getElementById("dispatchSelectedCount");
+
+    if (!countElement) {
+        return;
+    }
+
+    const selectedRows = getSelectedDispatchRows();
+
+    const count = selectedRows.length;
+
+    countElement.textContent = `${count} dispatch${count === 1 ? "" : "es"} selected`;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Refresh Bulk Toolbar State
+|--------------------------------------------------------------------------
+*/
+function refreshDispatchBulkState() {
+    const toolbar = document.getElementById("dispatchBulkToolbar");
+
+    const archiveBtn = document.getElementById("archiveSelectedDispatches");
+
+    const showArchived = document.getElementById("showArchivedDispatches");
+
+    const isArchivedMode = showArchived?.checked === true;
+
+    updateDispatchSelectedCount();
+
+    if (!toolbar || !archiveBtn) {
+        return;
+    }
+
+    /*
+     * Archived mode:
+     * no bulk archive.
+     */
+    if (isArchivedMode) {
+        toolbar.classList.remove("show");
+
+        archiveBtn.disabled = true;
+
+        return;
+    }
+
+    const selectedRows = getSelectedDispatchRows();
+
+    /*
+     * No selection.
+     */
+    if (selectedRows.length === 0) {
+        toolbar.classList.remove("show");
+
+        archiveBtn.disabled = true;
+
+        return;
+    }
+
+    /*
+     * Active rows only.
+     */
+    const activeRows = selectedRows.filter((row) => !row.dataset.archivedAt);
+
+    if (activeRows.length === 0) {
+        toolbar.classList.remove("show");
+
+        archiveBtn.disabled = true;
+
+        return;
+    }
+
+    /*
+     * Show bulk toolbar.
+     */
+    toolbar.classList.add("show");
+
+    archiveBtn.disabled = false;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Clear Dispatch Selection
+|--------------------------------------------------------------------------
+*/
+function clearDispatchSelection() {
+    document
+        .querySelectorAll("#dispatchTableBody .dispatch-checkbox:checked")
+        .forEach((checkbox) => {
+            checkbox.checked = false;
+        });
+
+    const selectAll = document.getElementById("selectAllDispatches");
+
+    if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    }
+
+    refreshDispatchBulkState();
+}
+
+/*
+|--------------------------------------------------------------------------
+| Row Checkbox Listener
+|--------------------------------------------------------------------------
+*/
+function initDispatchBulkCheckboxes() {
+    document.addEventListener("change", (event) => {
+        if (!event.target.matches("#dispatchTableBody .dispatch-checkbox")) {
+            return;
+        }
+
+        const checkboxes = Array.from(
+            document.querySelectorAll("#dispatchTableBody .dispatch-checkbox"),
+        );
+
+        const checkedCheckboxes = checkboxes.filter(
+            (checkbox) => checkbox.checked,
+        );
+
+        const selectAll = document.getElementById("selectAllDispatches");
+
+        if (selectAll) {
+            selectAll.checked =
+                checkboxes.length > 0 &&
+                checkedCheckboxes.length === checkboxes.length;
+
+            selectAll.indeterminate =
+                checkedCheckboxes.length > 0 &&
+                checkedCheckboxes.length < checkboxes.length;
+        }
+
+        refreshDispatchBulkState();
+    });
+}
+
+/*
+|--------------------------------------------------------------------------
+| Select All Listener
+|--------------------------------------------------------------------------
+*/
+function initDispatchSelectAll() {
+    document.addEventListener("change", (event) => {
+        if (event.target.id !== "selectAllDispatches") {
+            return;
+        }
+
+        const showArchived = document.getElementById("showArchivedDispatches");
+
+        if (showArchived?.checked === true) {
+            event.target.checked = false;
+            event.target.indeterminate = false;
+
+            return;
+        }
+
+        const checkboxes = document.querySelectorAll(
+            "#dispatchTableBody .dispatch-checkbox",
+        );
+
+        checkboxes.forEach((checkbox) => {
+            checkbox.checked = event.target.checked;
+        });
+
+        refreshDispatchBulkState();
+    });
+}
+
+/*
+|--------------------------------------------------------------------------
+| Clear Button
+|--------------------------------------------------------------------------
+*/
+function initDispatchClearSelection() {
+    const clearButton = document.getElementById("clearDispatchSelection");
+
+    if (!clearButton) {
+        return;
+    }
+
+    clearButton.addEventListener("click", clearDispatchSelection);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Bulk Archive
+|--------------------------------------------------------------------------
+*/
+async function handleArchiveSelected() {
     const tableBody = document.getElementById("dispatchTableBody");
 
     if (!tableBody) {
         return;
     }
 
-    const rowsToDelete = getSelectedDispatchRows();
+    const rowsToArchive = getSelectedDispatchRows();
 
-    if (rowsToDelete.length === 0) {
+    if (rowsToArchive.length === 0) {
         return;
     }
 
-    const dispatchIds = rowsToDelete
+    const activeRowsToArchive = rowsToArchive.filter(
+        (row) => !row.dataset.archivedAt,
+    );
+
+    if (activeRowsToArchive.length === 0) {
+        if (typeof showToast === "function") {
+            showToast("No active dispatches selected for archiving.", "error");
+        }
+
+        return;
+    }
+
+    const dispatchIds = activeRowsToArchive
         .map((row) => row.dataset.id)
         .filter(Boolean);
 
@@ -19,27 +239,27 @@ async function handleDeleteSelected() {
         return;
     }
 
-    const deleteBtn = document.getElementById("deleteSelectedDispatches");
+    const archiveBtn = document.getElementById("archiveSelectedDispatches");
 
-    if (deleteBtn) {
-        deleteBtn.disabled = true;
+    if (archiveBtn) {
+        archiveBtn.disabled = true;
 
-        deleteBtn.textContent = "Deleting...";
+        archiveBtn.innerHTML = '<i class="ph ph-spinner"></i> Archiving...';
     }
 
     try {
-        const response = await fetch("/dispatch/bulk-delete", {
-            method: "DELETE",
+        const response = await fetch("/dispatch/bulk-archive", {
+            method: "POST",
             headers: {
                 "Content-Type": "application/json",
+
                 Accept: "application/json",
+
                 "X-CSRF-TOKEN": document
                     .querySelector('meta[name="csrf-token"]')
                     ?.getAttribute("content"),
             },
-
             credentials: "same-origin",
-
             body: JSON.stringify({
                 dispatch_ids: dispatchIds,
             }),
@@ -58,7 +278,7 @@ async function handleDeleteSelected() {
 
             if (typeof showToast === "function") {
                 showToast(
-                    data.message || "Failed to delete dispatches.",
+                    data.message || "Failed to archive dispatches.",
                     "error",
                 );
             }
@@ -66,26 +286,13 @@ async function handleDeleteSelected() {
             return;
         }
 
-        const selectAll = document.getElementById("selectAllDispatches");
-
-        if (selectAll) {
-            selectAll.checked = false;
-
-            selectAll.indeterminate = false;
-        }
+        clearDispatchSelection();
 
         /*
         |--------------------------------------------------------------------------
-        | Reload authoritative backend state
-        |--------------------------------------------------------------------------
-        |
-        | Do not manually remove rows.
-        |
-        | Backend may have updated Reservation state
-        | while deleting valid Dispatch records.
+        | Reload backend state
         |--------------------------------------------------------------------------
         */
-
         if (typeof loadDispatches === "function") {
             await loadDispatches();
         }
@@ -94,18 +301,9 @@ async function handleDeleteSelected() {
         |--------------------------------------------------------------------------
         | Refresh available reservations
         |--------------------------------------------------------------------------
-        |
-        | Deleted Pending / Assigned Dispatch records may make their
-        | reservations available for Dispatch creation again.
-        |--------------------------------------------------------------------------
         */
-
         if (typeof loadAvailableReservations === "function") {
             await loadAvailableReservations();
-        }
-
-        if (typeof refreshDispatchBulkState === "function") {
-            refreshDispatchBulkState();
         }
 
         if (typeof applyDispatchFilters === "function") {
@@ -126,38 +324,64 @@ async function handleDeleteSelected() {
             updateDispatchPagination();
         }
 
-        const deletedCount = Array.isArray(data.deleted_ids)
-            ? data.deleted_ids.length
+        refreshDispatchBulkState();
+
+        const archivedCount = Array.isArray(data.archived_ids)
+            ? data.archived_ids.length
             : 0;
 
         if (typeof showToast === "function") {
-            if (deletedCount > 0) {
+            if (archivedCount > 0) {
                 showToast(
                     data.message ||
-                        `${deletedCount} dispatch${deletedCount === 1 ? "" : "es"} deleted successfully.`,
+                        `${archivedCount} dispatch${
+                            archivedCount === 1 ? "" : "es"
+                        } archived successfully.`,
                     "success",
                 );
             } else {
                 showToast(
-                    data.message || "No selected dispatches could be deleted.",
+                    data.message || "No selected dispatches could be archived.",
                     "error",
                 );
             }
         }
     } catch (error) {
-        console.error("Bulk dispatch deletion error:", error);
+        console.error("Bulk dispatch archive error:", error);
 
         if (typeof showToast === "function") {
             showToast(
-                "Something went wrong while deleting dispatches.",
+                "Something went wrong while archiving dispatches.",
                 "error",
             );
         }
     } finally {
-        if (deleteBtn) {
-            deleteBtn.disabled = false;
+        if (archiveBtn) {
+            archiveBtn.disabled = false;
 
-            deleteBtn.textContent = "Delete Selected";
+            archiveBtn.innerHTML =
+                '<i class="ph ph-archive"></i> Archive Selected';
         }
+
+        refreshDispatchBulkState();
     }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Initialization
+|--------------------------------------------------------------------------
+*/
+document.addEventListener("DOMContentLoaded", () => {
+    initDispatchBulkCheckboxes();
+    initDispatchSelectAll();
+    initDispatchClearSelection();
+
+    const archiveButton = document.getElementById("archiveSelectedDispatches");
+
+    if (archiveButton) {
+        archiveButton.addEventListener("click", handleArchiveSelected);
+    }
+
+    refreshDispatchBulkState();
+});

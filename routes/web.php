@@ -164,10 +164,10 @@ Route::middleware([
             [VehicleController::class, 'stats']
         )->name('vehicles.stats');
 
-        Route::delete(
-            '/fleet/bulk-delete',
-            [VehicleController::class, 'bulkDelete']
-        )->name('vehicles.bulkDelete');
+        Route::post(
+            '/fleet/bulk-archive',
+            [VehicleController::class, 'bulkArchive']
+        )->name('vehicles.bulkArchive');
 
         Route::get(
             '/fleet',
@@ -194,10 +194,15 @@ Route::middleware([
             [VehicleController::class, 'update']
         )->name('vehicles.update');
 
-        Route::delete(
-            '/fleet/{vehicle}',
-            [VehicleController::class, 'destroy']
-        )->name('vehicles.destroy');
+        Route::post(
+            '/fleet/{vehicle}/archive',
+            [VehicleController::class, 'archive']
+        )->name('vehicles.archive');
+
+        Route::post(
+            '/fleet/{vehicle}/restore',
+            [VehicleController::class, 'restore']
+        )->name('vehicles.restore');
 
     });
 
@@ -219,21 +224,46 @@ Route::middleware([
             [ReservationController::class, 'nextNumber']
         )->name('reservation.next-number');
 
-        Route::delete(
-            '/reservation/bulk-delete',
-            [ReservationController::class, 'bulkDelete']
-        )->name('reservation.bulkDelete');
+        Route::post(
+            '/reservation/bulk-archive',
+            [ReservationController::class, 'bulkArchive']
+        )->name('reservation.bulkArchive');
 
-        Route::resource(
-            'reservation',
-            ReservationController::class
-        );
+        Route::get(
+            '/reservation',
+            [ReservationController::class, 'index']
+        )->name('reservation.index');
+
+        Route::post(
+            '/reservation',
+            [ReservationController::class, 'store']
+        )->name('reservation.store');
+
+        Route::get(
+            '/reservation/{reservation}',
+            [ReservationController::class, 'show']
+        )->name('reservation.show');
+
+        Route::put(
+            '/reservation/{reservation}',
+            [ReservationController::class, 'update']
+        )->name('reservation.update');
+
+        Route::post(
+            '/reservation/{reservation}/archive',
+            [ReservationController::class, 'archive']
+        )->name('reservation.archive');
+
+        Route::post(
+            '/reservation/{reservation}/restore',
+            [ReservationController::class, 'restore']
+        )->name('reservation.restore');
 
         Route::post(
             '/reservation/{reservation}/apply-dispatch-recommendation',
             [ReservationController::class, 'applyDispatchRecommendation']
         )->name('reservation.apply-dispatch-recommendation');
-
+        
     });
 
 
@@ -269,10 +299,10 @@ Route::middleware([
             [DispatchController::class, 'store']
         )->name('dispatch.store');
 
-        Route::delete(
-            '/dispatch/bulk-delete',
-            [DispatchController::class, 'bulkDelete']
-        )->name('dispatch.bulkDelete');
+        Route::post(
+            '/dispatch/bulk-archive',
+            [DispatchController::class, 'bulkArchive']
+        )->name('dispatch.bulkArchive');
 
         Route::get(
             '/dispatch/{dispatch}',
@@ -284,11 +314,16 @@ Route::middleware([
             [DispatchController::class, 'update']
         )->name('dispatch.update');
 
-        Route::delete(
-            '/dispatch/{dispatch}',
-            [DispatchController::class, 'destroy']
-        )->name('dispatch.destroy');
+        Route::post(
+            '/dispatch/{dispatch}/archive',
+            [DispatchController::class, 'archive']
+        )->name('dispatch.archive');
 
+        Route::post(
+            '/dispatch/{dispatch}/restore',
+            [DispatchController::class, 'restore']
+        )->name('dispatch.restore');
+        
     });
 
 
@@ -299,11 +334,6 @@ Route::middleware([
     */
     Route::middleware('fleet.module:drivers')->group(function () {
 
-        Route::delete(
-            '/drivers/bulk-delete',
-            [DriverController::class, 'bulkDelete']
-        )->name('drivers.bulkDelete');
-
         Route::get(
             '/driver',
             [DriverController::class, 'index']
@@ -312,12 +342,12 @@ Route::middleware([
         Route::get(
             '/drivers',
             [DriverController::class, 'getDrivers']
-        );
+        )->name('drivers');
 
         Route::get(
             '/drivers/available',
             [DriverController::class, 'available']
-        );
+        )->name('drivers.available');
 
         Route::post(
             '/drivers/{driver}/create-account',
@@ -339,11 +369,21 @@ Route::middleware([
             [DriverController::class, 'update']
         )->name('drivers.update');
 
-        Route::delete(
-            '/drivers/{driver}',
-            [DriverController::class, 'destroy']
-        )->name('drivers.destroy');
+        Route::post(
+            '/drivers/bulk-archive',
+            [DriverController::class, 'bulkArchive']
+        )->name('drivers.bulkArchive');
 
+        Route::post(
+            '/drivers/{driver}/archive',
+            [DriverController::class, 'archive']
+        )->name('drivers.archive');
+
+        Route::post(
+            '/drivers/{driver}/restore',
+            [DriverController::class, 'restore']
+        )->name('drivers.restore');
+        
     });
 
 
@@ -384,16 +424,21 @@ Route::middleware([
             [MaintenanceController::class, 'update']
         )->name('maintenance.update');
 
-        Route::delete(
-            '/maintenance/bulk-delete',
-            [MaintenanceController::class, 'bulkDelete']
-        )->name('maintenance.bulkDelete');
+        Route::post(
+            '/maintenance/bulk-archive',
+            [MaintenanceController::class, 'bulkArchive']
+        )->name('maintenance.bulkArchive');
 
-        Route::delete(
-            '/maintenance/{maintenance}',
-            [MaintenanceController::class, 'destroy']
-        )->name('maintenance.destroy');
+        Route::post(
+            '/maintenance/{maintenance}/archive',
+            [MaintenanceController::class, 'archive']
+        )->name('maintenance.archive');
 
+        Route::post(
+            '/maintenance/{maintenance}/restore',
+            [MaintenanceController::class, 'restore']
+        )->name('maintenance.restore');
+        
     });
 
 
@@ -493,11 +538,6 @@ Route::middleware([
             '/route-planning/{routePlan}',
             [RoutePlanController::class, 'update']
         )->name('route-planning.update');
-
-        Route::delete(
-            '/route-planning/{routePlan}',
-            [RoutePlanController::class, 'destroy']
-        )->name('route-planning.destroy');
 
         Route::post(
             '/route-planning/{routePlan}/archive',

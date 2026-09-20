@@ -75,29 +75,21 @@ function refreshReservationBulkState() {
   }
 }
 
-async function deleteSelectedReservations() {
-    const tableBody = document.getElementById(
-      "reservationTableBody"
-    );
-    const selectAll = document.getElementById(
-      "selectAllReservations"
-    );
-    const deleteBtn = document.getElementById(
-      "deleteSelectedReservations"
-    );
-
-    if (!tableBody || !deleteBtn) {
+async function archiveSelectedReservations() {
+    const tableBody = document.getElementById("reservationTableBody");
+    const selectAll = document.getElementById("selectAllReservations");
+    const archiveBtn = document.getElementById("archiveSelectedReservations");
+    if (!tableBody || !archiveBtn) {
         return;
     }
 
-    const selectedRows =getSelectedReservationRows(tableBody);
+    const selectedRows = getSelectedReservationRows(tableBody);
 
     if (selectedRows.length === 0) {
-
         if (typeof window.showToast === "function") {
             window.showToast(
                 "Please select at least one reservation.",
-                "error"
+                "error",
             );
         }
 
@@ -105,98 +97,72 @@ async function deleteSelectedReservations() {
     }
 
     const reservationIds = selectedRows
-      .map((row) => row.dataset.id)
-      .filter(Boolean);
-
+        .map((row) => row.dataset.id)
+        .filter(Boolean);
 
     if (reservationIds.length === 0) {
         return;
     }
 
-    deleteBtn.disabled = true;
+    archiveBtn.disabled = true;
 
     try {
-        const response = await fetch(
-                "/reservation/bulk-delete",
-                {
-                    method: "DELETE",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                        "Accept":
-                            "application/json",
-                        "X-CSRF-TOKEN":
-                            document.querySelector(
-                                'meta[name="csrf-token"]'
-                            ).content,
-                    },
-                    body: JSON.stringify({
-                        ids:
-                            reservationIds,
-                    }),
-                }
-            );
-
+        const response = await fetch("/reservation/bulk-archive", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "X-CSRF-TOKEN":
+                    document.querySelector('meta[name="csrf-token"]')
+                        ?.content || "",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({
+                ids: reservationIds,
+            }),
+        });
 
         const data = await response.json();
 
-        console.log(
-            "BULK DELETE RESPONSE:",
-            response.status,
-            data
-        );
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                "Failed to delete reservations."
-            );
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Failed to archive reservations.");
         }
 
-        if (data.success) {
+        await loadReservations();
 
-            await loadReservations();
-
-            if (selectAll) {
-                selectAll.checked = false;
-                selectAll.indeterminate = false;
-            }
-
-            refreshReservationBulkState();
-
-            if (typeof updateReservationStatistics === "function") {
-                updateReservationStatistics();
-            }
-
-            if (typeof updateReservationPagination === "function") {
-                updateReservationPagination();
-            }
-
-            if (typeof window.showToast === "function") {
-                window.showToast(
-                    data.message ||
-                    "Reservation(s) deleted successfully.",
-                    "success"
-                );
-            }
+        if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
         }
 
-    } catch (error) {
-        console.error(
-            "BULK DELETE ERROR:",
-            error
-        );
+        refreshReservationBulkState();
+
+        if (typeof updateReservationStatistics === "function") {
+            updateReservationStatistics();
+        }
+        if (typeof updateReservationPagination === "function") {
+            updateReservationPagination();
+        }
 
         if (typeof window.showToast === "function") {
             window.showToast(
-                error.message ||
-                "Failed to delete reservations.",
-                "error"
+                data.message || "Reservation(s) archived successfully.",
+                "success",
             );
         }
+    } catch (error) {
+        console.error("BULK RESERVATION ARCHIVE ERROR:", error);
 
-    } finally {deleteBtn.disabled = false;}
+        if (typeof window.showToast === "function") {
+            window.showToast(
+                error.message || "Failed to archive reservations.",
+                "error",
+            );
+        }
+    } finally {
+        archiveBtn.disabled = false;
+    }
 }
 
 function initReservationBulkActions() {
@@ -219,11 +185,16 @@ function initReservationBulkActions() {
     const clearBtn = document.getElementById(
       "clearReservationSelection"
     );
-    const deleteBtn = document.getElementById(
-      "deleteSelectedReservations"
-    );
+    const archiveBtn = document.getElementById("archiveSelectedReservations");
 
-    if (!tableBody || !selectAll || !toolbar || !countEl || !clearBtn || !deleteBtn) {
+    if (
+        !tableBody ||
+        !selectAll ||
+        !toolbar ||
+        !countEl ||
+        !clearBtn ||
+        !archiveBtn
+    ) {
         console.warn("Reservation bulk actions could not initialize.");
         return;
     }
@@ -268,7 +239,7 @@ function initReservationBulkActions() {
         }
     );
 
-    deleteBtn.addEventListener("click", deleteSelectedReservations);
+    archiveBtn.addEventListener("click", archiveSelectedReservations);
 
     const observer = new MutationObserver(() => 
       {

@@ -154,6 +154,12 @@ class DispatchController extends Controller
             'reservation.routePlan.stops',
         ]);
 
+        if ($request->boolean('show_archived')) {
+            $query->whereNotNull('archived_at');
+        } else {
+            $query->whereNull('archived_at');
+        }
+
         /*
         |--------------------------------------------------------------------------
         | RBAC Data Scope
@@ -199,26 +205,28 @@ class DispatchController extends Controller
         | Completed dispatches are shown only within the number
         | of days configured in Fleet Settings.
         */
-        $query->where(function ($query) use ($completedCutoff) {
-            $query
-                ->where(
-                    'trip_status',
-                    '!=',
-                    'Completed'
-                )
-                ->orWhere(function ($completed) use ($completedCutoff) {
-                    $completed
-                        ->where(
-                            'trip_status',
-                            'Completed'
-                        )
-                        ->where(
-                            'updated_at',
-                            '>=',
-                            $completedCutoff
-                        );
-                });
-        });
+        if (!$request->boolean('show_archived')) {
+            $query->where(function ($query) use ($completedCutoff) {
+                $query
+                    ->where(
+                        'trip_status',
+                        '!=',
+                        'Completed'
+                    )
+                    ->orWhere(function ($completed) use ($completedCutoff) {
+                        $completed
+                            ->where(
+                                'trip_status',
+                                'Completed'
+                            )
+                            ->where(
+                                'updated_at',
+                                '>=',
+                                $completedCutoff
+                            );
+                    });
+            });
+        }
         $dispatches = $query
             ->orderBy('id', 'asc')
             ->get();
@@ -247,12 +255,17 @@ class DispatchController extends Controller
                     'fleet_manager',
                     'dispatcher'
                 ),
-            'canDelete' =>
+            'canArchive' =>
                 $user->hasRole(
                     'fleet_manager',
                     'dispatcher'
                 ),
-            'canBulkDelete' =>
+            'canBulkArchive' =>
+                $user->hasRole(
+                    'fleet_manager',
+                    'dispatcher'
+                ),
+            'canRestore' =>
                 $user->hasRole(
                     'fleet_manager',
                     'dispatcher'
@@ -722,6 +735,14 @@ class DispatchController extends Controller
     ) {
         $this->authorize('update', $dispatch);
 
+        if ($dispatch->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Archived dispatches cannot be modified.',
+            ], 422);
+        }
+
         $validator = Validator::make(
             $request->all(),
             [
@@ -1070,12 +1091,20 @@ class DispatchController extends Controller
     /**
      * Remove the specified dispatch.
      */
-    public function destroy(Dispatch $dispatch)
-    {
-        $this->authorize('delete', $dispatch);
+    public function archive(
+        Request $request,
+        Dispatch $dispatch
+    ) {
+        $this->authorize(
+            'archive',
+            $dispatch
+        );
 
         try {
-            DB::transaction(function () use ($dispatch) {
+            DB::transaction(function () use (
+                $request,
+                $dispatch
+            ) {
                 $dispatch = Dispatch::with([
                     'reservation',
                 ])
@@ -1095,7 +1124,7 @@ class DispatchController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
-                | Only Pending or Assigned can be deleted.
+                | Only Pending or Assigned may be archived.
                 |--------------------------------------------------------------------------
                 */
                 if (
@@ -1109,57 +1138,182 @@ class DispatchController extends Controller
                     )
                 ) {
                     throw new \Exception(
-                        "Dispatch {$dispatch->dispatch_number} cannot be deleted because its current status is {$dispatch->trip_status}."
+                        "Dispatch {$dispatch->dispatch_number} cannot be archived because its current status is {$dispatch->trip_status}."
                     );
                 }
 
-                $deletedDispatchValues =
-                $this->getDispatchAuditValues(
-                    $dispatch
-                );
+                $oldValues =
+                    $this->getDispatchAuditValues(
+                        $dispatch
+                    );
 
-                AuditLogService::log(
-                    module: 'Dispatch Management',
-                    action: 'Deleted',
-                    description:
-                        "Deleted dispatch {$dispatch->dispatch_number}.",
-                    record: $dispatch,
-                    oldValues:
-                        $deletedDispatchValues
-                );
-                /*
-                |--------------------------------------------------------------------------
-                | Delete Dispatch
-                |--------------------------------------------------------------------------
-                */
-                $dispatch->delete();
+                $oldReservationStatus =
+                    $reservation->status;
+
+                $dispatch->update([
+                    'archived_at' => now(),
+                    'archived_by' =>
+                        $request->user()->id,
+                ]);
 
                 /*
                 |--------------------------------------------------------------------------
-                | Return Reservation to Approved
+                | Release reservation from archived dispatch.
                 |--------------------------------------------------------------------------
-                |
-                | Pending:
-                | Reservation should already be Approved.
-                |
-                | Assigned:
-                | Reservation was Scheduled, so return to Approved.
-                |
                 */
                 $reservation->update([
                     'status' => 'Approved',
                 ]);
+
+                AuditLogService::log(
+                    module: 'Dispatch Management',
+                    action: 'Archived',
+                    description:
+                        "Archived dispatch {$dispatch->dispatch_number}.",
+                    record: $dispatch,
+                    oldValues: $oldValues,
+                    newValues: [
+                        'archived_at' =>
+                            $dispatch->archived_at
+                                ?->toDateTimeString(),
+
+                        'archived_by' =>
+                            $request->user()->id,
+
+                        'reservation_status_before' =>
+                            $oldReservationStatus,
+
+                        'reservation_status_after' =>
+                            'Approved',
+                    ]
+                );
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Dispatch deleted successfully.',
+                'message' =>
+                    'Dispatch archived successfully.',
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' =>
+                    $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function restore(
+        Request $request,
+        Dispatch $dispatch
+    ) {
+        $this->authorize(
+            'restore',
+            $dispatch
+        );
+
+        try {
+            DB::transaction(function () use (
+                $request,
+                $dispatch
+            ) {
+                $dispatch = Dispatch::with([
+                    'reservation',
+                ])
+                    ->lockForUpdate()
+                    ->findOrFail(
+                        $dispatch->id
+                    );
+
+                if (!$dispatch->archived_at) {
+                    throw new \Exception(
+                        'Dispatch is not archived.'
+                    );
+                }
+
+                $reservation =
+                    $dispatch->reservation;
+
+                if (!$reservation) {
+                    throw new \Exception(
+                        'Reservation associated with this dispatch was not found.'
+                    );
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Restore Reservation Status
+                |--------------------------------------------------------------------------
+                |
+                | Pending dispatch:
+                | Reservation → Approved
+                |
+                | Assigned dispatch:
+                | Reservation → Scheduled
+                |--------------------------------------------------------------------------
+                */
+                $reservationStatus =
+                    $dispatch->trip_status === 'Assigned'
+                        ? 'Scheduled'
+                        : 'Approved';
+
+                $oldValues = [
+                    'archived_at' =>
+                        $dispatch->archived_at
+                            ?->toDateTimeString(),
+
+                    'archived_by' =>
+                        $dispatch->archived_by,
+                ];
+
+                $dispatch->update([
+                    'archived_at' => null,
+                    'archived_by' => null,
+                ]);
+
+                $reservation->update([
+                    'status' =>
+                        $reservationStatus,
+                ]);
+
+                AuditLogService::log(
+                    module: 'Dispatch Management',
+                    action: 'Restored',
+                    description:
+                        "Restored dispatch {$dispatch->dispatch_number}.",
+                    record: $dispatch,
+                    oldValues: $oldValues,
+                    newValues: [
+                        'archived_at' => null,
+                        'archived_by' => null,
+                        'reservation_status' =>
+                            $reservationStatus,
+                    ]
+                );
+            });
+
+            $dispatch->refresh();
+
+            $dispatch->load([
+                'reservation.vehicle',
+                'reservation.driver',
+                'reservation.routePlan.stops',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                    'Dispatch restored successfully.',
+                'dispatch' =>
+                    $dispatch,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    $e->getMessage(),
             ], 422);
         }
     }
@@ -1167,9 +1321,12 @@ class DispatchController extends Controller
     /**
      * Bulk delete selected dispatches.
      */
-    public function bulkDelete(Request $request)
+    public function bulkArchive(Request $request)
     {
-        $this->authorize('deleteAny', Dispatch::class);
+        $this->authorize(
+            'archiveAny',
+            Dispatch::class
+        );
 
         $validator = Validator::make(
             $request->all(),
@@ -1190,8 +1347,10 @@ class DispatchController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please select valid dispatches.',
-                'errors' => $validator->errors(),
+                'message' =>
+                    'Please select valid dispatches.',
+                'errors' =>
+                    $validator->errors(),
             ], 422);
         }
 
@@ -1199,28 +1358,27 @@ class DispatchController extends Controller
             $validator->validated()['dispatch_ids'];
 
         try {
-            $deletedIds = [];
+            $archivedIds = [];
 
             DB::transaction(function () use (
                 $dispatchIds,
-                &$deletedIds
+                &$archivedIds,
+                $request
             ) {
-                $dispatches = Dispatch::with([
-                    'reservation',
-                ])
+                $dispatches =
+                    Dispatch::with([
+                        'reservation',
+                    ])
                     ->whereIn(
                         'id',
                         $dispatchIds
                     )
+                    ->whereNull('archived_at')
                     ->lockForUpdate()
                     ->get();
 
                 foreach ($dispatches as $dispatch) {
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Only Pending or Assigned may be deleted.
-                    |--------------------------------------------------------------------------
-                    */
+
                     if (
                         !in_array(
                             $dispatch->trip_status,
@@ -1234,65 +1392,81 @@ class DispatchController extends Controller
                         continue;
                     }
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Restore Reservation status.
-                    |--------------------------------------------------------------------------
-                    */
+                    $oldValues =
+                        $this->getDispatchAuditValues(
+                            $dispatch
+                        );
+
+                    $oldReservationStatus =
+                        $dispatch->reservation?->status;
+
+                    $dispatch->update([
+                        'archived_at' => now(),
+                        'archived_by' =>
+                            $request->user()->id,
+                    ]);
+
                     if ($dispatch->reservation) {
                         $dispatch->reservation->update([
                             'status' => 'Approved',
                         ]);
                     }
 
-                    $deletedIds[] =
-                        $dispatch->id;
-
-                    $deletedDispatchValues =
-                        $this->getDispatchAuditValues(
-                            $dispatch
-                        );
-
                     AuditLogService::log(
                         module: 'Dispatch Management',
-                        action: 'Deleted',
+                        action: 'Archived',
                         description:
-                            "Deleted dispatch {$dispatch->dispatch_number}.",
+                            "Archived dispatch {$dispatch->dispatch_number}.",
                         record: $dispatch,
-                        oldValues:
-                            $deletedDispatchValues
+                        oldValues: $oldValues,
+                        newValues: [
+                            'archived_at' =>
+                                $dispatch->archived_at
+                                    ?->toDateTimeString(),
+
+                            'archived_by' =>
+                                $request->user()->id,
+
+                            'reservation_status_before' =>
+                                $oldReservationStatus,
+
+                            'reservation_status_after' =>
+                                $dispatch->reservation
+                                    ? 'Approved'
+                                    : null,
+                        ]
                     );
 
-                    $dispatch->delete();
+                    $archivedIds[] =
+                        $dispatch->id;
                 }
             });
 
-            if (empty($deletedIds)) {
+            if (empty($archivedIds)) {
                 return response()->json([
                     'success' => false,
                     'message' =>
-                        'Only Pending or Assigned dispatches can be deleted.',
-                    'deleted_ids' => [],
+                        'Only Pending or Assigned dispatches can be archived.',
+                    'archived_ids' => [],
                 ], 422);
             }
 
             return response()->json([
                 'success' => true,
                 'message' =>
-                    count($deletedIds) === 1
-                        ? 'Dispatch deleted successfully.'
-                        : count($deletedIds) .
-                            ' dispatches deleted successfully.',
-
-                'deleted_ids' =>
-                    $deletedIds,
+                    count($archivedIds) === 1
+                        ? 'Dispatch archived successfully.'
+                        : count($archivedIds) .
+                            ' dispatches archived successfully.',
+                'archived_ids' =>
+                    $archivedIds,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' =>
-                    'Failed to delete dispatches.',
+                    'Failed to archive dispatches.',
                 'error' =>
                     $e->getMessage(),
             ], 500);

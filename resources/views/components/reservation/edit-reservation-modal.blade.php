@@ -129,10 +129,10 @@
               <option value="">Select Status</option>
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
-              <option value="Scheduled">Scheduled</option>
-              <option value="Completed">Completed</option>
+              <!--<option value="Scheduled">Scheduled</option>-->
+              <!--<option value="Completed">Completed</option>-->
               <option value="Rejected">Rejected</option>
-              <option value="Cancelled">Cancelled</option>
+              <!--<option value="Cancelled">Cancelled</option>-->
             </select>
           </div>
 

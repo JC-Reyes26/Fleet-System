@@ -455,6 +455,84 @@ class FleetNotificationService
     }
 
     /**
+     * Create notification for multiple role recipients
+     * if the notification setting is enabled.
+     */
+    public static function createForRolesWhenEnabled(
+        string $settingKey,
+        array $roles,
+        string $title,
+        string $message,
+        bool $default = true,
+        ?string $link = null,
+        ?int $excludeUserId = null
+    ): array {
+        if (
+            !self::enabled(
+                $settingKey,
+                $default
+            )
+        ) {
+            return [];
+        }
+
+        $users = User::query()
+            ->whereIn(
+                'role',
+                $roles
+            )
+            ->when(
+                $excludeUserId,
+                function ($query) use ($excludeUserId) {
+                    $query->where(
+                        'id',
+                        '!=',
+                        $excludeUserId
+                    );
+                }
+            )
+            ->get();
+
+        $created = [];
+
+        foreach ($users as $user) {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Respect module-level RBAC
+            |--------------------------------------------------------------------------
+            */
+            if (
+                !self::userCanAccessLink(
+                    $user,
+                    $link
+                )
+            ) {
+                continue;
+            }
+
+            $created[] = FleetNotification::create([
+                'user_id' =>
+                    $user->id,
+
+                'title' =>
+                    $title,
+
+                'message' =>
+                    $message,
+
+                'status' =>
+                    'Unread',
+
+                'link' =>
+                    $link,
+            ]);
+        }
+
+        return $created;
+    }
+
+    /**
      * Create unique notification if setting is enabled.
      */
     public static function createUniqueWhenEnabled(

@@ -26,10 +26,13 @@ class Driver extends Model
         'photo',
         'assigned_vehicle_id',
         'status',
+        'archived_at',
+        'archived_by',
     ];
 
     protected $casts = [
         'license_expiry' => 'date:Y-m-d',
+        'archived_at' => 'datetime',
     ];
 
     public function vehicle()
@@ -55,5 +58,13 @@ class Driver extends Model
     public function locations(): HasMany
     {
         return $this->hasMany(VehicleLocation::class);
+    }
+
+    public function archivedBy()
+    {
+        return $this->belongsTo(
+            User::class,
+            'archived_by'
+        );
     }
 }

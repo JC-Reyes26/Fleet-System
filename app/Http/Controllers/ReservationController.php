@@ -144,6 +144,12 @@ class ReservationController extends Controller
             'driver',
             'requester',
         ]);
+
+        if ($request->boolean('show_archived')) {
+            $query->whereNotNull('archived_at');
+        } else {
+            $query->whereNull('archived_at');
+        }
             /*
             |--------------------------------------------------------------------------
             | RBAC Data Scope
@@ -287,12 +293,17 @@ class ReservationController extends Controller
                     'dispatcher',
                     'department_head'
                 ),
-            'canDelete' =>
+            'canArchive' =>
                 $user->hasRole(
                     'fleet_manager',
                     'dispatcher'
                 ),
-            'canBulkDelete' =>
+            'canBulkArchive' =>
+                $user->hasRole(
+                    'fleet_manager',
+                    'dispatcher'
+                ),
+            'canRestore' =>
                 $user->hasRole(
                     'fleet_manager',
                     'dispatcher'
@@ -487,14 +498,36 @@ class ReservationController extends Controller
             );
 
             if ($reservation->status === 'Pending') {
-                FleetNotificationService::createWhenEnabled(
-                    'reservationPending',
-                    'Pending Reservation',
-                    "Reservation {$reservation->reservation_number} is waiting for approval.",
-                    true,
-                    route('reservation.index')
-                );
-            }
+            /*
+            |--------------------------------------------------------------------------
+            | Notify the requester
+            |--------------------------------------------------------------------------
+            */
+            FleetNotificationService::createWhenEnabled(
+                'reservationPending',
+                'Pending Reservation',
+                "Reservation {$reservation->reservation_number} is waiting for approval.",
+                true,
+                route('reservation.index')
+            );
+            /*
+            |--------------------------------------------------------------------------
+            | Notify Fleet Manager + Dispatcher
+            |--------------------------------------------------------------------------
+            */
+            FleetNotificationService::createForRolesWhenEnabled(
+                settingKey: 'reservationPending',
+                roles: [
+                    'fleet_manager',
+                    'dispatcher',
+                ],
+                title: 'Pending Reservation',
+                message: "Reservation {$reservation->reservation_number} is waiting for approval.",
+                default: true,
+                link: route('reservation.index'),
+                excludeUserId: $request->user()->id
+            );
+        }
 
             return response()->json([
                 'success' => true,
@@ -1109,67 +1142,156 @@ class ReservationController extends Controller
     /**
      * Remove the specified reservation.
      */
-    public function destroy(Reservation $reservation)
-    {
-        $this->authorize('delete', $reservation);
+    public function archive(
+        Request $request,
+        Reservation $reservation
+    ) {
+        $this->authorize(
+            'archive',
+            $reservation
+        );
 
-        try {
-            $reservation->load([
-                'routePlan',
-                'dispatch',
-            ]);
-            if ($reservation->dispatch) {
-                throw new \Exception(
-                    'This reservation cannot be deleted because it already has a dispatch.'
-                );
-            }
-            if ($reservation->routePlan) {
-                throw new \Exception(
-                    'This reservation cannot be deleted because it already has a route plan.'
-                );
-            }
-
-            $deletedReservationValues =
-                $this->getReservationAuditValues(
-                    $reservation
-                );
-
-            DB::transaction(
-                function () use (
-                    $reservation,
-                    $deletedReservationValues
-                ) {
-                    AuditLogService::log(
-                        module: 'Reservation Management',
-                        action: 'Deleted',
-                        description:
-                            "Deleted reservation {$reservation->reservation_number}.",
-                        record: $reservation,
-                        oldValues:
-                            $deletedReservationValues
-                    );
-
-                    $reservation->delete();
-                }
-            );
-            return response()->json([
-                'success' => true,
-                'message' => 'Reservation deleted successfully.',
-            ]);
-        } catch (\Exception $e) {
+        if ($reservation->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' =>
+                    'Reservation is already archived.',
             ], 422);
         }
+
+        $reservation->load([
+            'routePlan',
+            'dispatch',
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Preserve existing deletion protection
+        |--------------------------------------------------------------------------
+        */
+        if ($reservation->dispatch) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'This reservation cannot be archived because it already has a dispatch.',
+            ], 422);
+        }
+
+        if ($reservation->routePlan) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'This reservation cannot be archived because it already has a route plan.',
+            ], 422);
+        }
+
+        $oldValues =
+            $this->getReservationAuditValues(
+                $reservation
+            );
+
+        DB::transaction(function () use (
+            $request,
+            $reservation,
+            $oldValues
+        ) {
+            $reservation->update([
+                'archived_at' => now(),
+                'archived_by' =>
+                    $request->user()->id,
+            ]);
+
+            AuditLogService::log(
+                module: 'Reservation Management',
+                action: 'Archived',
+                description:
+                    "Archived reservation {$reservation->reservation_number}.",
+                record: $reservation,
+                oldValues: $oldValues,
+                newValues: [
+                    'archived_at' =>
+                        $reservation->archived_at
+                            ?->toDateTimeString(),
+
+                    'archived_by' =>
+                        $request->user()->id,
+                ]
+            );
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' =>
+                'Reservation archived successfully.',
+        ]);
+    }
+
+    public function restore(
+        Request $request,
+        Reservation $reservation
+    ) {
+        $this->authorize(
+            'restore',
+            $reservation
+        );
+
+        if (!$reservation->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Reservation is not archived.',
+            ], 422);
+        }
+
+        $oldValues = [
+            'archived_at' =>
+                $reservation->archived_at
+                    ?->toDateTimeString(),
+
+            'archived_by' =>
+                $reservation->archived_by,
+        ];
+
+        $reservation->update([
+            'archived_at' => null,
+            'archived_by' => null,
+        ]);
+
+        AuditLogService::log(
+            module: 'Reservation Management',
+            action: 'Restored',
+            description:
+                "Restored reservation {$reservation->reservation_number}.",
+            record: $reservation,
+            oldValues: $oldValues,
+            newValues: [
+                'archived_at' => null,
+                'archived_by' => null,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' =>
+                'Reservation restored successfully.',
+            'reservation' =>
+                $reservation->fresh()->load([
+                    'vehicle',
+                    'driver',
+                    'requester',
+                ]),
+        ]);
     }
 
     /**
      * Bulk delete reservations.
      */
-    public function bulkDelete(Request $request)
+    public function bulkArchive(Request $request)
     {
-        $this->authorize('deleteAny', Reservation::class);
+        $this->authorize(
+            'archiveAny',
+            Reservation::class
+        );
 
         $validator = Validator::make(
             $request->all(),
@@ -1185,30 +1307,40 @@ class ReservationController extends Controller
                 ],
             ]
         );
+
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please select valid reservations.',
-                'errors' => $validator->errors(),
+                'message' =>
+                    'Please select valid reservations.',
+                'errors' =>
+                    $validator->errors(),
             ], 422);
         }
-        $deletedIds = [];
+
+        $archivedIds = [];
+
         try {
-            $reservations = Reservation::with([
-                'routePlan',
-                'dispatch',
-            ])
+            $reservations =
+                Reservation::with([
+                    'routePlan',
+                    'dispatch',
+                ])
                 ->whereIn(
                     'id',
                     $validator->validated()['ids']
                 )
+                ->whereNull('archived_at')
                 ->get();
+
             DB::transaction(
                 function () use (
                     $reservations,
-                    &$deletedIds
+                    &$archivedIds,
+                    $request
                 ) {
                     foreach ($reservations as $reservation) {
+
                         if (
                             $reservation->routePlan ||
                             $reservation->dispatch
@@ -1216,49 +1348,65 @@ class ReservationController extends Controller
                             continue;
                         }
 
-                        $deletedReservationValues =
+                        $oldValues =
                             $this->getReservationAuditValues(
                                 $reservation
                             );
 
+                        $reservation->update([
+                            'archived_at' => now(),
+                            'archived_by' =>
+                                $request->user()->id,
+                        ]);
+
                         AuditLogService::log(
                             module: 'Reservation Management',
-                            action: 'Deleted',
+                            action: 'Archived',
                             description:
-                                "Deleted reservation {$reservation->reservation_number}.",
+                                "Archived reservation {$reservation->reservation_number}.",
                             record: $reservation,
-                            oldValues:
-                                $deletedReservationValues
+                            oldValues: $oldValues,
+                            newValues: [
+                                'archived_at' =>
+                                    $reservation->archived_at
+                                        ?->toDateTimeString(),
+
+                                'archived_by' =>
+                                    $request->user()->id,
+                            ]
                         );
 
-                        $deletedIds[] =
+                        $archivedIds[] =
                             $reservation->id;
-
-                        $reservation->delete();
                     }
                 }
             );
-            if (empty($deletedIds)) {
+
+            if (empty($archivedIds)) {
                 return response()->json([
                     'success' => false,
                     'message' =>
-                        'Selected reservations cannot be deleted because they are already linked to route planning or dispatch.',
-                    'deleted_ids' => [],
+                        'Selected reservations cannot be archived because they are already linked to route planning or dispatch.',
+                    'archived_ids' => [],
                 ], 422);
             }
+
             return response()->json([
                 'success' => true,
                 'message' =>
-                    count($deletedIds) === 1
-                        ? 'Reservation deleted successfully.'
-                        : count($deletedIds) . ' reservations deleted successfully.',
-                'deleted_ids' => $deletedIds,
+                    count($archivedIds) === 1
+                        ? 'Reservation archived successfully.'
+                        : count($archivedIds) .
+                            ' reservations archived successfully.',
+                'archived_ids' =>
+                    $archivedIds,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete reservations.',
+                'message' =>
+                    'Failed to archive reservations.',
             ], 500);
         }
     }
@@ -1273,7 +1421,8 @@ class ReservationController extends Controller
         $user =
             $request->user();
         $query =
-            Reservation::query();
+            Reservation::query()
+                ->whereNull('archived_at');
 
         if ($user->hasRole('driver')) {
             $driverId =

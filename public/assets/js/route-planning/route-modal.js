@@ -91,6 +91,7 @@ function canUpdateRoute() {
         ) === true
     );
 }
+/*
 function canDeleteRoute() {
     return (
         window.FleetRBAC?.hasPermission?.(
@@ -99,6 +100,7 @@ function canDeleteRoute() {
         ) === true
     );
 }
+*/   
 function canArchiveRoute() {
     return (
         window.FleetRBAC?.hasPermission?.(
@@ -1629,7 +1631,7 @@ function closeViewRouteModal() {
 /* ==========================================
    DELETE MODAL
 ========================================== */
-
+/*
 function openDeleteRouteModal(record) {
     if (!canDeleteRoute()) {
         return;
@@ -1667,7 +1669,7 @@ function closeDeleteRouteModal() {
     document.body.style.overflow = "";
     routeDeleteTargetId = null;
 }
-
+*/ 
 async function saveRouteFromForm() {
     if (routeFormMode === "add" && !canCreateRoute()) {
         return;
@@ -2160,9 +2162,11 @@ function initRoutePlanningModals() {
                 await openRouteFormModal("edit", record);
                 return;
             }
+            /*
             if (deleteButton && !deleteButton.disabled && canDeleteRoute()) {
                 openDeleteRouteModal(record);
             }
+            */ 
         });
     document
         .getElementById("closeViewRouteModal")
@@ -2297,7 +2301,7 @@ function initRoutePlanningModals() {
                 }
             }
         });
-
+    /*
     document
         .getElementById("closeDeleteRouteModal")
         ?.addEventListener("click", closeDeleteRouteModal);
@@ -2345,6 +2349,7 @@ function initRoutePlanningModals() {
                 }
             }
         });
+        */ 
 
     document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") {
@@ -2362,13 +2367,13 @@ function initRoutePlanningModals() {
                 ?.classList.contains("show")
         ) {
             closeViewRouteModal();
-        } else if (
+        } /*else if (
             document
                 .getElementById("deleteRouteModal")
                 ?.classList.contains("show")
         ) {
             closeDeleteRouteModal();
-        }
+        }*/
     });
 }
 

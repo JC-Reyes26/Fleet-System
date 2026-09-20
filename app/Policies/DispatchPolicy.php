@@ -80,7 +80,7 @@ class DispatchPolicy
         );
     }
 
-    public function delete(
+    public function archive(
         User $user,
         Dispatch $dispatch
     ): bool {
@@ -90,8 +90,18 @@ class DispatchPolicy
         );
     }
 
-    public function deleteAny(User $user): bool
+    public function archiveAny(User $user): bool
     {
+        return $user->hasRole(
+            'fleet_manager',
+            'dispatcher'
+        );
+    }
+
+    public function restore(
+        User $user,
+        Dispatch $dispatch
+    ): bool {
         return $user->hasRole(
             'fleet_manager',
             'dispatcher'

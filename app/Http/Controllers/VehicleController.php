@@ -67,6 +67,12 @@ class VehicleController extends Controller
             'lastCompletedMaintenance',
         ]);
 
+        if ($request->boolean('show_archived')) {
+            $query->whereNotNull('archived_at');
+        } else {
+            $query->whereNull('archived_at');
+        }
+
         $query =
         $this->applyVehicleVisibility(
             $query,
@@ -128,6 +134,7 @@ class VehicleController extends Controller
                 'driver_license' => $driver?->license_number,
 
                 'notes' => $vehicle->notes,
+                'archived_at' => $vehicle->archived_at,
                 /*
                 |--------------------------------------------------------------------------
                 | Include assigned drivers for Fuel Management
@@ -189,11 +196,15 @@ class VehicleController extends Controller
                     'dispatcher',
                     'maintenance'
                 ),
-            'canDelete' =>
+            'canArchive' =>
                 $request->user()->hasRole(
                     'fleet_manager'
                 ),
-            'canBulkDelete' =>
+            'canBulkArchive' =>
+                $request->user()->hasRole(
+                    'fleet_manager'
+                ),
+            'canRestore' =>
                 $request->user()->hasRole(
                     'fleet_manager'
                 ),
@@ -830,86 +841,175 @@ class VehicleController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Vehicle $vehicle)
-    {
-        $this->authorize('delete', $vehicle);
+        public function archive(
+        Request $request,
+        Vehicle $vehicle
+    ) {
+        $this->authorize('archive', $vehicle);
+
+        if ($vehicle->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vehicle is already archived.',
+            ], 422);
+        }
+
+        if ($vehicle->status === 'On Trip') {
+            return response()->json([
+                'success' => false,
+                'message' => 'A vehicle currently on a trip cannot be archived.',
+            ], 422);
+        }
 
         $vehicle->load('drivers');
 
-        $deletedValues =
-            $this->getVehicleAuditValues(
-                $vehicle
+        $oldValues = $this->getVehicleAuditValues($vehicle);
+
+        DB::transaction(function () use (
+            $vehicle,
+            $request,
+            $oldValues
+        ) {
+            $vehicle->update([
+                'archived_at' => now(),
+                'archived_by' => $request->user()->id,
+            ]);
+
+            Driver::where(
+                'assigned_vehicle_id',
+                $vehicle->id
+            )->update([
+                'assigned_vehicle_id' => null,
+            ]);
+
+            $vehicle->refresh();
+
+            AuditLogService::log(
+                module: 'Vehicle Management',
+                action: 'Archived',
+                description:
+                    "Archived vehicle {$vehicle->plate_number}.",
+                record: $vehicle,
+                oldValues: $oldValues,
+                newValues: [
+                    'archived_at' => $vehicle->archived_at?->toDateTimeString(),
+                    'archived_by' => $request->user()->id,
+                    'assigned_driver_id' => null,
+                ]
             );
+        });
 
-        DB::transaction(
-            function () use (
-                $vehicle,
-                $deletedValues
-            ) {
-                AuditLogService::log(
-                    module: 'Vehicle Management',
-                    action: 'Deleted',
-                    description:
-                        "Deleted vehicle {$vehicle->plate_number}.",
-                    record: $vehicle,
-                    oldValues:
-                        $deletedValues
-                );
+        return response()->json([
+            'success' => true,
+            'message' => 'Vehicle archived successfully.',
+        ]);
+    }
 
-                $vehicle->delete();
-            }
+    public function restore(
+        Request $request,
+        Vehicle $vehicle
+    ) {
+        $this->authorize('restore', $vehicle);
+
+        if (!$vehicle->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vehicle is not archived.',
+            ], 422);
+        }
+
+        $oldValues = [
+            'archived_at' =>
+                $vehicle->archived_at?->toDateTimeString(),
+            'archived_by' =>
+                $vehicle->archived_by,
+        ];
+
+        $vehicle->update([
+            'archived_at' => null,
+            'archived_by' => null,
+        ]);
+
+        AuditLogService::log(
+            module: 'Vehicle Management',
+            action: 'Restored',
+            description:
+                "Restored vehicle {$vehicle->plate_number}.",
+            record: $vehicle,
+            oldValues: $oldValues,
+            newValues: [
+                'archived_at' => null,
+                'archived_by' => null,
+            ]
         );
 
         return response()->json([
             'success' => true,
-            'message' => 'Vehicle deleted successfully.'
+            'message' => 'Vehicle restored successfully.',
+            'vehicle' => $vehicle->fresh()->load('drivers'),
         ]);
     }
 
-    // Bulk Delete
-    public function bulkDelete(Request $request)
-    {   
-        $this->authorize('deleteAny', Vehicle::class);
+    public function bulkArchive(Request $request)
+    {
+        $this->authorize('archiveAny', Vehicle::class);
 
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'exists:vehicles,id',
         ]);
 
-        $vehicles =
-            Vehicle::with('drivers')
-                ->whereIn(
-                    'id',
-                    $request->ids
-                )
-                ->get();
+        $vehicles = Vehicle::with('drivers')
+            ->whereIn('id', $request->ids)
+            ->whereNull('archived_at')
+            ->get();
 
-        DB::transaction(
-            function () use ($vehicles) {
-                foreach ($vehicles as $vehicle) {
-                    $deletedValues =
-                        $this->getVehicleAuditValues(
-                            $vehicle
-                        );
+        DB::transaction(function () use (
+            $vehicles,
+            $request
+        ) {
+            foreach ($vehicles as $vehicle) {
 
-                    AuditLogService::log(
-                        module: 'Vehicle Management',
-                        action: 'Deleted',
-                        description:
-                            "Deleted vehicle {$vehicle->plate_number}.",
-                        record: $vehicle,
-                        oldValues:
-                            $deletedValues
-                    );
-
-                    $vehicle->delete();
+                if ($vehicle->status === 'On Trip') {
+                    continue;
                 }
+
+                $oldValues =
+                    $this->getVehicleAuditValues($vehicle);
+
+                $vehicle->update([
+                    'archived_at' => now(),
+                    'archived_by' => $request->user()->id,
+                ]);
+
+                Driver::where(
+                    'assigned_vehicle_id',
+                    $vehicle->id
+                )->update([
+                    'assigned_vehicle_id' => null,
+                ]);
+
+                AuditLogService::log(
+                    module: 'Vehicle Management',
+                    action: 'Archived',
+                    description:
+                        "Archived vehicle {$vehicle->plate_number}.",
+                    record: $vehicle,
+                    oldValues: $oldValues,
+                    newValues: [
+                        'archived_at' =>
+                            $vehicle->archived_at?->toDateTimeString(),
+                        'archived_by' =>
+                            $request->user()->id,
+                        'assigned_driver_id' => null,
+                    ]
+                );
             }
-        );
+        });
 
         return response()->json([
             'success' => true,
-            'message' => 'Vehicle(s) deleted successfully.',
+            'message' => 'Selected vehicles archived successfully.',
         ]);
     }
 
@@ -928,7 +1028,7 @@ class VehicleController extends Controller
             $this->applyVehicleVisibility(
                 Vehicle::query(),
                 $user
-            );
+            )->whereNull('archived_at');
 
         return response()->json([
             'total' =>
@@ -980,7 +1080,7 @@ class VehicleController extends Controller
             $this->applyVehicleVisibility(
                 $query,
                 $request->user()
-            );
+            )->whereNull('archived_at');
 
         $vehicles =
             $query

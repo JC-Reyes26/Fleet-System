@@ -26,6 +26,8 @@ class Vehicle extends Model
         'current_odometer',
         'status',
         'notes',
+        'archived_at',
+        'archived_by',
         //'last_service',
     ];
 
@@ -35,6 +37,7 @@ class Vehicle extends Model
         'tank_capacity' => 'decimal:2',
         'current_fuel' => 'decimal:2',
         'current_odometer' => 'decimal:2',
+        'archived_at' => 'datetime',
     ];
 
     public function getDisplayLabelAttribute(): string
@@ -108,5 +111,10 @@ class Vehicle extends Model
     {
         return $this->hasOne(VehicleLocation::class)
             ->ofMany('recorded_at', 'max');
+    }
+
+    public function archivedBy()
+    {
+        return $this->belongsTo(User::class, 'archived_by');
     }
 }

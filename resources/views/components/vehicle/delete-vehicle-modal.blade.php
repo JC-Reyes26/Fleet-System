@@ -10,22 +10,33 @@
       <i class="ph-fill ph-warning-circle"></i>
     </div>
 
-    <h2 id="deleteVehicleTitle">Delete Vehicle</h2>
+    <h2 id="deleteVehicleTitle">Archive Vehicle</h2>
 
-    <p>
-      Are you sure you want to delete
+    <p id="deleteVehicleMessage">
+      Are you sure you want to archive
       <strong id="deleteVehicleName">Vehicle</strong>?
     </p>
 
-    <p class="delete-note">This action cannot be undone.</p>
+    <p class="delete-note">
+      The vehicle will be removed from the active fleet list but its records and history will be preserved.
+    </p>
 
     <div class="modal-footer">
-      <button type="button" class="btn-outline" id="cancelDeleteVehicle">Cancel</button>
+      <button
+        type="button"
+        class="btn-outline"
+        id="cancelDeleteVehicle"
+      >
+        Cancel
+      </button>
 
-      <button type="button" class="btn-danger" id="confirmDeleteVehicle">
-        <i class="ph ph-trash"></i>
-
-        Delete Vehicle
+      <button
+        type="button"
+        class="btn-danger"
+        id="confirmDeleteVehicle"
+      >
+        <i class="ph ph-archive"></i>
+        Archive Vehicle
       </button>
     </div>
   </div>

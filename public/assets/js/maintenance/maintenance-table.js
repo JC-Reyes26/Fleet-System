@@ -1,5 +1,5 @@
 /* ==========================================
-   Maintenance Table :)
+   Maintenance Table
 ========================================== */
 
 let maintenanceLiveUpdateInterval = null;
@@ -10,9 +10,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     startMaintenanceLiveUpdates();
 });
 
+document.addEventListener("DOMContentLoaded", () => {
+    const showArchived = document.getElementById("showArchivedMaintenances");
+
+    showArchived?.addEventListener("change", async () => {
+        if (typeof clearMaintenanceSelection === "function") {
+            clearMaintenanceSelection();
+        }
+
+        await loadMaintenances();
+
+        updateMaintenanceBulkSelectionVisibility();
+    });
+});
+
 async function loadMaintenances() {
     try {
-        const response = await fetch("/maintenance", {
+        const showArchived =
+            document.getElementById("showArchivedMaintenances")?.checked ===
+            true;
+
+        const url = showArchived
+            ? "/maintenance?show_archived=1"
+            : "/maintenance";
+
+        const response = await fetch(url, {
             headers: {
                 Accept: "application/json",
                 "X-Requested-With": "XMLHttpRequest",
@@ -20,24 +42,33 @@ async function loadMaintenances() {
             credentials: "same-origin",
             cache: "no-store",
         });
+
         const data = await response.json();
+
         if (!response.ok) {
             throw new Error(
                 data.message || "Failed to load maintenance records.",
             );
         }
+
         const maintenances = Array.isArray(data.maintenances)
             ? data.maintenances
             : Array.isArray(data)
               ? data
               : [];
+
         renderMaintenanceTable(maintenances);
+        updateMaintenanceBulkSelectionVisibility();
         if (typeof updateMaintenanceStatistics === "function") {
             updateMaintenanceStatistics();
         }
-        if (typeof updateMaintenancePagination === "function") {
+
+        if (typeof refreshMaintenancePagination === "function") {
+            refreshMaintenancePagination();
+        } else if (typeof updateMaintenancePagination === "function") {
             updateMaintenancePagination();
         }
+
         return maintenances;
     } catch (error) {
         console.error("MAINTENANCE LOAD ERROR:", error);
@@ -55,10 +86,13 @@ function startMaintenanceLiveUpdates() {
         if (document.hidden) {
             return;
         }
+
         if (maintenanceLiveUpdateRunning) {
             return;
         }
+
         maintenanceLiveUpdateRunning = true;
+
         try {
             await loadMaintenances();
         } catch (error) {
@@ -94,7 +128,6 @@ function getMaintenanceStatusClass(status) {
     return "out";
 }
 
-
 function formatMaintenanceDate(date) {
     if (!date) {
         return "—";
@@ -102,7 +135,7 @@ function formatMaintenanceDate(date) {
 
     const parsed = new Date(date);
 
-    if (isNaN(parsed.getTime())) {
+    if (Number.isNaN(parsed.getTime())) {
         return "—";
     }
 
@@ -113,11 +146,10 @@ function formatMaintenanceDate(date) {
     });
 }
 
-
 function formatMaintenanceCost(cost) {
     const value = Number(cost);
 
-    if (isNaN(value)) {
+    if (Number.isNaN(value)) {
         return "₱0.00";
     }
 
@@ -130,7 +162,6 @@ function formatMaintenanceCost(cost) {
     );
 }
 
-
 function formatMaintenanceVehicle(vehicle) {
     if (!vehicle) {
         return "Unassigned";
@@ -139,6 +170,7 @@ function formatMaintenanceVehicle(vehicle) {
     const vehicleName = [vehicle.brand, vehicle.model]
         .filter(Boolean)
         .join(" ");
+
     const vehicleType = vehicle.vehicle_type || "";
 
     return (
@@ -146,24 +178,42 @@ function formatMaintenanceVehicle(vehicle) {
     );
 }
 
+function updateMaintenanceBulkSelectionVisibility() {
+    const selectAll = document.getElementById("selectAllMaintenance");
+    const toolbar = document.getElementById("maintenanceBulkToolbar");
+    const showArchived =
+        document.getElementById("showArchivedMaintenances")?.checked === true;
+    if (selectAll) {
+        selectAll.hidden = showArchived;
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    }
+    if (showArchived) {
+        if (typeof clearMaintenanceSelection === "function") {
+            clearMaintenanceSelection();
+        }
+        if (toolbar) {
+            toolbar.classList.remove("show");
+        }
+    }
+}
 
 function renderMaintenanceTable(maintenances) {
     const tableBody = document.getElementById("maintenanceTableBody");
-
     if (!tableBody) {
         return;
     }
-
     const canUpdate =
         window.FleetRBAC?.hasPermission?.("maintenance", "canUpdate") === true;
-    const canDelete =
-        window.FleetRBAC?.hasPermission?.("maintenance", "canDelete") === true;
-    const canBulkDelete =
-        window.FleetRBAC?.hasPermission?.("maintenance", "canBulkDelete") ===
+    const canArchive =
+        window.FleetRBAC?.hasPermission?.("maintenance", "canArchive") === true;
+    const canBulkArchive =
+        window.FleetRBAC?.hasPermission?.("maintenance", "canBulkArchive") ===
         true;
+    const canRestore =
+        window.FleetRBAC?.hasPermission?.("maintenance", "canRestore") === true;
 
     let html = "";
-
     maintenances.forEach((maintenance) => {
         const vehicle = maintenance.vehicle || null;
         const vehicleName = formatMaintenanceVehicle(vehicle);
@@ -172,6 +222,7 @@ function renderMaintenanceTable(maintenances) {
         const scheduledDate = maintenance.maintenance_date || "";
         const completionDate = maintenance.completion_date || "";
         const cost = formatMaintenanceCost(maintenance.cost);
+        const isArchived = Boolean(maintenance.archived_at);
 
         html += `
                 <tr
@@ -187,18 +238,21 @@ function renderMaintenanceTable(maintenances) {
                     data-notes="${maintenance.notes ?? ""}"
                     data-cost="${maintenance.cost ?? 0}"
                     data-status="${status}"
+                    data-archived-at="${maintenance.archived_at ?? ""}"
                 >
 
                     <!-- Checkbox -->
                     <td>
                         ${
-                            canBulkDelete
+                            canBulkArchive && !isArchived
                                 ? `
                                     <input
                                         type="checkbox"
                                         class="maintenance-checkbox"
                                         data-id="${maintenance.id ?? ""}"
-                                        aria-label="Select ${maintenance.maintenance_number ?? ""}"
+                                        aria-label="Select ${
+                                            maintenance.maintenance_number ?? ""
+                                        }"
                                     />
                                 `
                                 : ""
@@ -267,7 +321,9 @@ function renderMaintenanceTable(maintenances) {
 
                     <!-- Status -->
                     <td>
-                        <span class="status-badge ${statusClass}">
+                        <span
+                            class="status-badge ${statusClass}"
+                        >
                             ${status}
                         </span>
                     </td>
@@ -275,22 +331,31 @@ function renderMaintenanceTable(maintenances) {
                     <!-- Actions -->
                     <td>
                         <div class="action-buttons">
+
+                            <!-- View -->
                             <button
                                 type="button"
                                 class="action-btn view-maintenance"
                                 data-id="${maintenance.id ?? ""}"
-                                aria-label="View ${maintenance.maintenance_number ?? ""}"
+                                aria-label="View ${
+                                    maintenance.maintenance_number ?? ""
+                                }"
                             >
                                 <i class="ph ph-eye"></i>
                             </button>
+
                             ${
-                                canUpdate
+                                canUpdate && !isArchived
                                     ? `
+                                        <!-- Edit -->
                                         <button
                                             type="button"
                                             class="action-btn edit-maintenance"
                                             data-id="${maintenance.id ?? ""}"
-                                            aria-label="Edit ${maintenance.maintenance_number ?? ""}"
+                                            aria-label="Edit ${
+                                                maintenance.maintenance_number ??
+                                                ""
+                                            }"
                                         >
                                             <i class="ph ph-pencil-simple"></i>
                                         </button>
@@ -299,19 +364,45 @@ function renderMaintenanceTable(maintenances) {
                             }
 
                             ${
-                                canDelete
+                                canArchive && !isArchived
                                     ? `
+                                        <!-- Archive -->
                                         <button
                                             type="button"
-                                            class="action-btn delete-maintenance"
+                                            class="action-btn archive-maintenance"
                                             data-id="${maintenance.id ?? ""}"
-                                            aria-label="Delete ${maintenance.maintenance_number ?? ""}"
+                                            aria-label="Archive ${
+                                                maintenance.maintenance_number ??
+                                                ""
+                                            }"
+                                            title="Archive"
                                         >
-                                            <i class="ph ph-trash"></i>
+                                            <i class="ph ph-archive"></i>
                                         </button>
                                     `
                                     : ""
                             }
+
+                            ${
+                                canRestore && isArchived
+                                    ? `
+                                        <!-- Restore -->
+                                        <button
+                                            type="button"
+                                            class="action-btn restore-maintenance"
+                                            data-id="${maintenance.id ?? ""}"
+                                            aria-label="Restore ${
+                                                maintenance.maintenance_number ??
+                                                ""
+                                            }"
+                                            title="Restore"
+                                        >
+                                            <i class="ph ph-arrow-counter-clockwise"></i>
+                                        </button>
+                                    `
+                                    : ""
+                            }
+
                         </div>
                     </td>
 
@@ -321,6 +412,9 @@ function renderMaintenanceTable(maintenances) {
 
     tableBody.innerHTML = html;
 
+    if (typeof applyMaintenanceFilters === "function") {
+        applyMaintenanceFilters();
+    }
     if (typeof refreshMaintenanceBulkState === "function") {
         refreshMaintenanceBulkState();
     }
@@ -330,4 +424,6 @@ function renderMaintenanceTable(maintenances) {
     if (typeof updateMaintenanceStatistics === "function") {
         updateMaintenanceStatistics();
     }
+
+    updateMaintenanceBulkSelectionVisibility();
 }

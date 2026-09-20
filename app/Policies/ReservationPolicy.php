@@ -109,7 +109,7 @@ class ReservationPolicy
         return false;
     }
 
-    public function delete(
+    public function archive(
         User $user,
         Reservation $reservation
     ): bool {
@@ -119,8 +119,18 @@ class ReservationPolicy
         );
     }
 
-    public function deleteAny(User $user): bool
+    public function archiveAny(User $user): bool
     {
+        return $user->hasRole(
+            'fleet_manager',
+            'dispatcher'
+        );
+    }
+
+    public function restore(
+        User $user,
+        Reservation $reservation
+    ): bool {
         return $user->hasRole(
             'fleet_manager',
             'dispatcher'

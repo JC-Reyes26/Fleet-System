@@ -16,11 +16,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     startDispatchLiveUpdates();
 });
 
+document.addEventListener("DOMContentLoaded", () => {
+    const showArchived = document.getElementById("showArchivedDispatches");
+    showArchived?.addEventListener("change", async () => {
+        await loadDispatches();
+    });
+});
+
 async function loadDispatches() {
     try {
-        const response = await fetch("/dispatch", {
+        const showArchived =
+            document.getElementById("showArchivedDispatches")?.checked === true;
+        const url = showArchived ? "/dispatch?show_archived=1" : "/dispatch";
+        const response = await fetch(url, {
             headers: {
                 Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
             },
             credentials: "same-origin",
             cache: "no-store",
@@ -37,7 +48,6 @@ async function loadDispatches() {
         const dispatches = Array.isArray(data.dispatches)
             ? data.dispatches
             : [];
-
         renderDispatchTable(dispatches);
         if (typeof updateDispatchStatistics === "function") {
             updateDispatchStatistics(dispatches);
@@ -45,13 +55,11 @@ async function loadDispatches() {
         if (typeof refreshDispatchPagination === "function") {
             refreshDispatchPagination();
         }
-
+        updateDispatchBulkSelectionVisibility();
         return dispatches;
     } catch (error) {
         console.error("Error loading dispatches:", error);
-
         const tableBody = document.getElementById("dispatchTableBody");
-
         if (tableBody) {
             tableBody.innerHTML = `
                 <tr>
@@ -61,14 +69,12 @@ async function loadDispatches() {
                 </tr>
             `;
         }
-
         if (typeof showToast === "function") {
             showToast(
                 error.message || "Unable to load dispatch records.",
                 "error",
             );
         }
-
         return [];
     }
 }
@@ -223,6 +229,26 @@ function formatDispatchSchedule(date, time) {
     return `${datePart}, ${timePart}`;
 }
 
+function updateDispatchBulkSelectionVisibility() {
+    const selectAll = document.getElementById("selectAllDispatches");
+    const toolbar = document.getElementById("dispatchBulkToolbar");
+    const showArchived =
+        document.getElementById("showArchivedDispatches")?.checked === true;
+    if (selectAll) {
+        selectAll.hidden = showArchived;
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    }
+    if (showArchived) {
+        if (typeof clearDispatchSelection === "function") {
+            clearDispatchSelection();
+        }
+        if (toolbar) {
+            toolbar.classList.remove("show");
+        }
+    }
+}
+
 function escapeDispatchHtml(value) {
     return String(value == null ? "" : value)
         .replace(/&/g, "&amp;")
@@ -241,10 +267,13 @@ function renderDispatchTable(dispatches) {
 
     const canUpdate =
         window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") === true;
-    const canDeletePermission =
-        window.FleetRBAC?.hasPermission?.("dispatch", "canDelete") === true;
-    const canBulkDelete =
-        window.FleetRBAC?.hasPermission?.("dispatch", "canBulkDelete") === true;
+    const canArchive =
+        window.FleetRBAC?.hasPermission?.("dispatch", "canArchive") === true;
+    const canBulkArchive =
+        window.FleetRBAC?.hasPermission?.("dispatch", "canBulkArchive") ===
+        true;
+    const canRestore =
+        window.FleetRBAC?.hasPermission?.("dispatch", "canRestore") === true;
 
     if (!Array.isArray(dispatches) || dispatches.length === 0) {
         tableBody.innerHTML = "";
@@ -296,9 +325,11 @@ function renderDispatchTable(dispatches) {
         const contact = reservation.contact_number || "";
         const statusClass = getDispatchStatusClass(status);
         const canEdit =
-            canUpdate && !["Completed", "Cancelled"].includes(status);
-        const canDelete =
-            canDeletePermission && ["Pending", "Assigned"].includes(status);
+            canUpdate &&
+            !dispatch.archived_at &&
+            !["Completed", "Cancelled"].includes(status);
+        const isArchived = Boolean(dispatch.archived_at);
+        const canArchiveThisDispatch = canArchive && !isArchived;
         const safeDispatchNumber = escapeDispatchHtml(
             dispatch.dispatch_number || "N/A",
         );
@@ -330,11 +361,14 @@ function renderDispatchTable(dispatches) {
                     data-status="${safeStatus}"
                     data-contact="${escapeDispatchHtml(contact)}"
                     data-notes="${escapeDispatchHtml(remarks)}"
+                    data-archived-at="${escapeDispatchHtml(
+                        dispatch.archived_at || "",
+                    )}"
                 >
                     <!-- Checkbox -->
                     <td>
                         ${
-                            canBulkDelete
+                            canBulkArchive && !dispatch.archived_at
                                 ? `
                                     <input
                                         type="checkbox"
@@ -439,7 +473,7 @@ function renderDispatchTable(dispatches) {
                                 <i class="ph ph-eye"></i>
                             </button>
                             ${
-                                canUpdate
+                                canUpdate && !isArchived
                                     ? `
                                         <button
                                             type="button"
@@ -460,21 +494,31 @@ function renderDispatchTable(dispatches) {
                             }
 
                             ${
-                                canDeletePermission
+                                canArchive && !isArchived
                                     ? `
                                         <button
                                             type="button"
-                                            class="action-btn delete-dispatch"
+                                            class="action-btn archive-dispatch"
                                             data-id="${escapeDispatchHtml(dispatch.id)}"
-                                            aria-label="Delete ${safeDispatchNumber}"
-                                            title="${
-                                                canDelete
-                                                    ? "Delete Dispatch"
-                                                    : "Only Pending or Assigned dispatches can be deleted"
-                                            }"
-                                            ${canDelete ? "" : "disabled"}
+                                            aria-label="Archive ${safeDispatchNumber}"
+                                            title="Archive Dispatch"
                                         >
-                                            <i class="ph ph-trash"></i>
+                                            <i class="ph ph-archive"></i>
+                                        </button>
+                                    `
+                                    : ""
+                            }
+                            ${
+                                canRestore && dispatch.archived_at
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="action-btn restore-dispatch"
+                                            data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Restore ${safeDispatchNumber}"
+                                            title="Restore Dispatch"
+                                        >
+                                            <i class="ph ph-arrow-counter-clockwise"></i>
                                         </button>
                                     `
                                     : ""
@@ -499,5 +543,6 @@ function renderDispatchTable(dispatches) {
     if (typeof initDispatchPagination === "function") {
         initDispatchPagination();
     }
-}
 
+    updateDispatchBulkSelectionVisibility();
+}

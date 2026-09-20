@@ -267,20 +267,20 @@ function populateMaintenanceVehicleSelect(vehicles) {
 }
 
 function createMaintenanceRow(form, savedMaintenance = null) {
-    // rbac
     const canUpdate =
         window.FleetRBAC?.hasPermission?.("maintenance", "canUpdate") === true;
-    const canDelete =
-        window.FleetRBAC?.hasPermission?.("maintenance", "canDelete") === true;
-    const canBulkDelete =
-        window.FleetRBAC?.hasPermission?.("maintenance", "canBulkDelete") ===
+    const canArchive =
+        window.FleetRBAC?.hasPermission?.("maintenance", "canArchive") === true;
+    const canBulkArchive =
+        window.FleetRBAC?.hasPermission?.("maintenance", "canBulkArchive") ===
         true;
-
+    const canRestore =
+        window.FleetRBAC?.hasPermission?.("maintenance", "canRestore") === true;
+    const isArchived = Boolean(savedMaintenance?.archived_at);
     const get = (id) => {
         const el = form.querySelector("#" + id);
         return el ? el.value : "";
     };
-
     const number =
         savedMaintenance?.maintenance_number ?? get("maintenanceNumber");
     const vehicleId = savedMaintenance?.vehicle_id ?? get("maintenanceVehicle");
@@ -306,13 +306,10 @@ function createMaintenanceRow(form, savedMaintenance = null) {
         if (!raw) {
             return "";
         }
-
         const date = new Date(raw);
-
-        if (isNaN(date.getTime())) {
+        if (Number.isNaN(date.getTime())) {
             return "";
         }
-
         return date.toLocaleDateString(undefined, {
             year: "numeric",
             month: "short",
@@ -321,13 +318,10 @@ function createMaintenanceRow(form, savedMaintenance = null) {
     }
 
     let vehicleName = "Unassigned";
-
     if (savedMaintenance?.vehicle) {
         const vehicle = savedMaintenance.vehicle;
-
         vehicleName = [
             [vehicle.brand, vehicle.model].filter(Boolean).join(" "),
-
             vehicle.vehicle_type,
         ]
             .filter(Boolean)
@@ -335,24 +329,17 @@ function createMaintenanceRow(form, savedMaintenance = null) {
     } else {
         const vehicleSelect = form.querySelector("#maintenanceVehicle");
         const selectedOption = vehicleSelect?.selectedOptions?.[0];
-
         vehicleName = selectedOption?.textContent?.trim() || "Unassigned";
     }
-
     const scheduledDisplay = formatDate(scheduledDateRaw);
-
     let completionDisplay = formatDate(completionDateRaw);
-
     if (!completionDisplay) {
         completionDisplay = "Not completed";
     }
-
     let costDisplay = "₱0.00";
-
     if (costRaw !== "" && costRaw !== null && costRaw !== undefined) {
         const costValue = parseFloat(costRaw);
-
-        if (!isNaN(costValue)) {
+        if (!Number.isNaN(costValue)) {
             costDisplay =
                 "₱" +
                 costValue.toLocaleString(undefined, {
@@ -361,18 +348,14 @@ function createMaintenanceRow(form, savedMaintenance = null) {
                 });
         }
     }
-
     const statusMap = {
         Scheduled: "scheduled",
         "In Progress": "trip",
         Completed: "completed",
         Cancelled: "cancelled",
     };
-
     const statusClass = statusMap[status] || "scheduled";
-
     const tr = document.createElement("tr");
-
     tr.dataset.id = savedMaintenance?.id ?? "";
     tr.dataset.maintenanceId = savedMaintenance?.id ?? "";
     tr.dataset.vehicleId = vehicleId ?? "";
@@ -385,6 +368,7 @@ function createMaintenanceRow(form, savedMaintenance = null) {
     tr.dataset.notes = notes ?? "";
     tr.dataset.cost = costRaw ?? "";
     tr.dataset.status = status ?? "";
+    tr.dataset.archivedAt = savedMaintenance?.archived_at ?? "";
     tr.dataset.maintenanceMatchesFilter = "true";
 
     function makeCell() {
@@ -393,17 +377,18 @@ function createMaintenanceRow(form, savedMaintenance = null) {
 
     function makeSpan(className, text) {
         const span = document.createElement("span");
-
         span.className = className;
         span.textContent = text ?? "";
-
         return span;
     }
 
-    /* 1. Checkbox */
+    /*
+    |--------------------------------------------------------------------------
+    | 1. Checkbox
+    |--------------------------------------------------------------------------
+    */
     const checkboxTd = makeCell();
-
-    if (canBulkDelete) {
+    if (canBulkArchive && !isArchived) {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "maintenance-checkbox";
@@ -413,104 +398,154 @@ function createMaintenanceRow(form, savedMaintenance = null) {
         checkbox.checked = false;
         checkboxTd.appendChild(checkbox);
     }
-
-    /* 2. Maintenance Number */
+    /*
+    |--------------------------------------------------------------------------
+    | 2. Maintenance Number
+    |--------------------------------------------------------------------------
+    */
     const numberTd = makeCell();
-
     numberTd.appendChild(makeSpan("maintenance-number", number));
-
-    /* 3. Vehicle */
+    /*
+    |--------------------------------------------------------------------------
+    | 3. Vehicle
+    |--------------------------------------------------------------------------
+    */
     const vehicleTd = makeCell();
-
     vehicleTd.appendChild(makeSpan("maintenance-vehicle", vehicleName));
-
-    /* 4. Service Type */
+    /*
+    |--------------------------------------------------------------------------
+    | 4. Service Type
+    |--------------------------------------------------------------------------
+    */
     const serviceTd = makeCell();
-
     serviceTd.appendChild(makeSpan("maintenance-service-type", serviceType));
-
-    /* 5. Technician / Workshop */
+    /*
+    |--------------------------------------------------------------------------
+    | 5. Technician / Workshop
+    |--------------------------------------------------------------------------
+    */
     const technicianTd = makeCell();
-
-    technicianTd.appendChild(makeSpan("maintenance-technician", technician));
-
-    /* 6. Scheduled Date */
+    technicianTd.appendChild(
+        makeSpan("maintenance-technician", technician || "Not provided"),
+    );
+    /*
+    |--------------------------------------------------------------------------
+    | 6. Scheduled Date
+    |--------------------------------------------------------------------------
+    */
     const scheduledTd = makeCell();
-
     scheduledTd.appendChild(
         makeSpan("maintenance-scheduled-date", scheduledDisplay),
     );
-
-    /* 7. Completion Date */
+    /*
+    |--------------------------------------------------------------------------
+    | 7. Completion Date
+    |--------------------------------------------------------------------------
+    */
     const completionTd = makeCell();
-
     completionTd.appendChild(
         makeSpan("maintenance-completion-date", completionDisplay),
     );
-
-    /* 8. Cost */
+    /*
+    |--------------------------------------------------------------------------
+    | 8. Cost
+    |--------------------------------------------------------------------------
+    */
     const costTd = makeCell();
-
     costTd.appendChild(makeSpan("maintenance-cost", costDisplay));
-
-    /* 9. Priority */
+    /*
+    |--------------------------------------------------------------------------
+    | 9. Priority
+    |--------------------------------------------------------------------------
+    */
     const priorityTd = makeCell();
-
     priorityTd.appendChild(makeSpan("maintenance-priority", priority));
-
-    /* 10. Status */
+    /*
+    |--------------------------------------------------------------------------
+    | 10. Status
+    |--------------------------------------------------------------------------
+    */
     const statusTd = makeCell();
     const statusBadge = document.createElement("span");
-
     statusBadge.className = "status-badge " + statusClass;
     statusBadge.textContent = status;
     statusTd.appendChild(statusBadge);
-
-    /* 11. Actions */
+    /*
+    |--------------------------------------------------------------------------
+    | 11. Actions
+    |--------------------------------------------------------------------------
+    */
     const actionsTd = makeCell();
     const actionsWrapper = document.createElement("div");
-
     actionsWrapper.className = "action-buttons";
-
+    /*
+    |--------------------------------------------------------------------------
+    | View
+    |--------------------------------------------------------------------------
+    */
     const viewBtn = document.createElement("button");
-
     viewBtn.type = "button";
     viewBtn.className = "action-btn view-maintenance";
     viewBtn.dataset.id = savedMaintenance?.id ?? "";
     viewBtn.setAttribute("aria-label", "View " + number);
-
+    viewBtn.title = "View";
     const viewIcon = document.createElement("i");
-
     viewIcon.className = "ph ph-eye";
     viewBtn.appendChild(viewIcon);
-
-    if (canUpdate) {
+    actionsWrapper.appendChild(viewBtn);
+    /*
+    |--------------------------------------------------------------------------
+    | Edit
+    |--------------------------------------------------------------------------
+    */
+    if (canUpdate && !isArchived) {
         const editBtn = document.createElement("button");
         editBtn.type = "button";
         editBtn.className = "action-btn edit-maintenance";
         editBtn.dataset.id = savedMaintenance?.id ?? "";
         editBtn.setAttribute("aria-label", "Edit " + number);
+        editBtn.title = "Edit";
         const editIcon = document.createElement("i");
         editIcon.className = "ph ph-pencil-simple";
         editBtn.appendChild(editIcon);
         actionsWrapper.appendChild(editBtn);
     }
-
-    if (canDelete) {
-        const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button";
-        deleteBtn.className = "action-btn delete-maintenance";
-        deleteBtn.dataset.id = savedMaintenance?.id ?? "";
-        deleteBtn.setAttribute("aria-label", "Delete " + number);
-        const deleteIcon = document.createElement("i");
-        deleteIcon.className = "ph ph-trash";
-        deleteBtn.appendChild(deleteIcon);
-        actionsWrapper.appendChild(deleteBtn);
+    /*
+    |--------------------------------------------------------------------------
+    | Archive
+    |--------------------------------------------------------------------------
+    */
+    if (canArchive && !isArchived) {
+        const archiveBtn = document.createElement("button");
+        archiveBtn.type = "button";
+        archiveBtn.className = "action-btn archive-maintenance";
+        archiveBtn.dataset.id = savedMaintenance?.id ?? "";
+        archiveBtn.setAttribute("aria-label", "Archive " + number);
+        archiveBtn.title = "Archive";
+        const archiveIcon = document.createElement("i");
+        archiveIcon.className = "ph ph-archive";
+        archiveBtn.appendChild(archiveIcon);
+        actionsWrapper.appendChild(archiveBtn);
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Restore
+    |--------------------------------------------------------------------------
+    */
+    if (canRestore && isArchived) {
+        const restoreBtn = document.createElement("button");
+        restoreBtn.type = "button";
+        restoreBtn.className = "action-btn restore-maintenance";
+        restoreBtn.dataset.id = savedMaintenance?.id ?? "";
+        restoreBtn.setAttribute("aria-label", "Restore " + number);
+        restoreBtn.title = "Restore";
+        const restoreIcon = document.createElement("i");
+        restoreIcon.className = "ph ph-arrow-counter-clockwise";
+        restoreBtn.appendChild(restoreIcon);
+        actionsWrapper.appendChild(restoreBtn);
     }
 
-    actionsWrapper.appendChild(viewBtn);
     actionsTd.appendChild(actionsWrapper);
-
     tr.appendChild(checkboxTd);
     tr.appendChild(numberTd);
     tr.appendChild(vehicleTd);

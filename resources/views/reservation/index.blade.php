@@ -114,6 +114,14 @@
                   id="reservationDateFilter"
                   aria-label="Filter reservations by date"
                 />
+
+                <label class="reservation-archived-toggle">
+                    <input
+                        type="checkbox"
+                        id="showArchivedReservations"
+                    >
+                    <span>Show Archived</span>
+                </label>
               </div>
 
               <div class="toolbar-right">
@@ -129,7 +137,7 @@
             </div>
 
             <!-- Bulk Toolbar -->
-            @if($reservationPermissions['canBulkDelete'] ?? false)
+            @if($reservationPermissions['canBulkArchive'] ?? false)
                 <div
                     class="bulk-toolbar"
                     id="reservationBulkToolbar"
@@ -149,11 +157,11 @@
 
                         <button
                             type="button"
-                            id="deleteSelectedReservations"
+                            id="archiveSelectedReservations"
                             class="btn-danger"
                         >
-                            <i class="ph ph-trash"></i>
-                            Delete Selected
+                            <i class="ph ph-archive"></i>
+                            Archive Selected
                         </button>
                     </div>
                 </div>
@@ -231,7 +239,7 @@
                   <thead>
                     <tr>
                       <th>
-                          @if($reservationPermissions['canBulkDelete'] ?? false)
+                          @if($reservationPermissions['canBulkArchive'] ?? false)
                               <input
                                   type="checkbox"
                                   id="selectAllReservations"
@@ -320,7 +328,10 @@
         @include('components.reservation.edit-reservation-modal')
     @endif
 
-    @if($reservationPermissions['canDelete'] ?? false)
+    @if(
+        ($reservationPermissions['canArchive'] ?? false) ||
+        ($reservationPermissions['canRestore'] ?? false)
+    )
         @include('components.reservation.delete-reservation-modal')
     @endif
 

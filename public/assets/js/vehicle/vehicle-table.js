@@ -9,10 +9,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadVehicles();
     startVehicleLiveUpdates();
 });
+document.addEventListener("DOMContentLoaded", () => {
+    const showArchived = document.getElementById("showArchivedVehicles");
+    showArchived?.addEventListener("change", async () => {
+        await loadVehicles();
+        updateVehicleBulkSelectionVisibility();
+    });
+});
 
 async function loadVehicles() {
     try {
-        const response = await fetch("/fleet", {
+        const showArchived =
+            document.getElementById("showArchivedVehicles")?.checked === true;
+        const url = showArchived ? "/fleet?show_archived=1" : "/fleet";
+        const response = await fetch(url, {
             headers: {
                 Accept: "application/json",
                 "X-Requested-With": "XMLHttpRequest",
@@ -30,13 +40,13 @@ async function loadVehicles() {
               ? data
               : [];
         renderVehicleTable(vehicles);
+        updateVehicleBulkSelectionVisibility();
         if (typeof updateVehicleStats === "function") {
             updateVehicleStats();
         }
         return vehicles;
     } catch (error) {
         console.error("VEHICLE LOAD ERROR:", error);
-
         return [];
     }
 }
@@ -126,6 +136,19 @@ function formatVehicleLastService(date) {
     });
 }
 
+function updateVehicleBulkSelectionVisibility() {
+    const selectAll = document.getElementById("selectAllVehicles");
+    if (!selectAll) return;
+    const showArchived =
+        document.getElementById("showArchivedVehicles")?.checked === true;
+    selectAll.hidden = showArchived;
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+    if (showArchived) {
+        clearVehicleSelection();
+    }
+}
+
 /* ==========================================
    Fuel Level
 ========================================== */
@@ -162,10 +185,10 @@ function renderVehicleTable(vehicles) {
 
     const canUpdate =
         window.FleetRBAC?.hasPermission("vehicles", "canUpdate") === true;
-    const canDelete =
-        window.FleetRBAC?.hasPermission("vehicles", "canDelete") === true;
-    const canBulkDelete =
-        window.FleetRBAC?.hasPermission("vehicles", "canBulkDelete") === true;
+    const canArchive =
+        window.FleetRBAC?.hasPermission("vehicles", "canArchive") === true;
+    const canBulkArchive =
+        window.FleetRBAC?.hasPermission("vehicles", "canBulkArchive") === true;
 
     let html = "";
 
@@ -197,10 +220,11 @@ function renderVehicleTable(vehicles) {
                 data-current-odometer="${currentOdometer}"
                 data-last-service="${formatVehicleLastService(vehicle.last_service)}"
                 data-notes="${vehicle.notes ?? ""}"
+                data-archived-at="${vehicle.archived_at ?? ""}"
             >
                 <td>
                     ${
-                        canBulkDelete
+                        canBulkArchive && !vehicle.archived_at
                             ? `
                                 <input
                                     type="checkbox"
@@ -272,7 +296,7 @@ function renderVehicleTable(vehicles) {
                             <i class="ph ph-eye"></i>
                         </button>
                         ${
-                            canUpdate
+                            canUpdate && !vehicle.archived_at
                                 ? `
                                     <button
                                         type="button"
@@ -285,14 +309,31 @@ function renderVehicleTable(vehicles) {
                                 : ""
                         }
                         ${
-                            canDelete
+                            canArchive && !vehicle.archived_at
                                 ? `
                                     <button
                                         type="button"
-                                        class="action-btn delete"
+                                        class="action-btn archive"
                                         data-id="${vehicle.id}"
-                                        title="Delete">
-                                        <i class="ph ph-trash"></i>
+                                        title="Archive">
+                                        <i class="ph ph-archive"></i>
+                                    </button>
+                                `
+                                : ""
+                        }
+                        ${
+                            vehicle.archived_at &&
+                            window.FleetRBAC?.hasPermission(
+                                "vehicles",
+                                "canRestore",
+                            ) === true
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="action-btn restore"
+                                        data-id="${vehicle.id}"
+                                        title="Restore">
+                                        <i class="ph ph-arrow-counter-clockwise"></i>
                                     </button>
                                 `
                                 : ""
@@ -316,4 +357,6 @@ function renderVehicleTable(vehicles) {
     if (typeof applyVehicleFilters === "function") {
         applyVehicleFilters();
     }
+
+    updateVehicleBulkSelectionVisibility();
 }

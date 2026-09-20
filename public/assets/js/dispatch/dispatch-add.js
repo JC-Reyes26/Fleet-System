@@ -17,12 +17,12 @@ function canCreateDispatch() {
 function canUpdateDispatch() {
     return window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") === true;
 }
-function canDeleteDispatch() {
-    return window.FleetRBAC?.hasPermission?.("dispatch", "canDelete") === true;
+function canArchiveDispatch() {
+    return window.FleetRBAC?.hasPermission?.("dispatch", "canArchive") === true;
 }
-function canBulkDeleteDispatch() {
+function canBulkArchiveDispatch() {
     return (
-        window.FleetRBAC?.hasPermission?.("dispatch", "canBulkDelete") === true
+        window.FleetRBAC?.hasPermission?.("dispatch", "canBulkArchive") === true
     );
 }
 
@@ -1041,8 +1041,10 @@ function initDispatchAiScoreBreakdown() {
 function createDispatchRow(dispatch) {
     //rbac
     const canUpdate = canUpdateDispatch();
-    const canDeletePermission = canDeleteDispatch();
-    const canBulkDelete = canBulkDeleteDispatch();
+    const canArchivePermission = canArchiveDispatch();
+    const canBulkArchive = canBulkArchiveDispatch();
+    const canRestore =
+        window.FleetRBAC?.hasPermission?.("dispatch", "canRestore") === true;
 
     const reservation = dispatch.reservation || null;
     const routePlan = getReservationRoutePlan(reservation);
@@ -1071,6 +1073,7 @@ function createDispatchRow(dispatch) {
         statusClassMap[status] || status.toLowerCase().replace(/\s+/g, "-");
     const tr = document.createElement("tr");
     tr.dataset.id = dispatch.id;
+    tr.dataset.archivedAt = dispatch.archived_at || "";
     tr.dataset.pickup = routeOrigin;
     tr.dataset.destination = routeDestination;
     tr.dataset.scheduleDate = String(
@@ -1085,7 +1088,7 @@ function createDispatchRow(dispatch) {
     tr.dataset.requestType = reservation?.request_type ?? "";
 
     const tdCheckbox = document.createElement("td");
-    if (canBulkDelete) {
+    if (canBulkArchive && !dispatch.archived_at) {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.className = "dispatch-checkbox";
@@ -1217,25 +1220,44 @@ function createDispatchRow(dispatch) {
         editBtn.dataset.id = dispatch.id;
         editBtn.setAttribute("aria-label", `Edit ${dispatch.dispatch_number}`);
         editBtn.innerHTML = '<i class="ph ph-pencil-simple"></i>';
-        if (["Completed", "Cancelled"].includes(status)) {
+        if (
+            dispatch.archived_at ||
+            ["Completed", "Cancelled"].includes(status)
+        ) {
             editBtn.disabled = true;
         }
         actionsWrap.appendChild(editBtn);
     }
-    if (canDeletePermission) {
-        const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button";
-        deleteBtn.className = "action-btn delete-dispatch";
-        deleteBtn.dataset.id = dispatch.id;
-        deleteBtn.setAttribute(
+    if (canArchivePermission && !dispatch.archived_at) {
+        const archiveBtn = document.createElement("button");
+        archiveBtn.type = "button";
+        archiveBtn.className = "action-btn archive-dispatch";
+        archiveBtn.dataset.id = dispatch.id;
+        archiveBtn.setAttribute(
             "aria-label",
-            `Delete ${dispatch.dispatch_number}`,
+            `Archive ${dispatch.dispatch_number}`,
         );
-        deleteBtn.innerHTML = '<i class="ph ph-trash"></i>';
+        archiveBtn.title = ["Pending", "Assigned"].includes(status)
+            ? "Archive Dispatch"
+            : "Only Pending or Assigned dispatches can be archived";
+        archiveBtn.innerHTML = '<i class="ph ph-archive"></i>';
         if (!["Pending", "Assigned"].includes(status)) {
-            deleteBtn.disabled = true;
+            archiveBtn.disabled = true;
         }
-        actionsWrap.appendChild(deleteBtn);
+        actionsWrap.appendChild(archiveBtn);
+    }
+    if (canRestore && dispatch.archived_at) {
+        const restoreBtn = document.createElement("button");
+        restoreBtn.type = "button";
+        restoreBtn.className = "action-btn restore-dispatch";
+        restoreBtn.dataset.id = dispatch.id;
+        restoreBtn.setAttribute(
+            "aria-label",
+            `Restore ${dispatch.dispatch_number}`,
+        );
+        restoreBtn.title = "Restore Dispatch";
+        restoreBtn.innerHTML = '<i class="ph ph-arrow-counter-clockwise"></i>';
+        actionsWrap.appendChild(restoreBtn);
     }
     actionsWrap.appendChild(viewBtn);
     tdActions.appendChild(actionsWrap);
@@ -1253,7 +1275,6 @@ function createDispatchRow(dispatch) {
     tr.appendChild(tdActions);
     return tr;
 }
-
 
 function formatDispatchSchedule(date, time) {
     if (!date) {

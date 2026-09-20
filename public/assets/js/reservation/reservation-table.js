@@ -9,12 +9,26 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     startReservationLiveUpdates();
 });
+document.addEventListener("DOMContentLoaded", () => {
+    const showArchived = document.getElementById("showArchivedReservations");
+
+    showArchived?.addEventListener("change", async () => {
+        await loadReservations();
+    });
+});
 
 async function loadReservations() {
     try {
-        const response = await fetch("/reservation", {
+        const showArchived =
+            document.getElementById("showArchivedReservations")?.checked ===
+            true;
+        const url = showArchived
+            ? "/reservation?show_archived=1"
+            : "/reservation";
+        const response = await fetch(url, {
             headers: {
                 Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
             },
             credentials: "same-origin",
             cache: "no-store",
@@ -23,10 +37,12 @@ async function loadReservations() {
         if (!response.ok) {
             throw new Error(data.message || "Failed to load reservations.");
         }
-        renderReservationTable(
-            Array.isArray(data.reservations) ? data.reservations : [],
-        );
-        return data.reservations;
+        const reservations = Array.isArray(data.reservations)
+            ? data.reservations
+            : [];
+        renderReservationTable(reservations);
+        updateReservationBulkSelectionVisibility();
+        return reservations;
     } catch (error) {
         console.error("RESERVATION LOAD ERROR:", error);
 
@@ -112,6 +128,29 @@ function formatReservationSchedule(date, time) {
     return "";
 }
 
+function updateReservationBulkSelectionVisibility() {
+    const selectAll = document.getElementById("selectAllReservations");
+    const toolbar = document.getElementById("reservationBulkToolbar");
+    const showArchived =
+        document.getElementById("showArchivedReservations")?.checked === true;
+
+    if (selectAll) {
+        selectAll.hidden = showArchived;
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    }
+
+    if (showArchived) {
+        if (typeof clearReservationSelection === "function") {
+            clearReservationSelection();
+        }
+
+        if (toolbar) {
+            toolbar.classList.remove("show");
+        }
+    }
+}
+
 function renderReservationTable(reservations) {
 
     const tableBody =
@@ -120,10 +159,14 @@ function renderReservationTable(reservations) {
     if (!tableBody) return;
 
     const role = window.FleetRBAC?.getRole?.() || "";
-    const canDelete =
-        window.FleetRBAC?.hasPermission?.("reservations", "canDelete") === true;
-    const canBulkDelete =
-        window.FleetRBAC?.hasPermission?.("reservations", "canBulkDelete") ===
+    const canArchive =
+        window.FleetRBAC?.hasPermission?.("reservations", "canArchive") ===
+        true;
+    const canBulkArchive =
+        window.FleetRBAC?.hasPermission?.("reservations", "canBulkArchive") ===
+        true;
+    const canRestore =
+        window.FleetRBAC?.hasPermission?.("reservations", "canRestore") ===
         true;
     const canUpdate =
         window.FleetRBAC?.hasPermission?.("reservations", "canUpdate") === true;
@@ -174,11 +217,12 @@ function renderReservationTable(reservations) {
                 data-status="${reservation.status ?? ""}"
                 data-contact-number="${reservation.contact_number ?? ""}"
                 data-notes="${reservation.notes ?? ""}"
+                data-archived-at="${reservation.archived_at ?? ""}"
             >
 
                 <td>
                     ${
-                        canBulkDelete
+                        canBulkArchive && !reservation.archived_at
                             ? `
                                 <input
                                     type="checkbox"
@@ -256,7 +300,7 @@ function renderReservationTable(reservations) {
                             <i class="ph ph-eye"></i>
                         </button>
                         ${
-                            canEditThisReservation
+                            canEditThisReservation && !reservation.archived_at
                                 ? `
                                     <button
                                         type="button"
@@ -270,15 +314,31 @@ function renderReservationTable(reservations) {
                                 : ""
                         }
                         ${
-                            canDelete
+                            canArchive && !reservation.archived_at
                                 ? `
                                     <button
                                         type="button"
-                                        class="action-btn delete-reservation"
+                                        class="action-btn archive-reservation"
                                         data-id="${reservation.id}"
-                                        aria-label="Delete ${reservation.reservation_number}"
+                                        aria-label="Archive ${reservation.reservation_number}"
+                                        title="Archive"
                                     >
-                                        <i class="ph ph-trash"></i>
+                                        <i class="ph ph-archive"></i>
+                                    </button>
+                                `
+                                : ""
+                        }
+                        ${
+                            canRestore && reservation.archived_at
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="action-btn restore-reservation"
+                                        data-id="${reservation.id}"
+                                        aria-label="Restore ${reservation.reservation_number}"
+                                        title="Restore"
+                                    >
+                                        <i class="ph ph-arrow-counter-clockwise"></i>
                                     </button>
                                 `
                                 : ""
@@ -304,4 +364,5 @@ function renderReservationTable(reservations) {
         updateReservationStatistics();
     }
     
+    updateReservationBulkSelectionVisibility();
 }

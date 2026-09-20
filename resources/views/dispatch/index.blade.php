@@ -126,6 +126,14 @@
                   id="dispatchDateFilter"
                   aria-label="Filter dispatches by schedule date"
                 />
+
+                <label class="dispatch-archived-toggle">
+                    <input
+                        type="checkbox"
+                        id="showArchivedDispatches"
+                    >
+                    <span>Show Archived</span>
+                </label>
               </div>
 
               <div class="toolbar-right">
@@ -141,7 +149,7 @@
             </div>
 
             <!-- Bulk Toolbar -->
-            @if($dispatchPermissions['canBulkDelete'] ?? false)
+            @if($dispatchPermissions['canBulkArchive'] ?? false)
                 <div
                     class="bulk-toolbar"
                     id="dispatchBulkToolbar"
@@ -161,11 +169,11 @@
 
                         <button
                             type="button"
-                            id="deleteSelectedDispatches"
+                            id="archiveSelectedDispatches"
                             class="btn-danger"
                         >
-                            <i class="ph ph-trash"></i>
-                            Delete Selected
+                            <i class="ph ph-archive"></i>
+                            Archive Selected
                         </button>
                     </div>
                 </div>
@@ -243,7 +251,7 @@
                   <thead>
                     <tr>
                       <th>
-                          @if($dispatchPermissions['canBulkDelete'] ?? false)
+                          @if($dispatchPermissions['canBulkArchive'] ?? false)
                               <input
                                   type="checkbox"
                                   id="selectAllDispatches"
@@ -334,7 +342,10 @@
         @include('components.dispatch.edit-dispatch-modal')
     @endif
 
-    @if($dispatchPermissions['canDelete'] ?? false)
+    @if(
+        ($dispatchPermissions['canArchive'] ?? false) ||
+        ($dispatchPermissions['canRestore'] ?? false)
+    )
         @include('components.dispatch.delete-dispatch-modal')
     @endif
 

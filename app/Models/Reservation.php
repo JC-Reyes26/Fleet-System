@@ -31,10 +31,13 @@ class Reservation extends Model
         'status',
         'contact_number',
         'notes',
+        'archived_at',
+        'archived_by',
     ];
 
     protected $casts = [
         'schedule_date' => 'date:Y-m-d',
+        'archived_at' => 'datetime',
     ];
 
     public function vehicle()
@@ -62,6 +65,14 @@ class Reservation extends Model
         return $this->belongsTo(
             User::class,
             'requested_by'
+        );
+    }
+
+    public function archivedBy()
+    {
+        return $this->belongsTo(
+            User::class,
+            'archived_by'
         );
     }
 }

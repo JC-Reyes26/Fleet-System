@@ -881,6 +881,7 @@ async function restoreRoutePlanApi(id) {
 /**
  * Delete Route Plan.
  */
+/*
 async function deleteRoutePlanApi(id) {
     const data = await routeApiRequest(
         `${ROUTE_API_BASE}/${encodeURIComponent(id)}`,
@@ -895,7 +896,7 @@ async function deleteRoutePlanApi(id) {
 
     return data;
 }
-
+*/ 
 /**
  * Duplicate Route Plan using a specific
  * target Approved Reservation.
