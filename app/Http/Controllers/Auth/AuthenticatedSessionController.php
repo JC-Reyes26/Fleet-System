@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Notifications\TwoFactorCodeNotification;
 use App\Services\AuditLogService;
+use App\Services\AuthenticationCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +15,11 @@ use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
 {
+    public function __construct(
+        private AuthenticationCodeService $codeService
+    ) {
+    }
+
     /**
      * Display the login view.
      */
@@ -28,23 +35,9 @@ class AuthenticatedSessionController extends Controller
         LoginRequest $request
     ): RedirectResponse {
         try {
-            /*
-            |--------------------------------------------------------------------------
-            | Authenticate
-            |--------------------------------------------------------------------------
-            */
-            $request->authenticate();
-
+            $user = $request->authenticate();
         } catch (ValidationException $e) {
 
-            /*
-            |--------------------------------------------------------------------------
-            | Failed Login Audit
-            |--------------------------------------------------------------------------
-            |
-            | Never log the submitted password.
-            |--------------------------------------------------------------------------
-            */
             AuditLogService::log(
                 module: 'Authentication',
                 action: 'Failed Login',
@@ -62,36 +55,86 @@ class AuthenticatedSessionController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Regenerate Session
-        |--------------------------------------------------------------------------
-        */
+         * Clean up any previous pending 2FA state.
+         */
+        $request->session()->forget([
+            'two_factor_user_id',
+            'two_factor_remember',
+        ]);
+
+        /*
+         * Check whether the user's 7-day 2FA
+         * verification window is still valid.
+         */
+        if (
+            $user->hasRecentTwoFactorVerification()
+        ) {
+            /*
+             * 2FA is still valid.
+             * Complete authentication now.
+             */
+            Auth::login(
+                $user,
+                $request->boolean('remember')
+            );
+
+            $request
+                ->session()
+                ->regenerate();
+
+            $user->forceFill([
+                'last_login_at' => now(),
+            ])->save();
+
+            AuditLogService::log(
+                module: 'Authentication',
+                action: 'Login',
+                description:
+                    'Logged in successfully.'
+            );
+
+            return redirect()->intended(
+                route(
+                    'dashboard',
+                    absolute: false
+                )
+            );
+        }
+
+        /*
+         * 2FA is required.
+         *
+         * User is still NOT authenticated.
+         */
+        $code = $this->codeService->issue(
+            $user,
+            AuthenticationCodeService::TYPE_TWO_FACTOR
+        );
+
+        $user->notify(
+            new TwoFactorCodeNotification(
+                $code
+            )
+        );
+
+        /*
+         * Regenerate the session before storing
+         * pending authentication state.
+         */
         $request
             ->session()
             ->regenerate();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Successful Login Audit
-        |--------------------------------------------------------------------------
-        |
-        | At this point auth()->user() is available, so AuditLogService
-        | automatically records the authenticated user.
-        |--------------------------------------------------------------------------
-        */
-        AuditLogService::log(
-            module: 'Authentication',
-            action: 'Login',
-            description:
-                'Logged in successfully.'
-        );
+        $request->session()->put([
+            'two_factor_user_id' =>
+                $user->id,
 
-        return redirect()->intended(
-            route(
-                'dashboard',
-                absolute: false
-            )
-        );
+            'two_factor_remember' =>
+                $request->boolean('remember'),
+        ]);
+
+        return redirect()
+            ->route('two-factor');
     }
 
     /**
@@ -101,14 +144,8 @@ class AuthenticatedSessionController extends Controller
         Request $request
     ): RedirectResponse {
         /*
-        |--------------------------------------------------------------------------
-        | Logout Audit
-        |--------------------------------------------------------------------------
-        |
-        | Must be logged BEFORE Auth::logout(), otherwise the authenticated
-        | actor would no longer be available to AuditLogService.
-        |--------------------------------------------------------------------------
-        */
+         * Logout Audit
+         */
         AuditLogService::log(
             module: 'Authentication',
             action: 'Logout',

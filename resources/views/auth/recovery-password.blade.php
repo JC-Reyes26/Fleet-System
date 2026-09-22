@@ -10,7 +10,7 @@
     >
 
     <title>
-        Forgot Password - HIMS Fleet
+        Create New Password - HIMS Fleet
     </title>
 
     <link
@@ -61,27 +61,18 @@
                             class="fw-bold mb-2"
                             style="color: #1f2937;"
                         >
-                            Forgot Password?
+                            Create New Password
                         </h4>
 
                         <p
                             class="text-muted mb-0"
                             style="font-size: 14px;"
                         >
-                            Enter your registered email address
-                            and we'll send you a verification code.
+                            Your verification was successful.
+                            Create a new password for your account.
                         </p>
 
                     </div>
-
-                    @if (session('status'))
-                        <div
-                            class="alert alert-success"
-                            style="font-size: 13px;"
-                        >
-                            {{ session('status') }}
-                        </div>
-                    @endif
 
                     @if ($errors->any())
                         <div
@@ -94,36 +85,58 @@
 
                     <form
                         method="POST"
-                        action="{{ route('password.email') }}"
+                        action="{{ route('password.recovery.update') }}"
                     >
                         @csrf
+                        @method('PUT')
 
                         <div class="mb-3">
 
                             <label
-                                for="email"
+                                for="password"
                                 class="form-label fw-semibold"
                                 style="font-size: 14px;"
                             >
-                                Email Address
+                                New Password
                             </label>
 
                             <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                value="{{ old('email') }}"
-                                class="form-control @error('email') is-invalid @enderror"
-                                placeholder="Enter your registered email"
+                                type="password"
+                                id="password"
+                                name="password"
+                                class="form-control @error('password') is-invalid @enderror"
+                                placeholder="Enter your new password"
                                 required
-                                autofocus
+                                autocomplete="new-password"
                             >
 
-                            @error('email')
+                            @error('password')
                                 <div class="invalid-feedback">
                                     {{ $message }}
                                 </div>
                             @enderror
+
+                        </div>
+
+                        <div class="mb-4">
+
+                            <label
+                                for="password_confirmation"
+                                class="form-label fw-semibold"
+                                style="font-size: 14px;"
+                            >
+                                Confirm New Password
+                            </label>
+
+                            <input
+                                type="password"
+                                id="password_confirmation"
+                                name="password_confirmation"
+                                class="form-control"
+                                placeholder="Confirm your new password"
+                                required
+                                autocomplete="new-password"
+                            >
 
                         </div>
 
@@ -136,26 +149,10 @@
                                 padding: 11px;
                             "
                         >
-                            Send Verification Code
+                            Update Password
                         </button>
 
                     </form>
-
-                    <div class="text-center mt-4">
-
-                        <a
-                            href="{{ route('login') }}"
-                            class="text-decoration-none"
-                            style="
-                                color: #00A86B;
-                                font-size: 14px;
-                                font-weight: 500;
-                            "
-                        >
-                            ← Back to Login
-                        </a>
-
-                    </div>
 
                 </div>
             </div>

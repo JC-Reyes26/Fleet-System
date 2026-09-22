@@ -27,6 +27,7 @@ use Illuminate\Notifications\Notifiable;
     'role',
     'status',
     'last_login_at',
+    'two_factor_verified_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -44,6 +45,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'two_factor_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -127,6 +129,14 @@ class User extends Authenticatable
         return $this->hasMany(
             \App\Models\AuditLog::class
         );
+    }
+
+    public function hasRecentTwoFactorVerification(): bool
+    {
+        return $this->two_factor_verified_at !== null
+            && $this->two_factor_verified_at->gt(
+                now()->subDays(7)
+            );
     }
 }
 

@@ -192,6 +192,15 @@
                     );
                 }
             @endif
+
+            @if (session('status'))
+                if (typeof showToast === "function") {
+                    showToast(
+                        @json(session('status')),
+                        "success"
+                    );
+                }
+            @endif
         });
     </script>
   </body>

@@ -10,7 +10,7 @@
     >
 
     <title>
-        Forgot Password - HIMS Fleet
+        Verify Code - HIMS Fleet
     </title>
 
     <link
@@ -61,15 +61,15 @@
                             class="fw-bold mb-2"
                             style="color: #1f2937;"
                         >
-                            Forgot Password?
+                            Verify Your Code
                         </h4>
 
                         <p
                             class="text-muted mb-0"
                             style="font-size: 14px;"
                         >
-                            Enter your registered email address
-                            and we'll send you a verification code.
+                            Enter the 6-digit code sent to
+                            your registered email address.
                         </p>
 
                     </div>
@@ -94,32 +94,39 @@
 
                     <form
                         method="POST"
-                        action="{{ route('password.email') }}"
+                        action="{{ route('password.verify.submit') }}"
                     >
                         @csrf
 
                         <div class="mb-3">
 
                             <label
-                                for="email"
+                                for="code"
                                 class="form-label fw-semibold"
                                 style="font-size: 14px;"
                             >
-                                Email Address
+                                Verification Code
                             </label>
 
                             <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                value="{{ old('email') }}"
-                                class="form-control @error('email') is-invalid @enderror"
-                                placeholder="Enter your registered email"
+                                type="text"
+                                id="code"
+                                name="code"
+                                class="form-control text-center @error('code') is-invalid @enderror"
+                                placeholder="000000"
+                                maxlength="6"
+                                inputmode="numeric"
+                                autocomplete="one-time-code"
                                 required
                                 autofocus
+                                style="
+                                    font-size: 24px;
+                                    letter-spacing: 8px;
+                                    font-weight: 600;
+                                "
                             >
 
-                            @error('email')
+                            @error('code')
                                 <div class="invalid-feedback">
                                     {{ $message }}
                                 </div>
@@ -136,23 +143,40 @@
                                 padding: 11px;
                             "
                         >
-                            Send Verification Code
+                            Verify Code
                         </button>
 
                     </form>
 
-                    <div class="text-center mt-4">
+                    <form
+                        method="POST"
+                        action="{{ route('password.resend') }}"
+                        class="text-center mt-3"
+                    >
+                        @csrf
 
-                        <a
-                            href="{{ route('login') }}"
-                            class="text-decoration-none"
+                        <button
+                            type="submit"
+                            class="btn btn-link text-decoration-none"
                             style="
                                 color: #00A86B;
-                                font-size: 14px;
-                                font-weight: 500;
+                                font-size: 13px;
                             "
                         >
-                            ← Back to Login
+                            Didn't receive the code?
+                            Send again
+                        </button>
+
+                    </form>
+
+                    <div class="text-center mt-2">
+
+                        <a
+                            href="{{ route('password.request') }}"
+                            class="text-decoration-none text-muted"
+                            style="font-size: 13px;"
+                        >
+                            Use a different email
                         </a>
 
                     </div>
@@ -163,6 +187,17 @@
         </div>
     </div>
 </div>
+
+<script>
+    document
+        .getElementById('code')
+        .addEventListener('input', function () {
+            this.value =
+                this.value
+                    .replace(/\D/g, '')
+                    .slice(0, 6);
+        });
+</script>
 
 </body>
 </html>

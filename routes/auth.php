@@ -4,11 +4,13 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
-use App\Http\Controllers\Auth\NewPasswordController;
+//use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
-use App\Http\Controllers\Auth\PasswordResetLinkController;
+//use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\TwoFactorAuthenticationController;
 use Illuminate\Support\Facades\Route;   
 
 Route::middleware('guest')->group(function () {
@@ -22,17 +24,67 @@ Route::middleware('guest')->group(function () {
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
-    Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
-        ->name('password.request');
+     /*
+     * Forgot Password
+     */
+    Route::get(
+        'forgot-password',
+        [ForgotPasswordController::class, 'create']
+    )->name('password.request');
 
-    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+    Route::post(
+        'forgot-password',
+        [ForgotPasswordController::class, 'sendCode']
+    )->middleware('throttle:5,1')
         ->name('password.email');
 
-    Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
-        ->name('password.reset');
+    Route::get(
+        'forgot-password/verify',
+        [ForgotPasswordController::class, 'showVerify']
+    )->name('password.verify');
 
-    Route::post('reset-password', [NewPasswordController::class, 'store'])
-        ->name('password.store');
+    Route::post(
+        'forgot-password/verify',
+        [ForgotPasswordController::class, 'verify']
+    )->middleware('throttle:10,1')
+        ->name('password.verify.submit');
+
+    Route::post(
+        'forgot-password/resend',
+        [ForgotPasswordController::class, 'resendCode']
+    )->middleware('throttle:5,1')
+        ->name('password.resend');
+
+    Route::get(
+        'forgot-password/change-password',
+        [ForgotPasswordController::class, 'showRecoveryPassword']
+    )->name('password.recovery');
+
+    Route::put(
+        'forgot-password/change-password',
+        [ForgotPasswordController::class, 'updateRecoveryPassword']
+    )->name('password.recovery.update');
+
+    /*
+     * Two-Factor Authentication
+     */
+    Route::get(
+        'two-factor',
+        [TwoFactorAuthenticationController::class, 'create']
+    )->name('two-factor');
+
+    Route::post(
+        'two-factor',
+        [TwoFactorAuthenticationController::class, 'verify']
+    )->middleware('throttle:10,1')
+        ->name('two-factor.verify');
+
+    Route::post(
+        'two-factor/resend',
+        [TwoFactorAuthenticationController::class, 'resend']
+    )->middleware('throttle:5,1')
+        ->name('two-factor.resend');
+        
 });
 
 Route::middleware('auth')->group(function () {
