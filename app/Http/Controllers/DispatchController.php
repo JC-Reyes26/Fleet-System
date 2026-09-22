@@ -735,6 +735,8 @@ class DispatchController extends Controller
     ) {
         $this->authorize('update', $dispatch);
 
+        $isDriver = $request->user()->hasRole('driver');
+
         if ($dispatch->archived_at) {
             return response()->json([
                 'success' => false,
@@ -746,7 +748,13 @@ class DispatchController extends Controller
         $validator = Validator::make(
             $request->all(),
             [
-                'dispatch_number' => [
+                'dispatch_number' => $isDriver
+                ? [
+                    'nullable',
+                    'string',
+                    'max:50',
+                ]
+                : [
                     'required',
                     'string',
                     'max:50',
@@ -777,7 +785,9 @@ class DispatchController extends Controller
         try {
             $result = DB::transaction(function () use (
                 $validator,
-                $dispatch
+                $dispatch,
+                $isDriver,
+                $request
             ) {
                 $validated = $validator->validated();
 
@@ -848,6 +858,23 @@ class DispatchController extends Controller
                 $newStatus =
                     $validated['trip_status'];
 
+                if ($isDriver) {
+                    $driverTransitions = [
+                        'Assigned' => 'En Route',
+                        'En Route' => 'Arrived',
+                        'Arrived' => 'Completed',
+                    ];
+
+                    if (
+                        !isset($driverTransitions[$currentStatus]) ||
+                        $driverTransitions[$currentStatus] !== $newStatus
+                    ) {
+                        throw new \Exception(
+                            "Driver cannot change dispatch status from {$currentStatus} to {$newStatus}."
+                        );
+                    }
+                }
+
                 $oldAuditValues =
                     $this->getDispatchAuditValues(
                         $dispatch
@@ -891,14 +918,15 @@ class DispatchController extends Controller
                 |--------------------------------------------------------------------------
                 */
                 $dispatch->update([
-                    'dispatch_number' =>
-                        $validated['dispatch_number'],
+                    'dispatch_number' => $isDriver
+                        ? $dispatch->dispatch_number
+                        : $validated['dispatch_number'],
 
-                    'trip_status' =>
-                        $newStatus,
+                    'trip_status' => $newStatus,
 
-                    'remarks' =>
-                        $validated['remarks'] ?? null,
+                    'remarks' => $isDriver
+                        ? $dispatch->remarks
+                        : ($validated['remarks'] ?? null),
                 ]);
 
                 /*
@@ -1551,7 +1579,8 @@ class DispatchController extends Controller
 
             'dispatch_date' =>
                 $dispatch->dispatch_date
-                    ?->format('Y-m-d'),
+                    ? (string) $dispatch->dispatch_date
+                    : null,
 
             'departure_time' =>
                 $dispatch->departure_time,

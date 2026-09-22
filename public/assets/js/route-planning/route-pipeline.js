@@ -26,13 +26,13 @@ let routeLeafletRouteLayer = null;
 let routeLeafletMarkerLayer = null;
 let routeLeafletVehicleMarkerLayer = null;
 let routeLeafletVehicleMarker = null;
+let routeLastTrackedVehicle = null;
 let routeLeafletMapInitialized = false;
 let routeTrackingInterval = null;
 let routeTrackingRunning = false;
 let routeRoutingRequestToken = 0;
 let routeNextOriginalOrder = 0;
-const ROUTE_GEOCODE_CACHE_KEY =
-    "himsFleetRoutePlanningGeocodeCache";
+const ROUTE_GEOCODE_CACHE_KEY = "himsFleetRoutePlanningGeocodeCache";
 
 let routeLastGeocodeRequestAt = 0;
 
@@ -45,7 +45,6 @@ let routePaginationState = {
     page: 1,
     pageSize: ROUTE_ROWS_PER_PAGE,
 };
-
 
 function formatRouteDistance(km) {
     if (km === null || km === undefined || km === "") {
@@ -252,7 +251,6 @@ function rebuildRouteResourceFilters(records) {
         }
     }
 }
-
 
 function setRouteStatisticText(id, value) {
     const element = document.getElementById(id);
@@ -560,8 +558,7 @@ function sortRouteRecords(list) {
             av = priorityRank(a.priority);
             bv = priorityRank(b.priority);
         } else if (field === "estimatedDistance") {
-
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Distance Sort
         |--------------------------------------------------------------------------
@@ -569,8 +566,7 @@ function sortRouteRecords(list) {
             av = a.estimatedDistance == null ? -1 : Number(a.estimatedDistance);
             bv = b.estimatedDistance == null ? -1 : Number(b.estimatedDistance);
         } else if (field === "departureDate") {
-
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Departure Date/Time Sort
         |--------------------------------------------------------------------------
@@ -588,8 +584,7 @@ function sortRouteRecords(list) {
                 bv = 0;
             }
         } else {
-
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Text Sort
         |--------------------------------------------------------------------------
@@ -911,9 +906,7 @@ function routeSleep(ms) {
 function readRouteGeocodeCache() {
     try {
         return JSON.parse(
-            sessionStorage.getItem(
-                ROUTE_GEOCODE_CACHE_KEY
-            ) || "{}"
+            sessionStorage.getItem(ROUTE_GEOCODE_CACHE_KEY) || "{}",
         );
     } catch {
         return {};
@@ -922,10 +915,7 @@ function readRouteGeocodeCache() {
 
 function writeRouteGeocodeCache(cache) {
     try {
-        sessionStorage.setItem(
-            ROUTE_GEOCODE_CACHE_KEY,
-            JSON.stringify(cache)
-        );
+        sessionStorage.setItem(ROUTE_GEOCODE_CACHE_KEY, JSON.stringify(cache));
     } catch {
         // Ignore storage failure.
     }
@@ -937,28 +927,20 @@ function writeRouteGeocodeCache(cache) {
  */
 async function waitForRouteGeocoderSlot() {
     const minimumGap = 1100;
-    const elapsed =
-        Date.now() -
-        routeLastGeocodeRequestAt;
+    const elapsed = Date.now() - routeLastGeocodeRequestAt;
     if (elapsed < minimumGap) {
-        await routeSleep(
-            minimumGap - elapsed
-        );
+        await routeSleep(minimumGap - elapsed);
     }
-    routeLastGeocodeRequestAt =
-        Date.now();
+    routeLastGeocodeRequestAt = Date.now();
 }
 
 async function geocodeRouteLocation(address) {
-    const normalized =
-        String(address || "").trim();
+    const normalized = String(address || "").trim();
     if (!normalized) {
         return null;
     }
-    const cache =
-        readRouteGeocodeCache();
-    const cacheKey =
-        normalized.toLowerCase();
+    const cache = readRouteGeocodeCache();
+    const cacheKey = normalized.toLowerCase();
     if (cache[cacheKey]) {
         return cache[cacheKey];
     }
@@ -968,10 +950,7 @@ async function geocodeRouteLocation(address) {
     | Add Philippines to improve local matching
     |--------------------------------------------------------------------------
     */
-    const query =
-        encodeURIComponent(
-            `${normalized}, Philippines`
-        );
+    const query = encodeURIComponent(`${normalized}, Philippines`);
     const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ph&q=${query}`,
         {
@@ -982,63 +961,35 @@ async function geocodeRouteLocation(address) {
         },
     );
     if (!response.ok) {
-        throw new Error(
-            "Unable to search the route location."
-        );
+        throw new Error("Unable to search the route location.");
     }
-    const results =
-        await response.json();
-    if (
-        !Array.isArray(results) ||
-        results.length === 0
-    ) {
-        throw new Error(
-            `Location not found: ${normalized}`
-        );
+    const results = await response.json();
+    if (!Array.isArray(results) || results.length === 0) {
+        throw new Error(`Location not found: ${normalized}`);
     }
     const result = {
-        lat:
-            Number(results[0].lat),
-        lng:
-            Number(results[0].lon),
-        displayName:
-            results[0].display_name ||
-            normalized,
+        lat: Number(results[0].lat),
+        lng: Number(results[0].lon),
+        displayName: results[0].display_name || normalized,
     };
-    if (
-        !Number.isFinite(result.lat) ||
-        !Number.isFinite(result.lng)
-    ) {
-        throw new Error(
-            `Invalid coordinates returned for: ${normalized}`
-        );
+    if (!Number.isFinite(result.lat) || !Number.isFinite(result.lng)) {
+        throw new Error(`Invalid coordinates returned for: ${normalized}`);
     }
-    cache[cacheKey] =
-        result;
-    writeRouteGeocodeCache(
-        cache
-    );
+    cache[cacheKey] = result;
+    writeRouteGeocodeCache(cache);
     return result;
 }
 
 async function initRouteLeafletMap() {
-    if (
-        routeLeafletMapInitialized &&
-        routeLeafletMap
-    ) {
+    if (routeLeafletMapInitialized && routeLeafletMap) {
         return routeLeafletMap;
     }
-    const mapElement =
-        document.getElementById(
-            "routeLeafletMap"
-        );
+    const mapElement = document.getElementById("routeLeafletMap");
     if (!mapElement) {
         return null;
     }
     if (typeof L === "undefined") {
-        console.warn(
-            "Leaflet is not available."
-        );
+        console.warn("Leaflet is not available.");
         return null;
     }
     /*
@@ -1046,60 +997,33 @@ async function initRouteLeafletMap() {
     | Tala Hospital / DJNRMHS
     |--------------------------------------------------------------------------
     */
-    const hospitalLocation = [
-        14.7707,
-        121.0659,
-    ];
-    routeLeafletMap =
-        L.map(
-            mapElement,
-            {
-                zoomControl: true,
-                scrollWheelZoom: false,
-            }
-        ).setView(
-            hospitalLocation,
-            13
-        );
+    const hospitalLocation = [14.7707, 121.0659];
+    routeLeafletMap = L.map(mapElement, {
+        zoomControl: true,
+        scrollWheelZoom: false,
+    }).setView(hospitalLocation, 13);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
         attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(routeLeafletMap);
+    routeLeafletRouteLayer = L.layerGroup().addTo(routeLeafletMap);
     routeLeafletMarkerLayer = L.layerGroup().addTo(routeLeafletMap);
     routeLeafletVehicleMarkerLayer = L.layerGroup().addTo(routeLeafletMap);
-    routeLeafletMapInitialized =
-        true;
-    window.setTimeout(
-        () => {
-            routeLeafletMap
-                ?.invalidateSize();
-        },
-        150
-    );
+    routeLeafletMapInitialized = true;
+    window.setTimeout(() => {
+        routeLeafletMap?.invalidateSize();
+    }, 150);
     return routeLeafletMap;
 }
 
 function clearRouteLeafletMap() {
     if (routeLeafletRouteLayer) {
-        try {
-            routeLeafletMap
-                ?.removeLayer(
-                    routeLeafletRouteLayer
-                );
-        } catch (error) {
-            console.warn(
-                "Unable to remove route layer:",
-                error
-            );
-        }
-
-        routeLeafletRouteLayer =
-            null;
+        routeLeafletRouteLayer.clearLayers();
     }
+
     if (routeLeafletMarkerLayer) {
-        routeLeafletMarkerLayer
-            .clearLayers();
+        routeLeafletMarkerLayer.clearLayers();
     }
 }
 
@@ -1159,14 +1083,89 @@ function createLiveVehicleIcon(heading = 0) {
     });
 }
 
-async function loadRoutePlanningVehicleLocation(record) {
+function renderRouteVehicleMarker(markerLayer, currentMarker, trackedVehicle) {
+    if (!markerLayer) {
+        return currentMarker || null;
+    }
     if (
-        !routeLeafletMap ||
-        !routeLeafletVehicleMarkerLayer ||
-        !record?.vehicleId
+        !trackedVehicle ||
+        !trackedVehicle.has_location ||
+        !trackedVehicle.location
     ) {
+        if (currentMarker) {
+            currentMarker.remove();
+        }
+        return null;
+    }
+    const location = trackedVehicle.location;
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return currentMarker || null;
+    }
+    const ageSeconds = Number(location.age_seconds);
+    if (Number.isFinite(ageSeconds) && ageSeconds > 120) {
+        if (currentMarker) {
+            currentMarker.remove();
+        }
+
+        return null;
+    }
+    const heading = Number(location.heading);
+    const driverName = String(location.driver || "").trim() || "Unassigned";
+    const speed =
+        location.speed !== null && location.speed !== undefined
+            ? `${Number(location.speed).toFixed(1)} km/h`
+            : "—";
+    const popupHtml = `
+        <strong>
+            ${escapeRouteHtml(trackedVehicle.vehicle_label || "Vehicle")}
+        </strong>
+        <br>
+        <strong>Plate:</strong>
+        ${escapeRouteHtml(trackedVehicle.plate_number || "—")}
+        <br>
+        <strong>Driver:</strong>
+        ${escapeRouteHtml(driverName)}
+        <br>
+        <strong>Status:</strong>
+        ${escapeRouteHtml(trackedVehicle.vehicle_status || "—")}
+        <br>
+        <strong>Speed:</strong>
+        ${escapeRouteHtml(speed)}
+        <br>
+        <strong>GPS Age:</strong>
+        ${
+            Number.isFinite(ageSeconds)
+                ? `${Math.max(0, Math.floor(ageSeconds))}s ago`
+                : "Unknown"
+        }
+    `;
+    const icon = createLiveVehicleIcon(Number.isFinite(heading) ? heading : 0);
+    if (!currentMarker) {
+        return L.marker([latitude, longitude], {
+            icon,
+            zIndexOffset: 1000,
+        })
+            .addTo(markerLayer)
+            .bindPopup(popupHtml);
+    }
+    currentMarker.setLatLng([latitude, longitude]);
+    currentMarker.setIcon(icon);
+    currentMarker.setPopupContent(popupHtml);
+    return currentMarker;
+}
+
+async function loadRoutePlanningVehicleLocation(record) {
+    if (!record?.vehicleId) {
+        routeLastTrackedVehicle = null;
+        window.updateFullRouteMapVehicleLocation?.(null, record);
         return;
     }
+    if (!routeLeafletVehicleMarkerLayer) {
+        return;
+    }
+
     try {
         const response = await fetch("/tracking/vehicles", {
             method: "GET",
@@ -1184,145 +1183,80 @@ async function loadRoutePlanningVehicleLocation(record) {
             );
         }
         const vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
-        const trackedVehicle = vehicles.find(
-            (vehicle) =>
-                String(vehicle.vehicle_id) === String(record.vehicleId),
+        const trackedVehicle =
+            vehicles.find(
+                (vehicle) =>
+                    String(vehicle.vehicle_id) === String(record.vehicleId),
+            ) || null;
+
+        routeLastTrackedVehicle = trackedVehicle;
+        routeLeafletVehicleMarker = renderRouteVehicleMarker(
+            routeLeafletVehicleMarkerLayer,
+            routeLeafletVehicleMarker,
+            trackedVehicle,
         );
-
-        /*
-         * No GPS record yet.
-         */
-        if (
-            !trackedVehicle ||
-            !trackedVehicle.has_location ||
-            !trackedVehicle.location
-        ) {
-            if (routeLeafletVehicleMarker) {
-                routeLeafletVehicleMarker.remove();
-                routeLeafletVehicleMarker = null;
-            }
-
-            return;
-        }
-
-        const location = trackedVehicle.location;
-        const latitude = Number(location.latitude);
-        const longitude = Number(location.longitude);
-
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-            return;
-        }
-
-        /*
-         * Ignore very old GPS readings.
-         *
-         * This prevents the map from showing a vehicle
-         * as "live" when the driver has gone offline.
-         */
-        const ageSeconds = Number(location.age_seconds);
-
-        if (Number.isFinite(ageSeconds) && ageSeconds > 120) {
-            if (routeLeafletVehicleMarker) {
-                routeLeafletVehicleMarker.remove();
-                routeLeafletVehicleMarker = null;
-            }
-
-            return;
-        }
-
-        const heading = Number(location.heading);
-        const driverName = String(location.driver || "").trim() || "Unassigned";
-        const speed =
-            location.speed !== null && location.speed !== undefined
-                ? `${Number(location.speed).toFixed(1)} km/h`
-                : "—";
-        const popupHtml = `
-            <strong>
-                ${escapeRouteHtml(trackedVehicle.vehicle_label || "Vehicle")}
-            </strong>
-            <br>
-            <strong>Plate:</strong>
-            ${escapeRouteHtml(trackedVehicle.plate_number || "—")}
-            <br>
-            <strong>Driver:</strong>
-            ${escapeRouteHtml(driverName)}
-            <br>
-            <strong>Status:</strong>
-            ${escapeRouteHtml(trackedVehicle.vehicle_status || "—")}
-            <br>
-            <strong>Speed:</strong>
-            ${escapeRouteHtml(speed)}
-            <br>
-            <strong>GPS Age:</strong>
-            ${
-                Number.isFinite(ageSeconds)
-                    ? `${Math.max(0, Math.floor(ageSeconds))}s ago`
-                    : "Unknown"
-            }
-        `;
-
-        if (!routeLeafletVehicleMarker) {
-            routeLeafletVehicleMarker = L.marker([latitude, longitude], {
-                icon: createLiveVehicleIcon(
-                    Number.isFinite(heading) ? heading : 0,
-                ),
-                zIndexOffset: 1000,
-            })
-                .addTo(routeLeafletVehicleMarkerLayer)
-                .bindPopup(popupHtml);
-        } else {
-            routeLeafletVehicleMarker.setLatLng([latitude, longitude]);
-            routeLeafletVehicleMarker.setIcon(
-                createLiveVehicleIcon(Number.isFinite(heading) ? heading : 0),
-            );
-
-            routeLeafletVehicleMarker.setPopupContent(popupHtml);
-        }
+        window.updateFullRouteMapVehicleLocation?.(trackedVehicle, record);
     } catch (error) {
         console.error("Route Planning vehicle tracking failed:", error);
     }
 }
 
-function addRouteLeafletMarker(
+function addRouteMarkerToLayer(
+    markerLayer,
+    type,
     coordinate,
-    title,
-    description,
-    type = "stop",
-    label = "",
+    label,
+    popupHtml = "",
 ) {
-    if (!routeLeafletMarkerLayer || !coordinate) {
-        return null;
-    }
-    const marker = L.marker([coordinate.lat, coordinate.lng], {
+    if (!markerLayer) return null;
+    if (!hasValidRouteCoordinate(coordinate)) return null;
+
+    const marker = L.marker(coordinate, {
         icon: createRouteMarkerIcon(type, label),
-    }).addTo(routeLeafletMarkerLayer).bindPopup(`
-            <strong>${escapeRouteHtml(title)}</strong><br>
-            ${escapeRouteHtml(description || "")}
-        `);
+    });
+
+    if (popupHtml) {
+        marker.bindPopup(popupHtml);
+    }
+
+    marker.addTo(markerLayer);
 
     return marker;
 }
 
-function hasValidRouteCoordinate(lat, lng) {
+function hasValidRouteCoordinate(coordinateOrLat, longitude = null) {
+    let latitude = coordinateOrLat;
+    let lng = longitude;
+
+    if (Array.isArray(coordinateOrLat)) {
+        latitude = coordinateOrLat[0];
+        lng = coordinateOrLat[1];
+    } else if (coordinateOrLat && typeof coordinateOrLat === "object") {
+        latitude = coordinateOrLat.lat;
+        lng = coordinateOrLat.lng;
+    }
+
     if (
-        lat === null ||
-        lat === undefined ||
-        lat === "" ||
+        latitude === null ||
+        latitude === undefined ||
+        latitude === "" ||
         lng === null ||
         lng === undefined ||
         lng === ""
     ) {
         return false;
     }
-    const latitude = Number(lat);
-    const longitude = Number(lng);
+
+    const numericLatitude = Number(latitude);
+    const numericLongitude = Number(lng);
+
     return (
-        Number.isFinite(latitude) &&
-        Number.isFinite(longitude) &&
-        latitude >= -90 &&
-        latitude <= 90 &&
-        longitude >= -180 &&
-        longitude <= 180
+        Number.isFinite(numericLatitude) &&
+        Number.isFinite(numericLongitude) &&
+        numericLatitude >= -90 &&
+        numericLatitude <= 90 &&
+        numericLongitude >= -180 &&
+        numericLongitude <= 180
     );
 }
 
@@ -1509,24 +1443,17 @@ function getOptimizedRouteStops(originalStops, waypoints) {
  * Coordinates are already geocoded by
  * geocodeRouteRecord().
  */
-async function requestTomTomRoute(
-    routeCoordinates,
-    record
-) {
+async function requestTomTomRoute(routeCoordinates, record) {
     const coordinates = [
         routeCoordinates.origin,
-        ...routeCoordinates.stops.map(
-            (stop) => stop.coordinate
-        ),
+        ...routeCoordinates.stops.map((stop) => stop.coordinate),
         routeCoordinates.destination,
     ];
     const payload = {
-        coordinates: coordinates.map(
-            (point) => ({
-                latitude: point.lat,
-                longitude: point.lng,
-            })
-        ),
+        coordinates: coordinates.map((point) => ({
+            latitude: point.lat,
+            longitude: point.lng,
+        })),
     };
     /*
     |--------------------------------------------------------------------------
@@ -1536,28 +1463,20 @@ async function requestTomTomRoute(
     | TomTom supports departAt for time-aware routing.
     |
     */
-    if (
-        record?.departureDate &&
-        record?.departureTime
-    ) {
-        payload.depart_at =
-            `${record.departureDate}T${record.departureTime}:00`;
+    if (record?.departureDate && record?.departureTime) {
+        payload.depart_at = `${record.departureDate}T${record.departureTime}:00`;
     }
-    const data = await routeApiRequest(
-        `${ROUTE_API_BASE}/traffic-route`,
-        {
-            method: "POST",
-            body: JSON.stringify(payload),
-        }
-    );
+    const data = await routeApiRequest(`${ROUTE_API_BASE}/traffic-route`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
     if (
         !data.success ||
         !Array.isArray(data.points) ||
         data.points.length < 2
     ) {
         throw new Error(
-            data.message ||
-            "TomTom did not return usable route geometry."
+            data.message || "TomTom did not return usable route geometry.",
         );
     }
     /*
@@ -1566,19 +1485,10 @@ async function requestTomTomRoute(
     |--------------------------------------------------------------------------
     */
     const latLngs = data.points
-        .map((point) => [
-            Number(point.latitude),
-            Number(point.longitude),
-        ])
-        .filter(
-            ([lat, lng]) =>
-                Number.isFinite(lat) &&
-                Number.isFinite(lng)
-        );
+        .map((point) => [Number(point.latitude), Number(point.longitude)])
+        .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
     if (latLngs.length < 2) {
-        throw new Error(
-            "TomTom returned invalid route geometry."
-        );
+        throw new Error("TomTom returned invalid route geometry.");
     }
     /*
     |--------------------------------------------------------------------------
@@ -1588,53 +1498,35 @@ async function requestTomTomRoute(
     const geometry = {
         type: "LineString",
         coordinates: data.points
-            .map((point) => [
-                Number(point.longitude),
-                Number(point.latitude),
-            ])
+            .map((point) => [Number(point.longitude), Number(point.latitude)])
             .filter(
-                ([lng, lat]) =>
-                    Number.isFinite(lng) &&
-                    Number.isFinite(lat)
+                ([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat),
             ),
     };
     return {
         provider: data.provider || "TomTom",
         distanceKm:
-            data.distance_km !== null &&
-            data.distance_km !== undefined
+            data.distance_km !== null && data.distance_km !== undefined
                 ? Number(data.distance_km)
                 : null,
         durationMinutes:
             data.travel_time_minutes !== null &&
             data.travel_time_minutes !== undefined
-                ? Math.ceil(
-                    Number(
-                        data.travel_time_minutes
-                    )
-                )
+                ? Math.ceil(Number(data.travel_time_minutes))
                 : null,
         trafficDelayMinutes:
             data.traffic_delay_minutes !== null &&
             data.traffic_delay_minutes !== undefined
-                ? Number(
-                    data.traffic_delay_minutes
-                )
+                ? Number(data.traffic_delay_minutes)
                 : 0,
-        noTrafficTravelTimeSeconds:
-            data.no_traffic_travel_time_seconds,
+        noTrafficTravelTimeSeconds: data.no_traffic_travel_time_seconds,
         historicTrafficTravelTimeSeconds:
             data.historic_traffic_travel_time_seconds,
-        liveTrafficTravelTimeSeconds:
-            data.live_traffic_travel_time_seconds,
-        trafficLengthMeters:
-            data.traffic_length_meters,
-        optimizedWaypoints:
-            Array.isArray(
-                data.optimized_waypoints
-            )
-                ? data.optimized_waypoints
-                : [],
+        liveTrafficTravelTimeSeconds: data.live_traffic_travel_time_seconds,
+        trafficLengthMeters: data.traffic_length_meters,
+        optimizedWaypoints: Array.isArray(data.optimized_waypoints)
+            ? data.optimized_waypoints
+            : [],
         points: latLngs,
         geometry,
         raw: data,
@@ -1648,103 +1540,141 @@ async function requestTomTomRoute(
  * OSRM coordinate format:
  * longitude,latitude
  */
-async function requestOsrmRoute(
-    routeCoordinates
-) {
+async function requestOsrmRoute(routeCoordinates) {
     const coordinates = [
         routeCoordinates.origin,
-        ...routeCoordinates.stops.map(
-            (stop) =>
-                stop.coordinate
-        ),
+        ...routeCoordinates.stops.map((stop) => stop.coordinate),
         routeCoordinates.destination,
     ];
-    const coordinateString =
-        coordinates
-            .map(
-                (point) =>
-                    `${point.lng},${point.lat}`
-            )
-            .join(";");
-   const url =
-       `https://router.project-osrm.org/route/v1/driving/${coordinateString}` +
-       "?overview=full&geometries=geojson&steps=false";
+    const coordinateString = coordinates
+        .map((point) => `${point.lng},${point.lat}`)
+        .join(";");
+    const url =
+        `https://router.project-osrm.org/route/v1/driving/${coordinateString}` +
+        "?overview=full&geometries=geojson&steps=false";
 
-    const response =
-        await fetch(
-            url,
-            {
-                headers: {
-                    Accept:
-                        "application/json",
-                },
-            }
-        );
+    const response = await fetch(url, {
+        headers: {
+            Accept: "application/json",
+        },
+    });
     if (!response.ok) {
-        throw new Error(
-            "Unable to calculate the driving route."
-        );
+        throw new Error("Unable to calculate the driving route.");
     }
-    const data =
-        await response.json();
+    const data = await response.json();
     if (
         data?.code !== "Ok" ||
-        !Array.isArray(
-            data.routes
-        ) ||
+        !Array.isArray(data.routes) ||
         data.routes.length === 0
     ) {
         throw new Error(
-            "No driving route was found between the selected locations."
+            "No driving route was found between the selected locations.",
         );
     }
     return data.routes[0];
 }
+
+async function calculateTrafficRouteFromCoordinates(
+    routeCoordinates,
+    record = {},
+) {
+    if (!routeCoordinates?.origin || !routeCoordinates?.destination) {
+        throw new Error(
+            "Valid origin and destination coordinates are required.",
+        );
+    }
+    try {
+        const trafficRoute = await requestTomTomRoute(routeCoordinates, record);
+
+        return {
+            ...trafficRoute,
+            routeCoordinates,
+            originalRouteCoordinates: routeCoordinates,
+            fallback: false,
+        };
+    } catch (tomTomError) {
+        console.warn(
+            "[Route Pipeline] TomTom return route failed. Using OSRM fallback.",
+            tomTomError,
+        );
+        const osrmRoute = await requestOsrmRoute(routeCoordinates);
+        return {
+            provider: "OSRM",
+            distanceKm: Number(osrmRoute.distanceMeters || 0) / 1000,
+            durationMinutes: Number(osrmRoute.durationSeconds || 0) / 60,
+            trafficDelayMinutes: 0,
+            optimizedWaypoints: [],
+            points: osrmRoute.points || [],
+            geometry: osrmRoute.geometry || null,
+            route: osrmRoute,
+            routeCoordinates,
+            originalRouteCoordinates: routeCoordinates,
+            fallback: true,
+        };
+    }
+}
 /**
  * Draw an OSRM GeoJSON route onto Leaflet.
  */
-function drawRouteOnLeaflet(route, routeCoordinates, record) {
-    if (!routeLeafletMap || !route?.geometry) {
-        return;
+function drawRouteOnMapTarget({
+    map,
+    routeLayer,
+    markerLayer,
+    route,
+    routeCoordinates,
+    record,
+}) {
+    if (!map || !routeLayer || !markerLayer || !route?.geometry) {
+        return null;
     }
-
-    clearRouteLeafletMap();
-    routeLeafletRouteLayer = L.geoJSON(route.geometry, {
+    routeLayer.clearLayers();
+    markerLayer.clearLayers();
+    const geoJsonRoute = L.geoJSON(route.geometry, {
         style: {
             weight: 6,
             opacity: 0.85,
         },
-    }).addTo(routeLeafletMap);
-    addRouteLeafletMarker(
-        routeCoordinates.origin,
+    }).addTo(routeLayer);
+    addRouteMarkerToLayer(
+        markerLayer,
+        "origin",
+        [routeCoordinates.origin.lat, routeCoordinates.origin.lng],
         "Origin",
-        record.origin,
-        "origin"
+        `
+            <strong>Origin</strong><br>
+            ${escapeRouteHtml(record.origin || "—")}
+        `,
     );
     routeCoordinates.stops.forEach((stop, index) => {
-        addRouteLeafletMarker(
-            stop.coordinate,
-            `Stop ${index + 1}`,
-            stop.location,
+        const stopNumber = index + 1;
+        addRouteMarkerToLayer(
+            markerLayer,
             "stop",
-            String(index + 1)
+            [stop.coordinate.lat, stop.coordinate.lng],
+            String(stopNumber),
+            `
+            <strong>Stop ${stopNumber}</strong><br>
+            ${escapeRouteHtml(stop.location || "—")}
+        `,
         );
     });
-    addRouteLeafletMarker(
-        routeCoordinates.destination,
+    addRouteMarkerToLayer(
+        markerLayer,
+        "destination",
+        [routeCoordinates.destination.lat, routeCoordinates.destination.lng],
         "Destination",
-        record.destination,
-        "destination"
+        `
+            <strong>Destination</strong><br>
+            ${escapeRouteHtml(record.destination || "—")}
+        `,
     );
-    const bounds = routeLeafletRouteLayer.getBounds();
-    if (bounds && bounds.isValid()) {
-        routeLeafletMap.fitBounds(bounds, {
+    const bounds = geoJsonRoute.getBounds();
+    if (bounds?.isValid?.()) {
+        map.fitBounds(bounds, {
             padding: [40, 40],
         });
     }
-    window.setTimeout(() => {
-        routeLeafletMap?.invalidateSize();
-    }, 100);
+    return geoJsonRoute;
 }
 /**
  * Main routing function.
@@ -1756,27 +1686,15 @@ function drawRouteOnLeaflet(route, routeCoordinates, record) {
  * options.draw = false
  * can calculate a route without drawing it.
  */
-async function calculateRouteWithOsrm(
-    record,
-    options = {}
-) {
-    const map =
-        await initRouteLeafletMap();
-    if (
-        options.draw !== false &&
-        !map
-    ) {
+async function calculateRouteWithOsrm(record, options = {}) {
+    const map = await initRouteLeafletMap();
+    if (options.draw !== false && !map) {
         return null;
     }
-    if (
-        !record ||
-        !record.origin ||
-        !record.destination
-    ) {
+    if (!record || !record.origin || !record.destination) {
         return null;
     }
-    const requestToken =
-        ++routeRoutingRequestToken;
+    const requestToken = ++routeRoutingRequestToken;
     try {
         const routeCoordinates = await geocodeRouteRecord(record);
         if (requestToken !== routeRoutingRequestToken) {
@@ -1984,17 +1902,45 @@ async function calculateRouteWithTraffic(record, options = {}) {
     }
 }
 
+function drawRouteOnLeaflet(route, routeCoordinates, record) {
+    if (!routeLeafletMap) {
+        return;
+    }
+
+    if (!routeLeafletRouteLayer) {
+        routeLeafletRouteLayer = L.layerGroup().addTo(routeLeafletMap);
+    }
+
+    drawRouteOnMapTarget({
+        map: routeLeafletMap,
+        routeLayer: routeLeafletRouteLayer,
+        markerLayer: routeLeafletMarkerLayer,
+        route,
+        routeCoordinates,
+        record,
+    });
+
+    window.setTimeout(() => {
+        routeLeafletMap?.invalidateSize();
+    }, 100);
+}
+
 /* ==========================================
    MAP PANEL
 ========================================== */
 let currentRoutePlanningMapRecord = null;
+let currentRoutePlanningMapRoute = null;
 
 function getCurrentRoutePlanningMapRecord() {
     return currentRoutePlanningMapRecord;
 }
+function getCurrentRoutePlanningMapRoute() {
+    return currentRoutePlanningMapRoute;
+}
 
 async function updateRouteMapPanel(record) {
     currentRoutePlanningMapRecord = record || null;
+    currentRoutePlanningMapRoute = null;
 
     const distanceEl = document.getElementById("mapDistanceLabel");
     const etaEl = document.getElementById("mapEtaLabel");
@@ -2050,12 +1996,14 @@ async function updateRouteMapPanel(record) {
     |--------------------------------------------------------------------------
     */
     try {
-        await calculateRouteWithTraffic(record, {
+        const routeResult = await calculateRouteWithTraffic(record, {
             draw: true,
             silent: true,
         });
+
+        currentRoutePlanningMapRoute = routeResult || null;
     } catch (error) {
-        console.warn("Route preview unavailable:", error?.message || error);
+        console.error("Unable to calculate Route Planning map route:", error);
     }
 
     void loadRoutePlanningVehicleLocation(record);
@@ -2518,3 +2466,16 @@ function initRoutePlanningPipeline() {
             });
         });
 }
+
+window.getCurrentRoutePlanningMapRecord = getCurrentRoutePlanningMapRecord;
+window.getCurrentRoutePlanningMapRoute = getCurrentRoutePlanningMapRoute;
+window.getLastRoutePlanningTrackedVehicle = function () {
+    return routeLastTrackedVehicle;
+};
+window.addRouteMarkerToLayer = addRouteMarkerToLayer;
+window.createRouteMarkerIcon = createRouteMarkerIcon;
+window.drawRouteOnMapTarget = drawRouteOnMapTarget;
+window.renderRouteVehicleMarker = renderRouteVehicleMarker;
+window.calculateTrafficRouteFromCoordinates =
+    calculateTrafficRouteFromCoordinates;
+

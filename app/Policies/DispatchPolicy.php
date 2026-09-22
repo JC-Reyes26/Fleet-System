@@ -74,10 +74,35 @@ class DispatchPolicy
         User $user,
         Dispatch $dispatch
     ): bool {
-        return $user->hasRole(
+
+        /*
+        |--------------------------------------------------------------------------
+        | Fleet Manager / Dispatcher
+        |--------------------------------------------------------------------------
+        */
+        if ($user->hasRole(
             'fleet_manager',
             'dispatcher'
-        );
+        )) {
+            return true;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Driver - assigned dispatch only
+        |--------------------------------------------------------------------------
+        */
+        if ($user->hasRole('driver')) {
+            $driverId =
+                $user->driverProfile?->id;
+
+            return
+                $driverId !== null &&
+                (int) $dispatch->reservation?->driver_id ===
+                    (int) $driverId;
+        }
+
+        return false;
     }
 
     public function archive(

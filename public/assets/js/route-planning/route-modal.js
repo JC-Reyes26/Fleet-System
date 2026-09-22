@@ -129,6 +129,37 @@ function canDuplicateRoute() {
 let routeLastOptimization = null;
 let routePendingOptimization = null;
 
+const ROUTE_STATUS_TRANSITIONS = {
+    Draft: ["Planned", "Archived"],
+    Planned: ["Draft", "Ready For Dispatch", "Archived"],
+    "Ready For Dispatch": ["Archived"],
+    Completed: ["Archived"],
+    Archived: [],
+};
+
+function applyRouteStatusTransitions(selectElement, currentStatus) {
+    if (!selectElement) {
+        return;
+    }
+    const normalizedStatus = String(currentStatus || "").trim();
+    const allowedTransitions = ROUTE_STATUS_TRANSITIONS[normalizedStatus] || [];
+    Array.from(selectElement.options).forEach((option) => {
+        const optionStatus = String(option.value || "").trim();
+        // Current status must always remain selectable.
+        if (optionStatus === normalizedStatus) {
+            option.disabled = false;
+            option.hidden = false;
+            return;
+        }
+        // Keep the option visible, but disable invalid transitions.
+        option.disabled = !allowedTransitions.includes(optionStatus);
+        option.hidden = false;
+    });
+
+    // Keep the current status selected when the modal opens.
+    selectElement.value = normalizedStatus;
+}
+
 /* ==========================================
    SELECT HELPERS 
 ========================================== */
@@ -932,7 +963,9 @@ function applyOptimizationToForm(result) {
     }
 }
 
-function applyPendingRouteOptimization({ showToast = true } = {}) {
+function applyPendingRouteOptimization({
+    showToast: shouldShowToast = true,
+} = {}) {
     if (!routePendingOptimization) {
         return false;
     }
@@ -1022,8 +1055,8 @@ function applyPendingRouteOptimization({ showToast = true } = {}) {
             </p>
         `;
     }
-    if (showToast && typeof showToast === "function") {
-        showToast("Route optimization applied.", "success");
+    if (shouldShowToast && typeof window.showToast === "function") {
+        window.showToast("Route optimization applied.", "success");
     }
     return true;
 }
@@ -1288,9 +1321,9 @@ async function openRouteFormModal(mode, record = null) {
         document.getElementById("routeDepartureTime").value =
             fullRoute.departureTime || "";
         if (statusSelect) {
+            const currentStatus = fullRoute.status || "Draft";
             statusSelect.disabled = false;
-
-            statusSelect.value = fullRoute.status || "Draft";
+            applyRouteStatusTransitions(statusSelect, currentStatus);
         }
         document.getElementById("routeNotes").value = fullRoute.notes || "";
 
@@ -2375,6 +2408,36 @@ function initRoutePlanningModals() {
             closeDeleteRouteModal();
         }*/
     });
+    document
+        .getElementById("routeStatus")
+        ?.addEventListener("change", (event) => {
+            if (routeFormMode !== "edit") {
+                return;
+            }
+            const select = event.currentTarget;
+            const currentRecord = getRouteRecordById(routeEditingId);
+            if (!currentRecord) {
+                return;
+            }
+            const currentStatus = String(
+                currentRecord.status || "Draft",
+            ).trim();
+            const allowedTransitions =
+                ROUTE_STATUS_TRANSITIONS[currentStatus] || [];
+            const selectedStatus = String(select.value || "").trim();
+            if (
+                selectedStatus !== currentStatus &&
+                !allowedTransitions.includes(selectedStatus)
+            ) {
+                select.value = currentStatus;
+                if (typeof showToast === "function") {
+                    showToast(
+                        `Route status cannot transition from "${currentStatus}" to "${selectedStatus}".`,
+                        "warning",
+                    );
+                }
+            }
+        });
 }
 
 async function initRoutePlanningPage() {

@@ -419,3 +419,867 @@
     font-size: 17px;
     line-height: 1;
 }
+
+
+/* ==========================================
+   FULL ROUTE MAP
+========================================== */
+.full-route-map-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal) + 10);
+
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100dvh;
+
+    background: var(--color-bg);
+    color: var(--color-text);
+
+    font-family: var(--font-family);
+
+    overflow: hidden;
+}
+
+.full-route-map-overlay[hidden] {
+    display: none;
+}
+
+.full-route-map-container {
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+
+    min-height: 0;
+}
+
+
+/* ==========================================================
+   HEADER
+   ========================================================== */
+
+.full-route-map-header {
+    position: relative;
+    z-index: 10;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    min-height: var(--navbar-height);
+    padding: var(--space-3) var(--space-4);
+
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+
+    box-shadow: var(--shadow-sm);
+
+    flex-shrink: 0;
+}
+
+.full-route-map-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+
+    min-width: 0;
+}
+
+
+/* ==========================================================
+   BACK BUTTON
+   ========================================================== */
+
+.full-map-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+
+    min-height: var(--control-height-sm);
+    padding: 0 var(--space-3);
+
+    background: var(--btn-outline-bg);
+    color: var(--btn-outline-text);
+
+    border: 1px solid var(--btn-outline-border);
+    border-radius: var(--radius-button);
+
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+
+    cursor: pointer;
+
+    transition:
+        background var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        transform var(--transition-fast);
+}
+
+.full-map-back-btn i {
+    font-size: 20px;
+}
+
+.full-map-back-btn:hover {
+    background: var(--color-surface-hover);
+    box-shadow: var(--shadow-sm);
+}
+
+.full-map-back-btn:active {
+    transform: translateY(1px);
+}
+
+.full-map-back-btn:focus-visible {
+    outline: var(--focus-outline-width) solid var(--color-primary);
+    outline-offset: var(--focus-outline-offset);
+}
+
+
+/* ==========================================================
+   TITLE
+   ========================================================== */
+
+.full-route-map-title {
+    min-width: 0;
+}
+
+.full-route-map-title h2 {
+    margin: 0;
+
+    color: var(--color-text);
+
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-semibold);
+    line-height: var(--line-height-tight);
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.full-route-map-title p {
+    margin: var(--space-1) 0 0;
+
+    color: var(--color-text-muted);
+
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-regular);
+    line-height: var(--line-height-tight);
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* ==========================================================
+   MAIN CONTENT
+   ========================================================== */
+
+.full-route-map-content {
+    position: relative;
+
+    flex: 1;
+    min-height: 0;
+
+    overflow: hidden;
+}
+
+
+/* ==========================================================
+   LEAFLET MAP
+   ========================================================== */
+
+.full-route-leaflet-map {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--color-surface-secondary);
+}
+
+.full-route-leaflet-map .leaflet-control-container {
+    font-family: var(--font-family);
+}
+
+
+/* ==========================================================
+   MAP INFORMATION CARD
+   ========================================================== */
+.full-route-info-card {
+    position: absolute;
+
+    top: var(--space-3);
+    right: var(--space-5);
+    left: auto;
+
+    z-index: 500;
+
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    width: min(520px, calc(100% - (var(--space-5) * 2)));
+
+    background: var(--color-surface);
+
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+
+    box-shadow: var(--shadow-md);
+
+    overflow: hidden;
+}
+
+.full-route-info-item {
+    min-width: 0;
+
+    padding:
+        var(--space-3)
+        var(--space-4);
+
+    border-right: 1px solid var(--color-border);
+}
+
+.full-route-info-item:last-child {
+    border-right: 0;
+}
+
+.full-route-info-item span {
+    display: block;
+
+    margin-bottom: var(--space-1);
+
+    color: var(--color-text-muted);
+
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-medium);
+
+    line-height: var(--line-height-tight);
+}
+
+.full-route-info-item strong {
+    display: block;
+
+    color: var(--color-text);
+
+    font-size: var(--font-size-md);
+    font-weight: var(--font-semibold);
+
+    line-height: var(--line-height-tight);
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* ==========================================================
+   DRIVER CONTROLS
+   ========================================================== */
+
+.full-route-driver-controls {
+    position: absolute;
+    right: var(--space-4);
+    bottom: var(--space-4);
+    left: var(--space-4);
+    z-index: 500;
+
+    display: flex;
+    gap: var(--space-3);
+
+    pointer-events: none;
+}
+
+.full-route-driver-controls[hidden] {
+    display: none;
+}
+
+.full-route-driver-controls > button {
+    pointer-events: auto;
+}
+
+
+/* ==========================================================
+   DRIVER STATUS BUTTON
+   ========================================================== */
+
+.driver-route-status-btn,
+.driver-return-hospital-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+
+    min-height: 52px;
+
+    padding: 0 var(--space-5);
+
+    border-radius: var(--radius-button);
+
+    font-family: var(--font-family);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-semibold);
+
+    cursor: pointer;
+
+    transition:
+        background var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        transform var(--transition-fast);
+}
+
+.driver-route-status-btn i,
+.driver-return-hospital-btn i {
+    font-size: 20px;
+}
+
+.driver-route-status-btn {
+    flex: 1;
+
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+
+    border: 1px solid var(--color-primary);
+
+    box-shadow: var(--shadow-primary);
+}
+
+.driver-route-status-btn:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-text-inverse);
+
+    box-shadow: var(--shadow-primary);
+}
+
+.driver-route-status-btn:active,
+.driver-return-hospital-btn:active {
+    transform: translateY(1px);
+}
+
+.driver-route-status-btn:focus-visible,
+.driver-return-hospital-btn:focus-visible {
+    outline: var(--focus-outline-width) solid var(--color-primary);
+    outline-offset: var(--focus-outline-offset);
+}
+
+.driver-route-status-btn:disabled {
+    background: var(--color-surface-secondary);
+    color: var(--color-text-muted);
+
+    border-color: var(--color-border);
+
+    box-shadow: none;
+
+    cursor: not-allowed;
+}
+
+
+/* ==========================================================
+   RETURN TO HOSPITAL
+   ========================================================== */
+
+.driver-return-hospital-btn {
+    flex: 0 0 auto;
+
+    background: var(--color-surface);
+    color: var(--color-text);
+
+    border: 1px solid var(--color-border-strong);
+
+    box-shadow: var(--shadow-sm);
+}
+
+.driver-return-hospital-btn:hover {
+    background: var(--color-surface-hover);
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-md);
+}
+
+
+/* ==========================================================
+   STATUS STATES
+   ========================================================== */
+
+.full-route-map-overlay[data-trip-status="Assigned"]
+    .driver-route-status-btn {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+.full-route-map-overlay[data-trip-status="En Route"]
+    .driver-route-status-btn {
+    background: var(--color-info);
+    border-color: var(--color-info);
+    color: var(--color-text-inverse);
+}
+
+.full-route-map-overlay[data-trip-status="Arrived"]
+    .driver-route-status-btn {
+    background: var(--color-success);
+    border-color: var(--color-success);
+    color: var(--color-text-inverse);
+}
+
+.full-route-map-overlay[data-trip-status="Completed"]
+    .driver-route-status-btn {
+    background: var(--color-success-strong);
+    border-color: var(--color-success-strong);
+    color: var(--color-text-inverse);
+}
+
+
+/* ==========================================================
+   LEAFLET CONTROL COMPATIBILITY
+   ========================================================== */
+
+.full-route-leaflet-map .leaflet-control {
+    border-radius: var(--radius-md);
+}
+
+.full-route-leaflet-map .leaflet-control-zoom {
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.full-route-leaflet-map .leaflet-control-zoom a {
+    width: 40px;
+    height: 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: var(--color-surface);
+    color: var(--color-text);
+
+    border: 0;
+
+    transition:
+        background var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.full-route-leaflet-map .leaflet-control-zoom a:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-primary);
+}
+
+
+/* ==========================================================
+   TABLET / DESKTOP
+   ========================================================== */
+
+@media (min-width: 768px) {
+
+    .full-route-map-header {
+        padding-left: var(--space-5);
+        padding-right: var(--space-5);
+    }
+
+    .full-route-info-card {
+        top: var(--space-3);
+        right: var(--space-5);
+        left: auto;
+
+        width: min(
+            520px,
+            calc(100% - (var(--space-5) * 2))
+        );
+    }
+
+    .full-route-driver-controls {
+        right: var(--space-5);
+        bottom: var(--space-5);
+        left: auto;
+
+        width: min(560px, calc(100% - (var(--space-5) * 2)));
+    }
+
+    .driver-route-status-btn,
+    .driver-return-hospital-btn {
+        min-height: var(--control-height);
+    }
+}
+
+
+/* ==========================================================
+   MOBILE
+   ========================================================== */
+
+@media (max-width: 767px) {
+
+    .full-route-map-header {
+        min-height: 64px;
+
+        padding:
+            var(--space-2)
+            var(--space-3);
+    }
+
+    .full-route-map-header-left {
+        gap: var(--space-2);
+    }
+
+    .full-map-back-btn {
+        min-width: 44px;
+        min-height: 44px;
+
+        padding: 0 var(--space-2);
+    }
+
+    .full-map-back-btn span {
+        display: none;
+    }
+
+    .full-route-map-title h2 {
+        font-size: var(--font-size-md);
+    }
+
+    .full-route-map-title p {
+        font-size: 11px;
+    }
+
+    .full-route-info-card {
+        top: var(--space-3);
+
+        right: var(--space-3);
+        left: 180px;
+
+        width: auto;
+        max-width: none;
+
+        border-radius: var(--radius-md);
+    }
+
+    .full-route-info-item {
+        padding:
+            var(--space-3)
+            var(--space-2);
+    }
+
+    .full-route-info-item span {
+        font-size: 11px;
+    }
+
+    .full-route-info-item strong {
+        font-size: var(--font-size-sm);
+    }
+
+    .full-route-driver-controls {
+        right: var(--space-3);
+        bottom: var(--space-3);
+        left: var(--space-3);
+
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+
+    .driver-route-status-btn,
+    .driver-return-hospital-btn {
+        width: 100%;
+        min-height: 52px;
+    }
+
+    .driver-return-hospital-btn {
+        background: var(--color-surface);
+    }
+}
+
+
+/* ==========================================================
+   VERY SMALL DEVICES
+   ========================================================== */
+
+@media (max-width: 380px) {
+
+    .full-route-info-card {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .full-route-info-item {
+        padding:
+            var(--space-2)
+            var(--space-1);
+    }
+
+    .full-route-info-item span {
+        font-size: 10px;
+    }
+
+    .full-route-info-item strong {
+        font-size: var(--font-size-xs);
+    }
+
+    .driver-route-status-btn,
+    .driver-return-hospital-btn {
+        min-height: 48px;
+
+        font-size: var(--font-size-sm);
+    }
+}
+
+
+/* ==========================================================
+   REDUCED MOTION
+   ========================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .full-map-back-btn,
+    .driver-route-status-btn,
+    .driver-return-hospital-btn,
+    .full-route-leaflet-map .leaflet-control-zoom a {
+        transition: none;
+    }
+}
+
+
+
+
+
+/* ==========================================
+   Route Driver Status Confirmation Modal
+   ========================================== */
+
+.route-status-confirm-overlay {
+  position: fixed;
+  inset: 0;
+
+  display: none;
+  align-items: center;
+  justify-content: center;
+
+  padding: var(--space-5);
+
+  background: var(--modal-overlay);
+
+  z-index: calc(var(--z-modal) + 20);
+}
+
+.route-status-confirm-overlay.show {
+  display: flex;
+
+  animation:
+    routeStatusConfirmShow
+    var(--transition-normal)
+    var(--ease-standard, ease);
+}
+
+.route-status-confirm-modal {
+  width: min(100% - 32px, 460px);
+  max-width: 460px;
+
+  padding: 40px;
+
+  background: var(--modal-bg);
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+
+  box-shadow: var(--shadow-lg);
+
+  text-align: center;
+
+  position: relative;
+}
+
+.route-status-confirm-icon {
+  width: 80px;
+  height: 80px;
+
+  margin: 0 auto var(--space-5);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+
+  font-size: 42px;
+}
+
+.route-status-confirm-modal h2 {
+  margin: 0 0 var(--space-3);
+
+  font-size: 30px;
+  font-weight: 700;
+
+  color: var(--color-text);
+
+  line-height: var(--line-height-tight);
+}
+
+.route-status-confirm-modal p {
+  margin: 0;
+
+  color: var(--color-text-muted);
+
+  line-height: 1.6;
+
+  font-size: 16px;
+}
+
+.route-status-confirm-modal strong {
+  color: var(--color-text);
+  font-weight: var(--font-semibold);
+}
+
+.route-status-confirm-note {
+  margin-top: var(--space-3) !important;
+
+  color: var(--color-text-light);
+  font-size: 15px !important;
+}
+
+.route-status-confirm-footer {
+  margin-top: var(--space-6);
+
+  padding-top: var(--space-5);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  gap: var(--space-3);
+
+  border-top: 1px solid var(--color-border);
+}
+
+.route-status-confirm-cancel,
+.route-status-confirm-submit {
+  min-width: 140px;
+  height: var(--control-height);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: var(--space-2);
+
+  border-radius: var(--radius-button);
+
+  cursor: pointer;
+
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-semibold);
+
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.route-status-confirm-cancel {
+  border: 1px solid var(--color-border-strong);
+
+  background: var(--btn-muted-bg);
+
+  color: var(--color-text-muted);
+}
+
+.route-status-confirm-cancel:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.route-status-confirm-submit {
+  border: 1px solid var(--color-primary);
+
+  background: var(--color-primary);
+
+  color: var(--color-text-on-primary);
+}
+
+.route-status-confirm-submit:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.route-status-confirm-cancel:focus-visible,
+.route-status-confirm-submit:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.route-status-confirm-cancel:disabled,
+.route-status-confirm-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.route-status-confirm-submit .ph-spinner {
+  animation: routeStatusConfirmSpin 0.8s linear infinite;
+}
+
+@keyframes routeStatusConfirmShow {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes routeStatusConfirmSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================
+   Responsive
+   ========================================== */
+
+@media (max-width: 575px) {
+  .route-status-confirm-overlay {
+    padding: var(--space-4);
+  }
+
+  .route-status-confirm-modal {
+    width: 100%;
+    padding: var(--space-7) var(--space-5);
+  }
+
+  .route-status-confirm-icon {
+    width: 72px;
+    height: 72px;
+
+    font-size: 38px;
+  }
+
+  .route-status-confirm-modal h2 {
+    font-size: 26px;
+  }
+
+  .route-status-confirm-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .route-status-confirm-cancel,
+  .route-status-confirm-submit {
+    width: 100%;
+  }
+}

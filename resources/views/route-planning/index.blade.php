@@ -188,14 +188,26 @@
 
             <div class="route-planning-layout">
               <div class="card route-map-card">
-                  <div class="card-header">
-                      <div>
-                          <h3>Route Map Preview</h3>
-                          <p class="card-subtitle">
-                              Interactive route preview using OpenStreetMap
-                          </p>
-                      </div>
-                  </div>
+                  <div class="card-header route-map-header">
+                    <div>
+                        <h3>Route Map Preview</h3>
+                        <p class="card-subtitle">
+                            Interactive route preview using OpenStreetMap
+                        </p>
+                    </div>
+
+                    <div class="route-map-header-actions">
+                        <button
+                            type="button"
+                            class="btn-outline"
+                            id="openFullRouteMapBtn"
+                            title="Open Full Map"
+                        >
+                            <i class="ph ph-arrows-out"></i>
+                            Full Map
+                        </button>
+                    </div>
+                </div>
                   <div
                       id="routeLeafletMap"
                       class="route-leaflet-map"
@@ -244,6 +256,111 @@
                   <li><span>Optimization Score</span><strong id="optSummaryScore">—</strong></li>
                 </ul>
               </div>
+            </div>
+
+            <!-- ==========================================
+                Full Route Map / Driver Map
+            ========================================== -->
+            <div
+                id="fullRouteMapOverlay"
+                class="full-route-map-overlay"
+                hidden
+                aria-hidden="true"
+            >
+                <div class="full-route-map-container">
+                    <!-- Full Map Header -->
+                    <header class="full-route-map-header">
+                        <div class="full-route-map-header-left">
+                            <button
+                                type="button"
+                                class="full-map-back-btn"
+                                id="backFromFullRouteMapBtn"
+                                aria-label="Back to route planning"
+                            >
+                                <i class="ph ph-arrow-left" aria-hidden="true"></i>
+                                <span>Back</span>
+                            </button>
+
+                            <div class="full-route-map-title">
+                                <h2 id="fullRouteMapTitle">Route Map</h2>
+                                <p id="fullRouteMapSubtitle">
+                                    Live route tracking
+                                </p>
+                            </div>
+                        </div>
+                    </header>
+
+
+                    <!-- Full Map -->
+                    <main class="full-route-map-content">
+                        <div
+                            id="fullRouteLeafletMap"
+                            class="full-route-leaflet-map"
+                            role="region"
+                            aria-label="Full route map"
+                        ></div>
+
+
+                        <!-- Floating Route Information -->
+                        <div class="full-route-info-card">
+
+                            <div class="full-route-info-item">
+                                <span>Distance</span>
+                                <strong id="fullMapDistanceLabel">—</strong>
+                            </div>
+
+                            <div class="full-route-info-item">
+                                <span>ETA</span>
+                                <strong id="fullMapEtaLabel">—</strong>
+                            </div>
+
+                            <div class="full-route-info-item">
+                                <span>Status</span>
+                                <strong id="fullMapStatusLabel">—</strong>
+                            </div>
+
+                        </div>
+
+
+                        <!-- Driver Controls -->
+                        <div
+                            class="full-route-driver-controls"
+                            id="fullRouteDriverControls"
+                            hidden
+                        >
+
+                            <button
+                                type="button"
+                                class="driver-route-status-btn"
+                                id="fullRouteStatusBtn"
+                                data-status="En Route"
+                            >
+                                <i
+                                    class="ph ph-navigation-arrow"
+                                    aria-hidden="true"
+                                ></i>
+
+                                <span id="fullRouteStatusBtnText">
+                                    En Route
+                                </span>
+                            </button>
+
+
+                            <button
+                                type="button"
+                                class="driver-return-hospital-btn"
+                                id="returnToHospitalBtn"
+                            >
+                                <i
+                                    class="ph ph-hospital"
+                                    aria-hidden="true"
+                                ></i>
+
+                                <span>Return to Hospital</span>
+                            </button>
+                        </div>
+                    </main>
+                </div>
             </div>
 
             <div class="card">
@@ -574,6 +691,55 @@
         </div>
       </div>
 
+      <div
+        id="routeDriverStatusConfirmModal"
+        class="route-status-confirm-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="routeDriverStatusConfirmTitle"
+        aria-describedby="routeDriverStatusConfirmDescription"
+      >
+        <div class="route-status-confirm-modal">
+          <div class="route-status-confirm-icon">
+            <i class="ph-fill ph-warning-circle"></i>
+          </div>
+          <h2 id="routeDriverStatusConfirmTitle">
+            Update Dispatch Status
+          </h2>
+          <p id="routeDriverStatusConfirmDescription">
+            Are you sure you want to change this dispatch to
+            <strong id="routeDriverStatusConfirmStatus">
+              En Route
+            </strong>?
+          </p>
+          <p
+            class="route-status-confirm-note"
+            id="routeDriverStatusConfirmMessage"
+          >
+            The dispatch status will be updated in the system.
+          </p>
+          <div class="route-status-confirm-footer">
+            <button
+              type="button"
+              class="route-status-confirm-cancel"
+              id="cancelRouteDriverStatusConfirm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="route-status-confirm-submit"
+              id="confirmRouteDriverStatus"
+            >
+              <i class="ph ph-check"></i>
+              <span id="confirmRouteDriverStatusText">
+                Set En Route
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
     <script>
         window.FLEET_RBAC = window.FLEET_RBAC || {};
         window.FLEET_RBAC.role =
@@ -594,6 +760,7 @@
     <script src="{{ asset('assets/js/components/dropdown.js') }}"></script>
     <script src="{{ asset('assets/js/route-planning/route-store.js') }}"></script>
     <script src="{{ asset('assets/js/route-planning/route-pipeline.js') }}"></script>
+    <script src="{{ asset('assets/js/route-planning/route-full-map.js') }}"></script>
     <script src="{{ asset('assets/js/route-planning/route-modal.js') }}"></script>
     <script src="{{ asset('assets/js/route-planning/route-templates.js') }}"></script>
     <script src="{{ asset('assets/js/route-planning/route-export.js') }}"></script>

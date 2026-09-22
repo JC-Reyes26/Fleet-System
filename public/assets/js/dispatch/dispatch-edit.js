@@ -443,7 +443,30 @@ function initEditDispatchModal() {
     editDispatchInitialized = true;
     document.body.addEventListener("click", async (event) => {
         const editButton = event.target.closest(".action-btn.edit-dispatch");
-        if (!editButton || editButton.disabled) {
+        if (!editButton) {
+            return;
+        }
+        const row = editButton.closest("tr");
+        if (!row) {
+            return;
+        }
+        const status = String(
+            row.dataset.status ||
+                row.querySelector(".status-badge")?.textContent ||
+                "",
+        ).trim();
+        /*
+         * Completed / Cancelled dispatches are lifecycle-locked.
+         * Keep the Edit button clickable so the user receives
+         * a clear toast instead of silently doing nothing.
+         */
+        if (["Completed", "Cancelled"].includes(status)) {
+            if (typeof showToast === "function") {
+                showToast(
+                    `This dispatch cannot be edited because it is already ${status}.`,
+                    "error",
+                );
+            }
             return;
         }
         const dispatchId = editButton.dataset.id;

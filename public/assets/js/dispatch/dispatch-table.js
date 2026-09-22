@@ -324,10 +324,8 @@ function renderDispatchTable(dispatches) {
         const remarks = dispatch.remarks || "";
         const contact = reservation.contact_number || "";
         const statusClass = getDispatchStatusClass(status);
-        const canEdit =
-            canUpdate &&
-            !dispatch.archived_at &&
-            !["Completed", "Cancelled"].includes(status);
+        const canEdit = canUpdate && !dispatch.archived_at;
+        const isLifecycleLocked = ["Completed", "Cancelled"].includes(status);
         const isArchived = Boolean(dispatch.archived_at);
         const canArchiveThisDispatch = canArchive && !isArchived;
         const safeDispatchNumber = escapeDispatchHtml(
@@ -479,13 +477,13 @@ function renderDispatchTable(dispatches) {
                                             type="button"
                                             class="action-btn edit-dispatch"
                                             data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            data-status="${safeStatus}"
                                             aria-label="Edit ${safeDispatchNumber}"
                                             title="${
-                                                canEdit
-                                                    ? "Edit Dispatch"
-                                                    : "This dispatch can no longer be edited"
+                                                isLifecycleLocked
+                                                    ? `This dispatch cannot be edited because it is already ${safeStatus}`
+                                                    : "Edit Dispatch"
                                             }"
-                                            ${canEdit ? "" : "disabled"}
                                         >
                                             <i class="ph ph-pencil-simple"></i>
                                         </button>
