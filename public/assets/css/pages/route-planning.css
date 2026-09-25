@@ -1283,3 +1283,139 @@
     width: 100%;
   }
 }
+
+/* ==========================================
+   FULL ROUTE MAP — GLOBAL APP UI LOCK
+   ========================================== */
+
+/*
+ * When the full route map is visible, hide the
+ * normal application navbar/sidebar so they cannot
+ * appear above or beside the map overlay.
+ *
+ * :has() checks whether the overlay is currently
+ * visible (hidden attribute is not present).
+ */
+body[data-full-route-map-open="true"] #navbar,
+body[data-full-route-map-open="true"] #sidebar {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+
+/*
+ * Keep the full map above every normal application
+ * layer.
+ */
+.full-route-map-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+
+    max-width: none !important;
+    max-height: none !important;
+
+    z-index: 2147483647 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    overflow: hidden !important;
+}
+
+
+/*
+ * Make sure its internal content does not get
+ * clipped by normal layout containers.
+ */
+.full-route-map-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+
+/*
+ * Full map content must occupy the available
+ * viewport below its own header.
+ */
+.full-route-map-content {
+    position: relative;
+
+    width: 100%;
+    height: calc(100% - var(--navbar-height));
+
+    min-width: 0;
+    min-height: 0;
+
+    overflow: hidden;
+}
+
+
+/*
+ * Tablet/mobile header should remain above the map
+ * and above Leaflet controls.
+ */
+.full-route-map-header {
+    position: relative !important;
+    z-index: 1000 !important;
+}
+
+
+/*
+ * Leaflet controls remain below our full-map header
+ * and information/driver panels.
+ */
+.full-route-leaflet-map {
+    z-index: 1;
+}
+
+.full-route-leaflet-map .leaflet-control-container {
+    z-index: 10;
+}
+
+.full-route-info-card,
+.full-route-driver-controls {
+    z-index: 500 !important;
+}
+
+/* ==========================================
+   FULL ROUTE MAP — TABLET / MOBILE OVERRIDE
+   ========================================== */
+
+@media (max-width: 1024px) {
+
+    body[data-full-route-map-open="true"] #navbar,
+    body[data-full-route-map-open="true"] #sidebar {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    .full-route-map-overlay {
+        position: fixed !important;
+        inset: 0 !important;
+
+        width: 100vw !important;
+        height: 100dvh !important;
+
+        z-index: 2147483647 !important;
+    }
+
+    .full-route-map-header {
+        min-height: 64px;
+    }
+
+    .full-route-map-content {
+        height: calc(100dvh - 64px);
+        height: calc(
+            100% - 64px
+        );
+    }
+}

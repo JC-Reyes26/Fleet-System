@@ -385,16 +385,52 @@ function initDashboardFleetMap() {
     loadDashboardVehicleMarkers();
 }
 
+function initDashboardFleetGpsListener() {
+    if (document.documentElement.dataset.dashboardGpsListener === "true") {
+        return;
+    }
+    document.documentElement.dataset.dashboardGpsListener = "true";
+    window.addEventListener("fleet:gps-location-updated", (event) => {
+        const detail = event.detail || {};
+        const vehicleId = detail.vehicleId;
+        const location = detail.location;
+
+        if (!vehicleId || !location || !dashboardFleetMap) {
+            return;
+        }
+        const latitude = Number(location.latitude);
+        const longitude = Number(location.longitude);
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            return;
+        }
+        const marker = dashboardVehicleMarkers.get(String(vehicleId));
+        /*
+         * Update existing vehicle marker immediately.
+         */
+        if (marker) {
+            marker.setLatLng([latitude, longitude]);
+
+            /*
+             * Update direction when heading changes.
+             */
+            if (typeof createDashboardVehicleIcon === "function") {
+                marker.setIcon(createDashboardVehicleIcon(location.heading));
+            }
+            return;
+        }
+        /*
+         * Marker does not exist yet.
+         * Reload vehicle metadata from Laravel.
+         */
+        void loadDashboardVehicleMarkers();
+    });
+}
+
 let dashboardInitialized = false;
 
 let dashboardLiveUpdateInterval = null;
 let dashboardLiveUpdateRunning = false;
-
-let dashboardGpsWatchId = null;
-let dashboardGpsDispatchId = null;
-let dashboardGpsSending = false;
-let dashboardGpsCheckInterval = null;
-let dashboardGpsActive = false;
 
 let dashboardMapDataSignature = "";
 
@@ -419,162 +455,6 @@ async function loadDashboardLiveData() {
 
         return null;
     }
-}
-
-function isDashboardDriver() {
-    return String(window.FLEET_RBAC?.role || "").toLowerCase() === "driver";
-}
-
-async function sendDashboardDriverLocation(position) {
-    if (!dashboardGpsActive || dashboardGpsSending) {
-        return;
-    }
-    const coords = position?.coords;
-    if (!coords) {
-        return;
-    }
-    const latitude = Number(coords.latitude);
-    const longitude = Number(coords.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return;
-    }
-    dashboardGpsSending = true;
-    try {
-        const csrfToken =
-            document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute("content") || "";
-
-        const payload = {
-            latitude,
-            longitude,
-            speed:
-                coords.speed !== null && coords.speed !== undefined
-                    ? Number(coords.speed) * 3.6
-                    : null,
-            heading:
-                coords.heading !== null && coords.heading !== undefined
-                    ? Number(coords.heading)
-                    : null,
-            accuracy:
-                coords.accuracy !== null && coords.accuracy !== undefined
-                    ? Number(coords.accuracy)
-                    : null,
-
-            dispatch_id: dashboardGpsDispatchId,
-        };
-        const response = await fetch("/tracking/location", {
-            method: "POST",
-
-            headers: {
-                Accept: "application/json",
-                "Content-Type": "application/json",
-                "X-CSRF-TOKEN": csrfToken,
-                "X-Requested-With": "XMLHttpRequest",
-            },
-            credentials: "same-origin",
-            body: JSON.stringify(payload),
-        });
-        let data = {};
-
-        try {
-            data = await response.json();
-        } catch {
-            data = {};
-        }
-        if (!response.ok) {
-            throw new Error(data.message || "Unable to send vehicle location.");
-        }
-    } catch (error) {
-        console.error("Driver GPS send failed:", error);
-    } finally {
-        dashboardGpsSending = false;
-    }
-}
-
-function stopDashboardDriverGps() {
-    dashboardGpsActive = false;
-    dashboardGpsDispatchId = null;
-    if (dashboardGpsWatchId !== null) {
-        navigator.geolocation.clearWatch(dashboardGpsWatchId);
-        dashboardGpsWatchId = null;
-    }
-}
-
-function startDashboardDriverGps(dispatchId) {
-    if (!navigator.geolocation) {
-        console.warn("Geolocation is not supported by this browser.");
-
-        return;
-    }
-    if (!dispatchId) {
-        return;
-    }
-    if (
-        dashboardGpsWatchId !== null &&
-        String(dashboardGpsDispatchId) === String(dispatchId)
-    ) {
-        return;
-    }
-    stopDashboardDriverGps();
-    dashboardGpsActive = true;
-    dashboardGpsDispatchId = String(dispatchId);
-    dashboardGpsWatchId = navigator.geolocation.watchPosition(
-        sendDashboardDriverLocation,
-        (error) => {
-            console.error("Driver GPS error:", error);
-        },
-        {
-            enableHighAccuracy: true,
-            maximumAge: 5000,
-            timeout: 15000,
-        },
-    );
-}
-
-async function syncDashboardDriverGps() {
-    if (!isDashboardDriver()) {
-        stopDashboardDriverGps();
-        return;
-    }
-    try {
-        const response = await fetch("/tracking/active-dispatch", {
-            headers: {
-                Accept: "application/json",
-                "X-Requested-With": "XMLHttpRequest",
-            },
-            credentials: "same-origin",
-            cache: "no-store",
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.message || "Unable to check active dispatch.");
-        }
-        if (data.active && data.dispatch?.id) {
-            startDashboardDriverGps(data.dispatch.id);
-
-            return;
-        }
-        stopDashboardDriverGps();
-    } catch (error) {
-        console.error("Driver GPS status check failed:", error);
-    }
-}
-
-function startDashboardDriverGpsMonitoring() {
-    if (!isDashboardDriver()) {
-        return;
-    }
-    void syncDashboardDriverGps();
-    if (dashboardGpsCheckInterval) {
-        return;
-    }
-    dashboardGpsCheckInterval = window.setInterval(() => {
-        if (document.hidden) {
-            return;
-        }
-        void syncDashboardDriverGps();
-    }, 10000);
 }
 
 function setDashboardLiveText(id, value) {
@@ -1384,7 +1264,6 @@ function initDashboardPage() {
         initDashboardKpiCards();
         initDashboardFleetMap();
         startDashboardLiveUpdates();
-        startDashboardDriverGpsMonitoring();
     } catch (error) {
         console.error("Dashboard init failed:", error);
     }

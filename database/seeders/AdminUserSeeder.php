@@ -12,7 +12,7 @@ class AdminUserSeeder extends Seeder
     {
         User::create([
             'name' => 'System Administrator',
-            'email' => 'admin@talahospital.com',
+            'email' => 'himsfleet@gmail.com',
             'password' => Hash::make('admin123'),
             'role' => 'admin',
             'status' => true,

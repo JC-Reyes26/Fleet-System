@@ -52,8 +52,7 @@ Route::middleware('guest')->group(function () {
     Route::post(
         'forgot-password/resend',
         [ForgotPasswordController::class, 'resendCode']
-    )->middleware('throttle:5,1')
-        ->name('password.resend');
+    )->name('password.resend');
 
     Route::get(
         'forgot-password/change-password',
@@ -82,8 +81,7 @@ Route::middleware('guest')->group(function () {
     Route::post(
         'two-factor/resend',
         [TwoFactorAuthenticationController::class, 'resend']
-    )->middleware('throttle:5,1')
-        ->name('two-factor.resend');
+    )->name('two-factor.resend');
         
 });
 

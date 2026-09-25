@@ -1201,6 +1201,103 @@ async function loadRoutePlanningVehicleLocation(record) {
     }
 }
 
+function initRouteFleetGpsListener() {
+    if (document.documentElement.dataset.routeGpsListener === "true") {
+        return;
+    }
+
+    document.documentElement.dataset.routeGpsListener = "true";
+
+    window.addEventListener("fleet:gps-location-updated", (event) => {
+        const detail = event.detail || {};
+        const vehicleId = detail.vehicleId;
+        const location = detail.location;
+
+        const currentRecord = getCurrentRoutePlanningMapRecord();
+
+        if (
+            !currentRecord ||
+            !currentRecord.vehicleId ||
+            !vehicleId ||
+            String(currentRecord.vehicleId) !== String(vehicleId)
+        ) {
+            return;
+        }
+
+        if (
+            !location ||
+            !Number.isFinite(Number(location.latitude)) ||
+            !Number.isFinite(Number(location.longitude))
+        ) {
+            return;
+        }
+
+        /*
+         * Keep existing vehicle metadata when available.
+         * Only update the live GPS data.
+         */
+        const existingVehicle = routeLastTrackedVehicle || {};
+
+        routeLastTrackedVehicle = {
+            ...existingVehicle,
+
+            vehicle_id: vehicleId,
+
+            vehicle_label:
+                existingVehicle.vehicle_label ||
+                currentRecord.vehicle ||
+                "Vehicle",
+
+            plate_number: existingVehicle.plate_number || "—",
+
+            vehicle_status: existingVehicle.vehicle_status || "On Trip",
+
+            has_location: true,
+
+            location: {
+                ...(existingVehicle.location || {}),
+
+                latitude: Number(location.latitude),
+
+                longitude: Number(location.longitude),
+
+                speed: location.speed ?? null,
+
+                heading: location.heading ?? null,
+
+                accuracy: location.accuracy ?? null,
+
+                age_seconds: 0,
+
+                recorded_at: new Date().toISOString(),
+            },
+        };
+
+        /*
+         * Update Route Planning vehicle marker
+         * immediately from the phone GPS.
+         */
+        if (routeLeafletVehicleMarkerLayer) {
+            routeLeafletVehicleMarker = renderRouteVehicleMarker(
+                routeLeafletVehicleMarkerLayer,
+                routeLeafletVehicleMarker,
+                routeLastTrackedVehicle,
+            );
+        }
+
+        /*
+         * Forward the exact same live vehicle state
+         * to the Full Route Map.
+         */
+        if (typeof window.updateFullRouteMapVehicleLocation === "function") {
+            window.updateFullRouteMapVehicleLocation(
+                routeLastTrackedVehicle,
+                currentRecord,
+            );
+        }
+    });
+}
+
 function addRouteMarkerToLayer(
     markerLayer,
     type,
@@ -2341,6 +2438,8 @@ function initRoutePlanningPipeline() {
     }
 
     tableBody.dataset.routePipelineInit = "true";
+
+    initRouteFleetGpsListener();
 
     const onFilter = () => {
         refreshRoutePlanningTable({

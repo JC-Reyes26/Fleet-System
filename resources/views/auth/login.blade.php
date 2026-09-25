@@ -131,8 +131,8 @@
 
             <div class="login-row">
               <label class="login-remember">
-                <input type="checkbox" id="loginRemember" name="remember" />
-                Remember me
+                <!--<input type="checkbox" id="loginRemember" name="remember" />
+                Remember me-->
               </label>
               @if (Route::has('password.request'))
               <a href="{{ route('password.request') }}" class="login-forgot">

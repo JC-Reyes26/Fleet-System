@@ -74,17 +74,29 @@ class ForgotPasswordController extends Controller
             );
     }
 
-    public function showVerify(): View|RedirectResponse
-    {
-        if (!session()->has(
+    public function showVerify(
+        Request $request
+    ): View|RedirectResponse {
+        $email = session(
             'password_recovery_email'
-        )) {
+        );
+
+        if (!$email) {
             return redirect()
                 ->route('password.request');
         }
 
+        $resendStatus =
+            $this->codeService->resendStatus(
+                AuthenticationCodeService::TYPE_FORGOT_PASSWORD
+            );
+
         return view(
-            'auth.verify-forgot-password'
+            'auth.verify-forgot-password',
+            [
+                'resendCooldown' =>
+                    $resendStatus['cooldown'],
+            ]
         );
     }
 
@@ -161,13 +173,31 @@ class ForgotPasswordController extends Controller
                 ]);
         }
 
+        $resendStatus =
+            $this->codeService->consumeResendAttempt(
+                AuthenticationCodeService::TYPE_FORGOT_PASSWORD
+            );
+
+        if (!$resendStatus['allowed']) {
+            return back()
+                ->withErrors([
+                    'code' =>
+                        'Please wait ' .
+                        $resendStatus['cooldown'] .
+                        ' seconds before requesting another code.',
+                ]);
+        }
+
         $user = User::query()
             ->whereRaw(
                 'LOWER(email) = ?',
-                [$email]
+                [strtolower($email)]
             )
             ->first();
 
+        /*
+        * Keep account existence private.
+        */
         if ($user) {
             $code = $this->codeService->issue(
                 $user,

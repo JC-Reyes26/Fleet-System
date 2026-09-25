@@ -12,6 +12,10 @@ class AuthenticationCodeService
 
     public const TYPE_TWO_FACTOR = 'two_factor';
 
+    public const RESEND_MAX_ATTEMPTS = 2;
+
+    public const RESEND_COOLDOWN_SECONDS = 30;
+
     public function issue(
         User $user,
         string $type
@@ -100,5 +104,138 @@ class AuthenticationCodeService
                 ->first();
 
         return $authenticationCode?->expires_at;
+    }
+
+    public function resendStatus(
+        string $type
+    ): array {
+        $prefix = "auth_resend.{$type}";
+
+        $attempts = (int) session(
+            "{$prefix}.attempts",
+            0
+        );
+
+        $cooldownUntil = (int) session(
+            "{$prefix}.cooldown_until",
+            0
+        );
+
+        $now = now()->timestamp;
+
+        /*
+         * Cooldown has expired.
+         * Reset the resend cycle.
+         */
+        if (
+            $cooldownUntil > 0 &&
+            $cooldownUntil <= $now
+        ) {
+            session()->forget([
+                "{$prefix}.attempts",
+                "{$prefix}.cooldown_until",
+            ]);
+
+            $attempts = 0;
+            $cooldownUntil = 0;
+        }
+
+        /*
+         * Still within cooldown.
+         */
+        if ($cooldownUntil > $now) {
+            return [
+                'attempts' => $attempts,
+                'remaining' => 0,
+                'cooldown' =>
+                    $cooldownUntil - $now,
+            ];
+        }
+
+        return [
+            'attempts' => $attempts,
+            'remaining' => max(
+                0,
+                self::RESEND_MAX_ATTEMPTS - $attempts
+            ),
+            'cooldown' => 0,
+        ];
+    }
+
+    public function consumeResendAttempt(
+        string $type
+    ): array {
+        $prefix = "auth_resend.{$type}";
+
+        $status =
+            $this->resendStatus($type);
+
+        /*
+         * Still within cooldown.
+         */
+        if ($status['cooldown'] > 0) {
+            return [
+                'allowed' => false,
+                'attempts' =>
+                    $status['attempts'],
+                'remaining' => 0,
+                'cooldown' =>
+                    $status['cooldown'],
+            ];
+        }
+
+        $attempts =
+            $status['attempts'] + 1;
+
+        /*
+         * Second resend:
+         * start 30-second cooldown.
+         */
+        if (
+            $attempts >=
+            self::RESEND_MAX_ATTEMPTS
+        ) {
+            $cooldownUntil =
+                now()
+                    ->addSeconds(
+                        self::RESEND_COOLDOWN_SECONDS
+                    )
+                    ->timestamp;
+
+            session([
+                "{$prefix}.attempts" =>
+                    self::RESEND_MAX_ATTEMPTS,
+
+                "{$prefix}.cooldown_until" =>
+                    $cooldownUntil,
+            ]);
+
+            return [
+                'allowed' => true,
+                'attempts' => $attempts,
+                'remaining' => 0,
+                'cooldown' =>
+                    self::RESEND_COOLDOWN_SECONDS,
+            ];
+        }
+
+        /*
+         * First resend.
+         */
+        session([
+            "{$prefix}.attempts" =>
+                $attempts,
+
+            "{$prefix}.cooldown_until" => 0,
+        ]);
+
+        return [
+            'allowed' => true,
+            'attempts' => $attempts,
+            'remaining' =>
+                self::RESEND_MAX_ATTEMPTS -
+                $attempts,
+            'cooldown' => 0,
+        ];
     }
 }

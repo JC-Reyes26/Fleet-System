@@ -89,17 +89,18 @@
             </p>
 
             <div
-                style="
-                    margin-bottom: 20px;
-                    padding: 12px 14px;
-                    border-radius: 8px;
-                    background: #f0fdf4;
-                    color: #166534;
-                    font-size: 13px;
-                "
+                class="two-factor-expiry"
             >
-                The verification code expires in
-                <strong id="twoFactorCountdown">02:00</strong>.
+                <span>
+                    The verification code expires in
+                </span>
+
+                <strong
+                    id="twoFactorCountdown"
+                    class="two-factor-expiry-time"
+                >
+                    {{ $expiresAt ? '02:00' : 'Expired' }}
+                </strong>
             </div>
 
 
@@ -127,8 +128,8 @@
                         maxlength="6"
                         required
                         autofocus
-                        placeholder="Enter 6-digit code"
-                        class="@error('code') is-invalid @enderror"
+                        placeholder="000000"
+                        class="two-factor-code-input @error('code') is-invalid @enderror"
                         style="
                             text-align: center;
                             font-size: 24px;
@@ -164,32 +165,40 @@
             <form
                 method="POST"
                 action="{{ route('two-factor.resend') }}"
-                class="text-center mt-3"
+                class="two-factor-secondary"
             >
                 @csrf
 
                 <button
                     type="submit"
-                    class="btn btn-link text-decoration-none"
-                    style="
-                        color: #00A86B;
-                        font-size: 13px;
-                    "
+                    class="two-factor-resend"
+                    id="twoFactorResendBtn"
+                    @if (($resendCooldown ?? 0) > 0)
+                        disabled
+                    @endif
                 >
-                    Didn't receive the code?
-                    Send again
+                    <span id="twoFactorResendText">
+                        @if (($resendCooldown ?? 0) > 0)
+                            Resend available in {{ $resendCooldown }}s
+                        @else
+                            Didn't receive the code? Send again
+                        @endif
+                    </span>
                 </button>
             </form>
 
-
-            <div class="text-center mt-2">
+            <div class="two-factor-footer">
 
                 <a
                     href="{{ route('login') }}"
-                    class="text-decoration-none text-muted"
-                    style="font-size: 13px;"
+                    class="two-factor-cancel"
                 >
-                    Cancel and return to Login
+                    <i
+                        class="ph ph-arrow-left"
+                        aria-hidden="true"
+                    ></i>
+
+                    <span>Cancel and return to Login</span>
                 </a>
 
             </div>
@@ -360,16 +369,20 @@
             let countdownTimer = null;
 
             if (
-                countdown &&
-                expiresAt
+                countdown
             ) {
                 function updateCountdown() {
+
+                    if (!expiresAt) {
+                        countdown.textContent = "Expired";
+                        countdown.classList.add("is-expired");
+                        return;
+                    }
 
                     const remaining =
                         Math.max(
                             0,
-                            expiresAt -
-                                Date.now()
+                            expiresAt - Date.now()
                         );
 
                     const totalSeconds =
@@ -392,27 +405,92 @@
                         String(seconds)
                             .padStart(2, "0");
 
-                    if (
-                        totalSeconds <= 0
-                    ) {
+                    if (totalSeconds <= 0) {
+
+                        countdown.textContent =
+                            "Expired";
+
+                        countdown.classList.add(
+                            "is-expired"
+                        );
+
                         if (countdownTimer) {
                             clearInterval(
                                 countdownTimer
                             );
-                        }
 
-                        countdown.textContent =
-                            "Expired";
+                            countdownTimer = null;
+                        }
                     }
                 }
 
                 updateCountdown();
 
-                countdownTimer =
-                    setInterval(
-                        updateCountdown,
-                        1000
-                    );
+                if (expiresAt) {
+                    countdownTimer =
+                        setInterval(
+                            updateCountdown,
+                            1000
+                        );
+                }
+            }
+
+            const resendButton =
+                document.getElementById(
+                    "twoFactorResendBtn"
+                );
+
+            const resendText =
+                document.getElementById(
+                    "twoFactorResendText"
+                );
+
+            let resendSeconds =
+                Number(
+                    @json($resendCooldown ?? 0)
+                );
+
+            let resendTimer = null;
+
+            function updateResendState() {
+
+                if (
+                    resendSeconds > 0
+                ) {
+                    resendButton.disabled = true;
+
+                    resendText.textContent =
+                        `Resend available in ${resendSeconds}s`;
+
+                    resendSeconds--;
+
+                    return;
+                }
+
+                resendButton.disabled = false;
+
+                resendText.textContent =
+                    "Didn't receive the code? Send again";
+
+                if (resendTimer) {
+                    clearInterval(resendTimer);
+                    resendTimer = null;
+                }
+            }
+
+            if (
+                resendButton &&
+                resendText
+            ) {
+                updateResendState();
+
+                if (resendSeconds > 0) {
+                    resendTimer =
+                        setInterval(
+                            updateResendState,
+                            1000
+                        );
+                }
             }
 
         }

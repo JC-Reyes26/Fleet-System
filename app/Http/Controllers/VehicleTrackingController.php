@@ -287,15 +287,21 @@ class VehicleTrackingController extends Controller
         }
 
         /*
-        * Only En Route is considered an active trip
-        * for continuous GPS tracking.
+        * GPS tracking is not limited to En Route anymore.
+        *
+        * Assigned / En Route / Arrived are considered
+        * trackable dispatch states.
         */
         $dispatch = \App\Models\Dispatch::query()
             ->with([
                 'reservation.vehicle',
                 'reservation.driver',
             ])
-            ->where('trip_status', 'En Route')
+            ->whereIn('trip_status', [
+                'Assigned',
+                'En Route',
+                'Arrived',
+            ])
             ->whereHas('reservation', function ($query) use ($driver) {
                 $query->where('driver_id', $driver->id);
             })

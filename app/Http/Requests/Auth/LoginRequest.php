@@ -1,169 +1,157 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Http\Requests\Auth;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
-use App\Notifications\TwoFactorCodeNotification;
-use App\Services\AuditLogService;
-use App\Services\AuthenticationCodeService;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
+use App\Models\User;
+use Illuminate\Auth\Events\Lockout;
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Illuminate\View\View;
 
-class AuthenticatedSessionController extends Controller
+class LoginRequest extends FormRequest
 {
-    public function __construct(
-        private AuthenticationCodeService $codeService
-    ) {
-    }
-
     /**
-     * Display the login view.
+     * Determine if the user is authorized to make this request.
      */
-    public function create(): View
+    public function authorize(): bool
     {
-        return view('auth.login');
+        return true;
     }
 
     /**
-     * Handle an incoming authentication request.
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
-    public function store(
-        LoginRequest $request
-    ): RedirectResponse {
-        try {
-            $user = $request->authenticate();
-        } catch (ValidationException $e) {
+    public function rules(): array
+    {
+        return [
+            'email' => [
+                'required',
+                'string',
+                'email',
+            ],
 
-            AuditLogService::log(
-                module: 'Authentication',
-                action: 'Failed Login',
-                description:
-                    'Failed login attempt for ' .
-                    $request->input('email') .
-                    '.',
-                newValues: [
-                    'email' =>
-                        $request->input('email'),
-                ]
-            );
+            'password' => [
+                'required',
+                'string',
+            ],
+        ];
+    }
 
-            throw $e;
-        }
+    /**
+     * Validate the request's credentials without
+     * starting an authenticated session.
+     *
+     * @throws ValidationException
+     */
+    public function authenticate(): User
+    {
+        $this->ensureIsNotRateLimited();
 
-        /*
-         * Clean up any previous pending 2FA state.
-         */
-        $request->session()->forget([
-            'two_factor_user_id',
-            'two_factor_remember',
+        $credentials = $this->only([
+            'email',
+            'password',
         ]);
 
-        /*
-         * Check whether the user's 7-day 2FA
-         * verification window is still valid.
-         */
-        if (
-            $user->hasRecentTwoFactorVerification()
-        ) {
-            /*
-             * 2FA is still valid.
-             * Complete authentication now.
-             */
-            Auth::login(
-                $user,
-                $request->boolean('remember')
-            );
-
-            $request
-                ->session()
-                ->regenerate();
-
-            $user->forceFill([
-                'last_login_at' => now(),
-            ])->save();
-
-            AuditLogService::log(
-                module: 'Authentication',
-                action: 'Login',
-                description:
-                    'Logged in successfully.'
-            );
-
-            return redirect()->intended(
-                route(
-                    'dashboard',
-                    absolute: false
-                )
-            );
-        }
+        $guard = Auth::guard('web');
 
         /*
-         * 2FA is required.
+         * Validate credentials only.
          *
-         * User is still NOT authenticated.
+         * Unlike Auth::attempt(), this does not
+         * authenticate the user into the session.
          */
-        $code = $this->codeService->issue(
-            $user,
-            AuthenticationCodeService::TYPE_TWO_FACTOR
+        if (!$guard->validate($credentials)) {
+            RateLimiter::hit(
+                $this->throttleKey()
+            );
+
+            throw ValidationException::withMessages([
+                'email' =>
+                    'The provided credentials do not match our records.',
+            ]);
+        }
+
+        RateLimiter::clear(
+            $this->throttleKey()
         );
 
-        $user->notify(
-            new TwoFactorCodeNotification(
-                $code
-            )
-        );
+        $user = $guard->getLastAttempted();
+
+        if (!$user instanceof User) {
+            throw ValidationException::withMessages([
+                'email' =>
+                    'Unable to authenticate the account.',
+            ]);
+        }
 
         /*
-         * Regenerate the session before storing
-         * pending authentication state.
+         * Preserve Laravel's normal automatic password
+         * rehash behavior when the configured hashing
+         * algorithm/work factor requires it.
          */
-        $request
-            ->session()
-            ->regenerate();
+        $guard
+            ->getProvider()
+            ->rehashPasswordIfRequired(
+                $user,
+                $credentials
+            );
 
-        $request->session()->put([
-            'two_factor_user_id' =>
-                $user->id,
-
-            'two_factor_remember' =>
-                $request->boolean('remember'),
-        ]);
-
-        return redirect()
-            ->route('two-factor');
+        return $user;
     }
 
     /**
-     * Destroy an authenticated session.
+     * Ensure the login request is not rate limited.
+     *
+     * @throws ValidationException
      */
-    public function destroy(
-        Request $request
-    ): RedirectResponse {
-        /*
-         * Logout Audit
-         */
-        AuditLogService::log(
-            module: 'Authentication',
-            action: 'Logout',
-            description:
-                'Logged out successfully.'
+    public function ensureIsNotRateLimited(): void
+    {
+        if (!RateLimiter::tooManyAttempts(
+            $this->throttleKey(),
+            5
+        )) {
+            return;
+        }
+
+        event(new Lockout($this));
+
+        $seconds =
+            RateLimiter::availableIn(
+                $this->throttleKey()
+            );
+
+        throw ValidationException::withMessages([
+            'email' => trans(
+                'auth.throttle',
+                [
+                    'seconds' =>
+                        $seconds,
+
+                    'minutes' =>
+                        ceil(
+                            $seconds / 60
+                        ),
+                ]
+            ),
+        ]);
+    }
+
+    /**
+     * Get the rate limiting throttle key for the request.
+     */
+    public function throttleKey(): string
+    {
+        return Str::transliterate(
+            Str::lower(
+                $this->string('email')
+            )
+            . '|'
+            . $this->ip()
         );
-
-        Auth::guard('web')
-            ->logout();
-
-        $request
-            ->session()
-            ->invalidate();
-
-        $request
-            ->session()
-            ->regenerateToken();
-
-        return redirect('/');
     }
 }

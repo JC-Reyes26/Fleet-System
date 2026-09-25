@@ -22,7 +22,9 @@ class TwoFactorAuthenticationController extends Controller
     /**
      * Display the 2FA verification page.
      */
-    public function create(): View|RedirectResponse {
+    public function create(
+        Request $request
+    ): View|RedirectResponse {
         $user = $this->pendingUser();
 
         if (!$user) {
@@ -36,11 +38,18 @@ class TwoFactorAuthenticationController extends Controller
                 AuthenticationCodeService::TYPE_TWO_FACTOR
             );
 
+        $resendStatus =
+            $this->codeService->resendStatus(
+                AuthenticationCodeService::TYPE_TWO_FACTOR
+            );
+
         return view(
             'auth.two-factor',
             [
                 'user' => $user,
                 'expiresAt' => $expiresAt,
+                'resendCooldown' =>
+                    $resendStatus['cooldown'],
             ]
         );
     }
@@ -138,7 +147,9 @@ class TwoFactorAuthenticationController extends Controller
     /**
      * Send a new 2FA code.
      */
-    public function resend(): RedirectResponse {
+    public function resend(
+        Request $request
+    ): RedirectResponse {
         $user = $this->pendingUser();
 
         if (!$user) {
@@ -147,6 +158,21 @@ class TwoFactorAuthenticationController extends Controller
                 ->withErrors([
                     'email' =>
                         'Your two-factor authentication session has expired. Please log in again.',
+                ]);
+        }
+
+        $resendStatus =
+            $this->codeService->consumeResendAttempt(
+                AuthenticationCodeService::TYPE_TWO_FACTOR
+            );
+
+        if (!$resendStatus['allowed']) {
+            return back()
+                ->withErrors([
+                    'code' =>
+                        'Please wait ' .
+                        $resendStatus['cooldown'] .
+                        ' seconds before requesting another code.',
                 ]);
         }
 

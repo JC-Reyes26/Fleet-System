@@ -258,6 +258,21 @@
         }
     }
 
+    function moveFullRouteMapOverlayToBody() {
+        const overlay = getElement("fullRouteMapOverlay");
+
+        if (!overlay) {
+            console.warn("[Full Route Map] Overlay not found.");
+            return;
+        }
+
+        // Move the overlay outside the route-planning/page layout
+        // so it can truly cover the entire viewport on all devices.
+        if (overlay.parentElement !== document.body) {
+            document.body.appendChild(overlay);
+        }
+    }
+
     /* =====================================================
        FULL MAP INITIALIZATION
     ===================================================== */
@@ -375,6 +390,33 @@
 
         if (trackedVehicle) {
             updateFullRouteMapVehicleLocation(trackedVehicle);
+        } else {
+            const gpsLocation = window.FleetGPS?.getCurrentLocation?.();
+            const gpsVehicleId = window.FleetGPS?.getVehicleId?.();
+
+            if (
+                gpsLocation &&
+                gpsVehicleId &&
+                record?.vehicleId &&
+                String(gpsVehicleId) === String(record.vehicleId)
+            ) {
+                updateFullRouteMapVehicleLocation({
+                    vehicle_id: gpsVehicleId,
+                    vehicle_label: record.vehicle || "Vehicle",
+                    plate_number: "—",
+                    vehicle_status: record.tripStatus || "On Trip",
+                    has_location: true,
+                    location: {
+                        latitude: Number(gpsLocation.latitude),
+                        longitude: Number(gpsLocation.longitude),
+                        speed: gpsLocation.speed ?? null,
+                        heading: gpsLocation.heading ?? null,
+                        accuracy: gpsLocation.accuracy ?? null,
+                        age_seconds: 0,
+                        recorded_at: new Date().toISOString(),
+                    },
+                });
+            }
         }
 
         window.setTimeout(() => {
@@ -693,6 +735,77 @@
     window.updateFullRouteMapVehicleLocation =
         updateFullRouteMapVehicleLocation;
 
+    function initFullRouteMapGpsListener() {
+        if (document.documentElement.dataset.fullMapGpsListener === "true") {
+            return;
+        }
+
+        document.documentElement.dataset.fullMapGpsListener = "true";
+
+        window.addEventListener("fleet:gps-location-updated", (event) => {
+            const detail = event.detail || {};
+            const vehicleId = detail.vehicleId;
+            const location = detail.location;
+
+            if (!vehicleId || !location || !currentFullMapRecord) {
+                return;
+            }
+
+            /*
+             * Only update the marker when the GPS belongs
+             * to the vehicle assigned to the current route.
+             */
+            if (
+                !currentFullMapRecord.vehicleId ||
+                String(currentFullMapRecord.vehicleId) !== String(vehicleId)
+            ) {
+                return;
+            }
+
+            const latitude = Number(location.latitude);
+            const longitude = Number(location.longitude);
+
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                return;
+            }
+
+            /*
+             * Keep the existing vehicle metadata if it exists.
+             */
+            const existingVehicle =
+                window.getLastRoutePlanningTrackedVehicle?.() || {};
+
+            const trackedVehicle = {
+                ...existingVehicle,
+
+                vehicle_id: vehicleId,
+
+                vehicle_label:
+                    existingVehicle.vehicle_label ||
+                    currentFullMapRecord.vehicle ||
+                    "Vehicle",
+
+                plate_number: existingVehicle.plate_number || "—",
+                vehicle_status: existingVehicle.vehicle_status || "On Trip",
+                has_location: true,
+                location: {
+                    ...(existingVehicle.location || {}),
+
+                    latitude,
+                    longitude,
+
+                    speed: location.speed ?? null,
+                    heading: location.heading ?? null,
+                    accuracy: location.accuracy ?? null,
+                    age_seconds: 0,
+                    recorded_at: new Date().toISOString(),
+                },
+            };
+
+            updateFullRouteMapVehicleLocation(trackedVehicle);
+        });
+    }
+
     /* =====================================================
        RETURN TO HOSPITAL
     ===================================================== */
@@ -702,12 +815,10 @@
             throw new Error("No active route is loaded.");
         }
 
+        const fleetGpsLocation = window.FleetGPS?.getCurrentLocation?.();
         const trackedVehicle = window.getLastRoutePlanningTrackedVehicle?.();
-
-        const location = trackedVehicle?.location || null;
-
+        const location = fleetGpsLocation || trackedVehicle?.location || null;
         const latitude = Number(location?.latitude);
-
         const longitude = Number(location?.longitude);
 
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -1046,6 +1157,13 @@
        INIT
     ===================================================== */
     function init() {
+        // IMPORTANT:
+        // Move the full map overlay directly under <body>.
+        // This prevents tablet/mobile layout stacking contexts
+        // from trapping the overlay behind the navbar/sidebar.
+        moveFullRouteMapOverlayToBody();
+        initFullRouteMapGpsListener();
+
         routeDriverStatusConfirmModal = getElement(
             "routeDriverStatusConfirmModal",
         );
