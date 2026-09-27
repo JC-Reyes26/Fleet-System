@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\ProfileController;
@@ -40,6 +41,24 @@ Route::get('/', function () {
 */
 require __DIR__.'/auth.php';
 
+    /*
+    |--------------------------------------------------------------------------
+    | SESSION ACTIVITY
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('auth')->post(
+        '/session/activity',
+        function (Request $request) {
+            $request->session()->put(
+                'last_user_activity',
+                now()->timestamp
+            );
+
+            return response()->json([
+                'success' => true,
+            ]);
+        }
+    )->name('session.activity');
 
 /*
 |--------------------------------------------------------------------------
@@ -50,6 +69,7 @@ Route::middleware([
     'auth',
     'verified',
     'prevent.back.history',
+    'session.security',
 ])->group(function () {
 
     /*

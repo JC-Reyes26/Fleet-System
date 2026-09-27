@@ -37,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'fleet.module' => FleetModuleAccess::class,
             'fleet.action' => FleetModuleAction::class,
             'prevent.back.history' => PreventBackHistory::class,
+            'session.security' => \App\Http\Middleware\FleetSessionSecurity::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

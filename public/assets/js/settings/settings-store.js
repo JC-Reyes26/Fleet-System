@@ -53,11 +53,63 @@ function getDefaultFleetSettings() {
           overdueWarnDays: 3,
           requireCost: true,
           defaultType: "Preventive Maintenance",
+          serviceTypes: [
+              {
+                  id: "preventive_maintenance",
+                  name: "Preventive Maintenance",
+                  defaultCost: 0,
+                  active: true,
+              },
+              {
+                  id: "corrective_repair",
+                  name: "Corrective Repair",
+                  defaultCost: 0,
+                  active: true,
+              },
+              {
+                  id: "inspection",
+                  name: "Inspection",
+                  defaultCost: 0,
+                  active: true,
+              },
+              {
+                  id: "oil_change",
+                  name: "Oil Change",
+                  defaultCost: 0,
+                  active: true,
+              },
+              {
+                  id: "tire_service",
+                  name: "Tire Service",
+                  defaultCost: 0,
+                  active: true,
+              },
+              {
+                  id: "brake_service",
+                  name: "Brake Service",
+                  defaultCost: 0,
+                  active: true,
+              },
+              {
+                  id: "engine_service",
+                  name: "Engine Service",
+                  defaultCost: 0,
+                  active: true,
+              },
+              {
+                  id: "other",
+                  name: "Other",
+                  defaultCost: 0,
+                  active: true,
+              },
+          ],
+          providers: [],
       },
       fuel: {
           requireOdometer: true,
           requireStation: false,
           highCostAlert: 5000,
+          fuelStations: [],
       },
       routes: {
           preferOptimized: true,
@@ -227,9 +279,50 @@ function normalizeFleetSettings(raw) {
               "Preventive Maintenance",
               "Corrective Repair",
               "Inspection",
+              "Oil Change",
+              "Tire Service",
+              "Brake Service",
+              "Engine Service",
+              "Other",
           ].includes(m.defaultType)
               ? m.defaultType
               : defaults.maintenance.defaultType,
+          serviceTypes: Array.isArray(m.serviceTypes)
+              ? m.serviceTypes
+                    .map((item) => ({
+                        id: String(item?.id ?? "").trim(),
+                        name: String(item?.name ?? "")
+                            .trim()
+                            .slice(0, 100),
+                        defaultCost: clampNumber(
+                            item?.defaultCost,
+                            0,
+                            100000000,
+                            0,
+                        ),
+                        active: item?.active !== false,
+                    }))
+                    .filter((item) => item.id && item.name)
+              : JSON.parse(JSON.stringify(defaults.maintenance.serviceTypes)),
+          providers: Array.isArray(m.providers)
+              ? m.providers
+                    .map((item) => ({
+                        id: String(item?.id ?? "").trim(),
+                        name: String(item?.name ?? "")
+                            .trim()
+                            .slice(0, 120),
+                        type:
+                            item?.type === "Workshop"
+                                ? "Workshop"
+                                : "Technician",
+                        contractType:
+                            item?.contractType === "In-house"
+                                ? "In-house"
+                                : "Contractual",
+                        active: item?.active !== false,
+                    }))
+                    .filter((item) => item.id && item.name)
+              : [],
       },
       fuel: {
           requireOdometer: f.requireOdometer !== false,
@@ -240,6 +333,23 @@ function normalizeFleetSettings(raw) {
               1000000,
               defaults.fuel.highCostAlert,
           ),
+          fuelStations: Array.isArray(f.fuelStations)
+              ? f.fuelStations
+                    .map((item) => ({
+                        id: String(item?.id ?? "")
+                            .trim()
+                            .slice(0, 160),
+                        name: String(item?.name ?? "")
+                            .trim()
+                            .slice(0, 120),
+                        /*
+                         * Fuel stations are always contractual.
+                         */
+                        contractType: "Contractual",
+                        active: item?.active !== false,
+                    }))
+                    .filter((item) => item.id && item.name)
+              : [],
       },
       routes: {
           preferOptimized: rt.preferOptimized !== false,
@@ -583,8 +693,3 @@ async function resetFleetSettingsStorage() {
     return false;
   }
 }
-
-
-
-
-

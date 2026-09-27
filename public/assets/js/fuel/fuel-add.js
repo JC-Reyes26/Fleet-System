@@ -13,6 +13,7 @@ window.getFuelModuleSettings =
             requireOdometer: true,
             requireStation: false,
             highCostAlert: 5000,
+            fuelStations: [],
         };
 
         try {
@@ -41,19 +42,32 @@ window.getFuelModuleSettings =
             ) {
                 return defaults;
             }
+            const fuelStations = Array.isArray(settings.fuelStations)
+                ? settings.fuelStations
+                      .filter(
+                          (station) =>
+                              station &&
+                              station.id &&
+                              station.name &&
+                              station.contractType === "Contractual" &&
+                              station.active !== false,
+                      )
+                      .map((station) => ({
+                          id: String(station.id),
+                          name: String(station.name).trim(),
+                          contractType: "Contractual",
+                      }))
+                      .filter((station) => station.name !== "")
+                : [];
+
             return {
-                requireOdometer:
-                    settings.requireOdometer !== false,
-                requireStation:
-                    settings.requireStation === true,
-                highCostAlert:
-                    Math.max(
-                        0,
-                        Number(
-                            settings.highCostAlert ??
-                                5000
-                        )
-                    ),
+                requireOdometer: settings.requireOdometer !== false,
+                requireStation: settings.requireStation === true,
+                highCostAlert: Math.max(
+                    0,
+                    Number(settings.highCostAlert ?? 5000),
+                ),
+                fuelStations,
             };
         } catch (error) {
             console.error(
@@ -64,6 +78,30 @@ window.getFuelModuleSettings =
         }
     };
 
+function populateFuelStationSelect(stations, selectedValue = "") {
+    const select = document.getElementById("fuelStation");
+    if (!select) {
+        return;
+    }
+    select.innerHTML = '<option value="">Select Fuel Station</option>';
+    stations.forEach((station) => {
+        const option = document.createElement("option");
+        option.value = station.name;
+        option.textContent = `${station.name} — Contractual`;
+        option.dataset.stationId = station.id;
+        option.dataset.contractType = "Contractual";
+        select.appendChild(option);
+    });
+    if (
+        selectedValue &&
+        Array.from(select.options).some(
+            (option) => option.value === selectedValue,
+        )
+    ) {
+        select.value = selectedValue;
+    }
+}
+
 function applyFuelAddSettings(settings) {
     const odometer = document.getElementById("fuelOdometer");
     const odometerMark = document.getElementById("fuelOdometerRequiredMark");
@@ -71,13 +109,29 @@ function applyFuelAddSettings(settings) {
     const stationMark = document.getElementById("fuelStationRequiredMark");
     const requireOdometer = settings.requireOdometer === true;
     const requireStation = settings.requireStation === true;
-
+    /*
+    |--------------------------------------------------------------------------
+    | Fuel Station
+    |--------------------------------------------------------------------------
+    */
+    const currentStation = station?.value || "";
+    populateFuelStationSelect(settings.fuelStations || [], currentStation);
+    /*
+    |--------------------------------------------------------------------------
+    | Odometer
+    |--------------------------------------------------------------------------
+    */
     if (odometer) {
         odometer.required = requireOdometer;
     }
     if (odometerMark) {
         odometerMark.hidden = !requireOdometer;
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Fuel Station requirement
+    |--------------------------------------------------------------------------
+    */
     if (station) {
         station.required = requireStation;
     }
@@ -470,8 +524,7 @@ async function initFuelAdd() {
                 refuel_time:
                     document.getElementById("fuelRefuelTime")?.value || null,
                 fuel_station:
-                    document.getElementById("fuelStation")?.value.trim() ||
-                    null,
+                    document.getElementById("fuelStation")?.value || null,
                 receipt_number:
                     document.getElementById("fuelReceipt")?.value.trim() ||
                     null,

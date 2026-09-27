@@ -9,7 +9,7 @@
   <div class="custom-modal">
     <div class="modal-header">
       <div>
-        <h2 id="addFuelModalTitle">Add Fuel Record</h2>
+        <h2 id="addFuelModalTitle">Request Fuel Record</h2>
         <p id="addFuelModalDescription">
           Log a refueling transaction for a hospital fleet vehicle.
         </p>
@@ -150,7 +150,9 @@
                 Fuel Station
                 <span id="fuelStationRequiredMark">*</span>
             </label>
-            <input type="text" id="fuelStation" placeholder="Enter fuel station" />
+            <select id="fuelStation">
+              <option value="">Select Fuel Station</option>
+            </select>
           </div>
 
           <div class="form-group">

@@ -368,33 +368,187 @@
                 </section>
 
                 <!-- Maintenance -->
-                <section class="card settings-card" id="settingsMaintenance">
-                  <div class="card-header">
-                    <div>
-                      <h3><i class="ph ph-wrench" aria-hidden="true"></i> Maintenance</h3>
-                      <p class="card-subtitle">Service defaults and overdue warnings.</p>
+                <section
+                    class="card settings-card"
+                    id="settingsMaintenance"
+                >
+                    <div class="card-header">
+                        <div>
+                            <h3>
+                                <i
+                                    class="ph ph-wrench"
+                                    aria-hidden="true"
+                                ></i>
+                                Maintenance
+                            </h3>
+                            <p class="card-subtitle">
+                                Configure maintenance defaults, service types,
+                                and available technicians or workshops.
+                            </p>
+                        </div>
                     </div>
-                  </div>
-                  <div class="settings-check-list">
-                    <label class="settings-check">
-                      <input type="checkbox" id="settingsMntRequireCost" />
-                      <span>Require cost on completed work</span>
-                    </label>
-                  </div>
-                  <div class="settings-form-grid settings-form-grid--follow">
-                    <div class="form-group">
-                      <label for="settingsMntOverdueDays">Overdue warning (days)</label>
-                      <input type="number" id="settingsMntOverdueDays" min="0" max="30" step="1" />
+                    <!-- Maintenance Preferences -->
+                    <div class="settings-check-list">
+                        <label class="settings-check">
+                            <input
+                                type="checkbox"
+                                id="settingsMntRequireCost"
+                            />
+                            <span>
+                                Require cost on completed work
+                            </span>
+                        </label>
                     </div>
-                    <div class="form-group">
-                      <label for="settingsMntDefaultType">Default type</label>
-                      <select id="settingsMntDefaultType">
-                        <option value="Preventive Maintenance">Preventive Maintenance</option>
-                        <option value="Corrective Repair">Corrective Repair</option>
-                        <option value="Inspection">Inspection</option>
-                      </select>
+                    <div class="settings-form-grid settings-form-grid--follow">
+                        <div class="form-group">
+                            <label for="settingsMntOverdueDays">
+                                Overdue warning (days)
+                            </label>
+                            <input
+                                type="number"
+                                id="settingsMntOverdueDays"
+                                min="0"
+                                max="30"
+                                step="1"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="settingsMntDefaultType">
+                                Default type
+                            </label>
+                            <select
+                                id="settingsMntDefaultType"
+                            >
+                                <option value="Preventive Maintenance">
+                                    Preventive Maintenance
+                                </option>
+                                <option value="Corrective Repair">
+                                    Corrective Repair
+                                </option>
+                                <option value="Inspection">
+                                    Inspection
+                                </option>
+                                <option value="Oil Change">
+                                    Oil Change
+                                </option>
+                                <option value="Tire Service">
+                                    Tire Service
+                                </option>
+                                <option value="Brake Service">
+                                    Brake Service
+                                </option>
+                                <option value="Engine Service">
+                                    Engine Service
+                                </option>
+                                <option value="Other">
+                                    Other
+                                </option>
+                            </select>
+                        </div>
                     </div>
-                  </div>
+                    <!-- Maintenance Service Types -->
+                    <div class="settings-subsection">
+                        <div class="card-header">
+                            <div>
+                                <h4>
+                                    <i
+                                        class="ph ph-list-checks"
+                                        aria-hidden="true"
+                                    ></i>
+                                    Maintenance Service Types
+                                </h4>
+                                <p class="card-subtitle">
+                                    Manage available maintenance services and their default costs.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="settings-data-actions">
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                id="addMaintenanceServiceType"
+                            >
+                                <i
+                                    class="ph ph-plus"
+                                    aria-hidden="true"
+                                ></i>
+                                Add Service Type
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="fleet-table">
+                                <thead>
+                                    <tr>
+                                        <th>Service Type</th>
+                                        <th>Default Cost</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="maintenanceServiceTypesTableBody">
+                                    <!-- Service types will be rendered by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="settings-note">
+                            The default cost is automatically used when the corresponding
+                            service type is selected in a maintenance request.
+                            The final actual cost may still be updated according to the
+                            completed maintenance record.
+                        </p>
+                    </div>
+                    <!-- Technicians / Workshops -->
+                    <div class="settings-subsection">
+
+                        <div class="card-header">
+                            <div>
+                                <h4>
+                                    <i
+                                        class="ph ph-users-three"
+                                        aria-hidden="true"
+                                    ></i>
+                                    Technicians / Workshops
+                                </h4>
+                                <p class="card-subtitle">
+                                    Manage technicians and workshops available for maintenance assignments.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="settings-data-actions">
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                id="addMaintenanceProvider"
+                            >
+                                <i
+                                    class="ph ph-plus"
+                                    aria-hidden="true"
+                                ></i>
+                                Add Technician / Workshop
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="fleet-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Contract Type</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="maintenanceProvidersTableBody">
+                                    <!-- Technicians / workshops will be rendered by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="settings-note">
+                            Only active technicians and workshops will be available for
+                            selection in the Maintenance request form.
+                        </p>
+                    </div>
                 </section>
 
                 <!-- Fuel -->
@@ -420,6 +574,54 @@
                       <label for="settingsFuelHighCost">High cost alert (₱)</label>
                       <input type="number" id="settingsFuelHighCost" min="0" step="0.01" />
                     </div>
+                  </div>
+                  <div class="settings-subsection">
+                      <div class="card-header">
+                          <div>
+                              <h4>
+                                  <i
+                                      class="ph ph-gas-pump"
+                                      aria-hidden="true"
+                                  ></i>
+                                  Fuel Stations
+                              </h4>
+
+                              <p class="card-subtitle">
+                                  Manage contractual fuel stations available
+                                  for fleet fuel transactions.
+                              </p>
+                          </div>
+                      </div>
+                      <div class="settings-data-actions">
+                          <button
+                              type="button"
+                              class="btn-primary"
+                              id="addFuelStation"
+                          >
+                              <i
+                                  class="ph ph-plus"
+                                  aria-hidden="true"
+                              ></i>
+                              Add Fuel Station
+                          </button>
+                      </div>
+                      <div class="table-responsive">
+                          <table class="fleet-table">
+                              <thead>
+                                  <tr>
+                                      <th>Fuel Station</th>
+                                      <th>Contract Type</th>
+                                      <th>Status</th>
+                                      <th>Actions</th>
+                                  </tr>
+                              </thead>
+                              <tbody id="fuelStationsTableBody"></tbody>
+                          </table>
+                      </div>
+                      <p class="settings-note">
+                          Only active contractual fuel stations will be
+                          available for selection in Fuel transactions.
+                      </p>
                   </div>
                 </section>
 

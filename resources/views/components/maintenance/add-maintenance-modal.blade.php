@@ -9,8 +9,10 @@
   <div class="custom-modal">
     <div class="modal-header">
       <div>
-        <h2 id="addMaintenanceModalTitle">Add Maintenance</h2>
-        <p id="addMaintenanceModalDescription">Create a maintenance record for a hospital fleet vehicle.</p>
+        <h2 id="addMaintenanceModalTitle">Request Maintenance</h2>
+        <p id="addMaintenanceModalDescription">
+          Create a maintenance record for a hospital fleet vehicle.
+        </p>
       </div>
 
       <button
@@ -26,51 +28,97 @@
     <div class="modal-body">
       <form id="maintenanceForm">
         <div class="form-grid">
+
+          <!-- Maintenance Number -->
           <div class="form-group">
-            <label for="maintenanceNumber">Maintenance Number *</label>
+            <label for="maintenanceNumber">
+              Maintenance Number *
+            </label>
+
             <input
               type="text"
               id="maintenanceNumber"
-
               required
               readonly
             />
           </div>
 
+          <!-- Vehicle -->
           <div class="form-group">
-            <label for="maintenanceVehicle">Vehicle *</label>
-            <select id="maintenanceVehicle" required>
-              <option value="">Select Vehicle</option>
-            </select>
-          </div>
+            <label for="maintenanceVehicle">
+              Vehicle *
+            </label>
 
-          <div class="form-group">
-            <label for="maintenanceServiceType">Service Type *</label>
-            <select id="maintenanceServiceType" required>
-              <option value="">Select Service Type</option>
-              <option value="Preventive Maintenance">Preventive Maintenance</option>
-              <option value="Corrective Repair">Corrective Repair</option>
-              <option value="Inspection">Inspection</option>
-              <option value="Oil Change">Oil Change</option>
-              <option value="Tire Service">Tire Service</option>
-              <option value="Brake Service">Brake Service</option>
-              <option value="Engine Service">Engine Service</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="maintenanceTechnician">Technician / Workshop *</label>
-            <input
-              type="text"
-              id="maintenanceTechnician"
-              placeholder="Enter technician or workshop"
+            <select
+              id="maintenanceVehicle"
               required
-            />
+            >
+              <option value="">
+                Select Vehicle
+              </option>
+            </select>
           </div>
 
+          <!-- Request Type -->
           <div class="form-group">
-            <label for="maintenanceScheduledDate">Scheduled Date *</label>
+            <label for="maintenanceRequestType">
+              Request Type *
+            </label>
+
+            <select
+              id="maintenanceRequestType"
+              required
+            >
+              <option value="">
+                Select Request Type
+              </option>
+              <option value="Normal">
+                Normal Maintenance
+              </option>
+              <option value="Emergency">
+                Emergency Maintenance
+              </option>
+            </select>
+          </div>
+
+          <!-- Service Type -->
+          <div class="form-group">
+            <label for="maintenanceServiceType">
+              Service Type *
+            </label>
+
+            <select
+              id="maintenanceServiceType"
+              required
+            >
+              <option value="">
+                Select Service Type
+              </option>
+            </select>
+          </div>
+
+          <!-- Technician / Workshop -->
+          <div class="form-group">
+            <label for="maintenanceTechnician">
+              Technician / Workshop *
+            </label>
+
+            <select
+              id="maintenanceTechnician"
+              required
+            >
+              <option value="">
+                Select Technician / Workshop
+              </option>
+            </select>
+          </div>
+
+          <!-- Scheduled Date -->
+          <div class="form-group">
+            <label for="maintenanceScheduledDate">
+              Scheduled Date *
+            </label>
+
             <input
               type="date"
               id="maintenanceScheduledDate"
@@ -78,54 +126,99 @@
             />
           </div>
 
+          <!-- Completion Date -->
           <div class="form-group">
-            <label for="maintenanceCompletionDate">Completion Date</label>
+            <label for="maintenanceCompletionDate">
+              Completion Date
+            </label>
+
             <input
               type="date"
               id="maintenanceCompletionDate"
             />
           </div>
 
+          <!-- Cost -->
           <div class="form-group">
             <label for="maintenanceCost">
-                Cost
-                <span
-                    id="maintenanceCostRequiredMark"
-                >*</span>
+              Cost
+              <span
+                id="maintenanceCostRequiredMark"
+              >*</span>
             </label>
+
             <input
               type="number"
               id="maintenanceCost"
               min="0"
               step="0.01"
               placeholder="0.00"
+              readonly
             />
           </div>
 
+          <!-- Priority -->
           <div class="form-group">
-            <label for="maintenancePriority">Priority *</label>
-            <select id="maintenancePriority" required>
-              <option value="">Select Priority</option>
-              <option value="Emergency">Emergency</option>
-              <option value="High">High</option>
-              <option value="Normal">Normal</option>
-              <option value="Low">Low</option>
+            <label for="maintenancePriority">
+              Priority *
+            </label>
+
+            <select
+              id="maintenancePriority"
+              required
+            >
+              <option value="">
+                Select Priority
+              </option>
+              <option value="Emergency">
+                Emergency
+              </option>
+              <option value="High">
+                High
+              </option>
+              <option value="Normal">
+                Normal
+              </option>
+              <option value="Low">
+                Low
+              </option>
             </select>
           </div>
 
+          <!-- Status -->
           <div class="form-group">
-            <label for="maintenanceStatus">Status *</label>
-            <select id="maintenanceStatus" required>
-              <option value="">Select Status</option>
-              <option value="Scheduled">Scheduled</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-              <option value="Cancelled">Cancelled</option>
+            <label for="maintenanceStatus">
+              Status *
+            </label>
+
+            <select
+              id="maintenanceStatus"
+              required
+            >
+              <option value="">
+                Select Status
+              </option>
+              <option value="Scheduled">
+                Scheduled
+              </option>
+              <option value="In Progress">
+                In Progress
+              </option>
+              <option value="Completed">
+                Completed
+              </option>
+              <option value="Cancelled">
+                Cancelled
+              </option>
             </select>
           </div>
 
+          <!-- Odometer -->
           <div class="form-group">
-            <label for="maintenanceOdometer">Odometer Reading</label>
+            <label for="maintenanceOdometer">
+              Odometer Reading
+            </label>
+
             <input
               type="number"
               id="maintenanceOdometer"
@@ -134,8 +227,12 @@
             />
           </div>
 
+          <!-- Description -->
           <div class="form-group full-width">
-            <label for="maintenanceDescription">Description *</label>
+            <label for="maintenanceDescription">
+              Description *
+            </label>
+
             <textarea
               id="maintenanceDescription"
               rows="4"
@@ -144,8 +241,12 @@
             ></textarea>
           </div>
 
+          <!-- Parts Used -->
           <div class="form-group full-width">
-            <label for="maintenancePartsUsed">Parts Used</label>
+            <label for="maintenancePartsUsed">
+              Parts Used
+            </label>
+
             <textarea
               id="maintenancePartsUsed"
               rows="3"
@@ -153,14 +254,19 @@
             ></textarea>
           </div>
 
+          <!-- Notes -->
           <div class="form-group full-width">
-            <label for="maintenanceNotes">Notes</label>
+            <label for="maintenanceNotes">
+              Notes
+            </label>
+
             <textarea
               id="maintenanceNotes"
               rows="3"
               placeholder="Add additional notes"
             ></textarea>
           </div>
+
         </div>
 
         <div class="modal-footer">
@@ -171,7 +277,12 @@
           >
             Cancel
           </button>
-          <button type="submit" class="btn-primary" id="saveMaintenanceBtn">
+
+          <button
+            type="submit"
+            class="btn-primary"
+            id="saveMaintenanceBtn"
+          >
             Save Maintenance
           </button>
         </div>

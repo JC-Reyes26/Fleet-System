@@ -9,8 +9,13 @@
   <div class="custom-modal">
     <div class="modal-header">
       <div>
-        <h2 id="editMaintenanceModalTitle">Edit Maintenance</h2>
-        <p id="editMaintenanceModalDescription">Update vehicle maintenance record information.</p>
+        <h2 id="editMaintenanceModalTitle">
+          Edit Maintenance
+        </h2>
+
+        <p id="editMaintenanceModalDescription">
+          Update vehicle maintenance record information.
+        </p>
       </div>
 
       <button
@@ -26,8 +31,13 @@
     <div class="modal-body">
       <form id="editMaintenanceForm">
         <div class="form-grid">
+
+          <!-- Maintenance Number -->
           <div class="form-group">
-            <label for="editMaintenanceNumber">Maintenance Number *</label>
+            <label for="editMaintenanceNumber">
+              Maintenance Number *
+            </label>
+
             <input
               type="text"
               id="editMaintenanceNumber"
@@ -36,40 +46,60 @@
             />
           </div>
 
+          <!-- Vehicle -->
           <div class="form-group">
-            <label for="editMaintenanceVehicle">Vehicle *</label>
-            <select id="editMaintenanceVehicle" required>
-              <option value="">Select Vehicle</option>
-            </select>
-          </div>
+            <label for="editMaintenanceVehicle">
+              Vehicle *
+            </label>
 
-          <div class="form-group">
-            <label for="editMaintenanceServiceType">Service Type *</label>
-            <select id="editMaintenanceServiceType" required>
-              <option value="">Select Service Type</option>
-              <option value="Preventive Maintenance">Preventive Maintenance</option>
-              <option value="Corrective Repair">Corrective Repair</option>
-              <option value="Inspection">Inspection</option>
-              <option value="Oil Change">Oil Change</option>
-              <option value="Tire Service">Tire Service</option>
-              <option value="Brake Service">Brake Service</option>
-              <option value="Engine Service">Engine Service</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="editMaintenanceTechnician">Technician / Workshop *</label>
-            <input
-              type="text"
-              id="editMaintenanceTechnician"
-              placeholder="Enter technician or workshop"
+            <select
+              id="editMaintenanceVehicle"
               required
-            />
+            >
+              <option value="">
+                Select Vehicle
+              </option>
+            </select>
           </div>
 
+          <!-- Service Type -->
           <div class="form-group">
-            <label for="editMaintenanceScheduledDate">Scheduled Date *</label>
+            <label for="editMaintenanceServiceType">
+              Service Type *
+            </label>
+
+            <select
+              id="editMaintenanceServiceType"
+              required
+            >
+              <option value="">
+                Select Service Type
+              </option>
+            </select>
+          </div>
+
+          <!-- Technician / Workshop -->
+          <div class="form-group">
+            <label for="editMaintenanceTechnician">
+              Technician / Workshop *
+            </label>
+
+            <select
+              id="editMaintenanceTechnician"
+              required
+            >
+              <option value="">
+                Select Technician / Workshop
+              </option>
+            </select>
+          </div>
+
+          <!-- Scheduled Date -->
+          <div class="form-group">
+            <label for="editMaintenanceScheduledDate">
+              Scheduled Date *
+            </label>
+
             <input
               type="date"
               id="editMaintenanceScheduledDate"
@@ -77,54 +107,99 @@
             />
           </div>
 
+          <!-- Completion Date -->
           <div class="form-group">
-            <label for="editMaintenanceCompletionDate">Completion Date</label>
+            <label for="editMaintenanceCompletionDate">
+              Completion Date
+            </label>
+
             <input
               type="date"
               id="editMaintenanceCompletionDate"
             />
           </div>
 
+          <!-- Cost -->
           <div class="form-group">
             <label for="editMaintenanceCost">
-                Cost
-                <span
-                    id="editMaintenanceCostRequiredMark"
-                >*</span>
+              Cost
+              <span
+                id="editMaintenanceCostRequiredMark"
+              >*</span>
             </label>
+
             <input
               type="number"
               id="editMaintenanceCost"
               min="0"
               step="0.01"
               placeholder="0.00"
+              readonly
             />
           </div>
 
+          <!-- Priority -->
           <div class="form-group">
-            <label for="editMaintenancePriority">Priority *</label>
-            <select id="editMaintenancePriority" required>
-              <option value="">Select Priority</option>
-              <option value="Emergency">Emergency</option>
-              <option value="High">High</option>
-              <option value="Normal">Normal</option>
-              <option value="Low">Low</option>
+            <label for="editMaintenancePriority">
+              Priority *
+            </label>
+
+            <select
+              id="editMaintenancePriority"
+              required
+            >
+              <option value="">
+                Select Priority
+              </option>
+              <option value="Emergency">
+                Emergency
+              </option>
+              <option value="High">
+                High
+              </option>
+              <option value="Normal">
+                Normal
+              </option>
+              <option value="Low">
+                Low
+              </option>
             </select>
           </div>
 
+          <!-- Status -->
           <div class="form-group">
-            <label for="editMaintenanceStatus">Status *</label>
-            <select id="editMaintenanceStatus" required>
-              <option value="">Select Status</option>
-              <option value="Scheduled">Scheduled</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-              <option value="Cancelled">Cancelled</option>
+            <label for="editMaintenanceStatus">
+              Status *
+            </label>
+
+            <select
+              id="editMaintenanceStatus"
+              required
+            >
+              <option value="">
+                Select Status
+              </option>
+              <option value="Scheduled">
+                Scheduled
+              </option>
+              <option value="In Progress">
+                In Progress
+              </option>
+              <option value="Completed">
+                Completed
+              </option>
+              <option value="Cancelled">
+                Cancelled
+              </option>
             </select>
           </div>
 
+          <!-- Odometer -->
           <div class="form-group">
-            <label for="editMaintenanceOdometer">Odometer Reading</label>
+            <label for="editMaintenanceOdometer">
+              Odometer Reading
+            </label>
+
             <input
               type="number"
               id="editMaintenanceOdometer"
@@ -133,8 +208,12 @@
             />
           </div>
 
+          <!-- Description -->
           <div class="form-group full-width">
-            <label for="editMaintenanceDescription">Description *</label>
+            <label for="editMaintenanceDescription">
+              Description *
+            </label>
+
             <textarea
               id="editMaintenanceDescription"
               rows="4"
@@ -143,8 +222,12 @@
             ></textarea>
           </div>
 
+          <!-- Parts Used -->
           <div class="form-group full-width">
-            <label for="editMaintenancePartsUsed">Parts Used</label>
+            <label for="editMaintenancePartsUsed">
+              Parts Used
+            </label>
+
             <textarea
               id="editMaintenancePartsUsed"
               rows="3"
@@ -152,14 +235,19 @@
             ></textarea>
           </div>
 
+          <!-- Notes -->
           <div class="form-group full-width">
-            <label for="editMaintenanceNotes">Notes</label>
+            <label for="editMaintenanceNotes">
+              Notes
+            </label>
+
             <textarea
               id="editMaintenanceNotes"
               rows="3"
               placeholder="Add additional notes"
             ></textarea>
           </div>
+
         </div>
 
         <div class="modal-footer">
@@ -170,7 +258,12 @@
           >
             Cancel
           </button>
-          <button type="submit" class="btn-primary" id="updateMaintenanceBtn">
+
+          <button
+            type="submit"
+            class="btn-primary"
+            id="updateMaintenanceBtn"
+          >
             Update Maintenance
           </button>
         </div>

@@ -114,28 +114,30 @@
                 @csrf
 
                 <div class="form-group">
+                    <label for="twoFactorDigit1">Verification Code</label>
 
-                    <label for="twoFactorCode">
-                        Verification Code
-                    </label>
+                    <div class="otp-input-group" id="twoFactorOtpInputs">
+                        @for ($i = 1; $i <= 6; $i++)
+                            <input
+                                type="text"
+                                id="twoFactorDigit{{ $i }}"
+                                class="two-factor-code-input otp-digit @error('code') is-invalid @enderror"
+                                inputmode="numeric"
+                                autocomplete="{{ $i === 1 ? 'one-time-code' : 'off' }}"
+                                maxlength="1"
+                                pattern="[0-9]"
+                                aria-label="Verification code digit {{ $i }}"
+                                required
+                                @if ($i === 1) autofocus @endif
+                            />
+                        @endfor
+                    </div>
 
                     <input
-                        type="text"
+                        type="hidden"
                         id="twoFactorCode"
                         name="code"
-                        inputmode="numeric"
-                        autocomplete="one-time-code"
-                        maxlength="6"
-                        required
-                        autofocus
-                        placeholder="000000"
-                        class="two-factor-code-input @error('code') is-invalid @enderror"
-                        style="
-                            text-align: center;
-                            font-size: 24px;
-                            font-weight: 600;
-                            letter-spacing: 8px;
-                        "
+                        value="{{ old('code') }}"
                     />
 
                     <p
@@ -147,7 +149,6 @@
                             {{ $message }}
                         @enderror
                     </p>
-
                 </div>
 
 
@@ -294,53 +295,208 @@
                 }
             @endif
 
-
-            /*
-             * Restrict the code input to digits.
-             */
-            const codeInput =
+            const otpInputs = Array.from(
+                document.querySelectorAll(
+                    "#twoFactorOtpInputs .otp-digit"
+                )
+            );
+            const hiddenCodeInput =
                 document.getElementById(
                     "twoFactorCode"
                 );
+            function syncTwoFactorCode() {
+                if (!hiddenCodeInput) {
+                    return;
+                }
+                hiddenCodeInput.value =
+                    otpInputs
+                        .map((input) => input.value)
+                        .join("");
+            }
+            otpInputs.forEach(
+                (input, index) => {
+                    /*
+                    * Block letters, symbols, and
+                    * any non-numeric keyboard input.
+                    */
+                    input.addEventListener(
+                        "keydown",
+                        function (event) {
 
-            codeInput?.addEventListener(
-                "input",
-                function () {
+                            const allowedKeys = [
+                                "Backspace",
+                                "Delete",
+                                "Tab",
+                                "ArrowLeft",
+                                "ArrowRight",
+                                "ArrowUp",
+                                "ArrowDown"
+                            ];
+                            if (
+                                event.ctrlKey ||
+                                event.metaKey
+                            ) {
+                                return;
+                            }
+    
+                            if (
+                                allowedKeys.includes(
+                                    event.key
+                                )
+                            ) {
+                                if (
+                                    event.key === "Backspace" &&
+                                    !this.value &&
+                                    index > 0
+                                ) {
+                                    event.preventDefault();
 
-                    this.value =
-                        this.value
-                            .replace(/\D/g, "")
-                            .slice(0, 6);
+                                    otpInputs[
+                                        index - 1
+                                    ].focus();
+                                }
+                                /*
+                                * Left arrow.
+                                */
+                                if (
+                                    event.key === "ArrowLeft" &&
+                                    index > 0
+                                ) {
+                                    event.preventDefault();
+
+                                    otpInputs[
+                                        index - 1
+                                    ].focus();
+                                }
+                                /*
+                                * Right arrow.
+                                */
+                                if (
+                                    event.key === "ArrowRight" &&
+                                    index <
+                                        otpInputs.length - 1
+                                ) {
+                                    event.preventDefault();
+
+                                    otpInputs[
+                                        index + 1
+                                    ].focus();
+                                }
+                                return;
+                            }
+                            /*
+                            * Only allow numbers 0-9.
+                            */
+                            if (
+                                !/^[0-9]$/.test(
+                                    event.key
+                                )
+                            ) {
+                                event.preventDefault();
+                            }
+                        }
+                    );
+                    /*
+                    * Extra protection:
+                    * remove anything that is not numeric.
+                    */
+                    input.addEventListener(
+                        "input",
+                        function () {
+
+                            this.value =
+                                this.value
+                                    .replace(/[^0-9]/g, "")
+                                    .slice(0, 1);
+                            /*
+                            * Move automatically
+                            * to the next box.
+                            */
+                            if (
+                                this.value &&
+                                index <
+                                    otpInputs.length - 1
+                            ) {
+                                otpInputs[
+                                    index + 1
+                                ].focus();
+                            }
+                            syncTwoFactorCode();
+                        }
+                    );
+                    /*
+                    * Completely disable paste.
+                    */
+                    input.addEventListener(
+                        "paste",
+                        function (event) {
+                            event.preventDefault();
+                        }
+                    );
+                    /*
+                    * Disable drag-and-drop text.
+                    */
+                    input.addEventListener(
+                        "drop",
+                        function (event) {
+                            event.preventDefault();
+                        }
+                    );
                 }
             );
 
-
-            /*
-             * Prevent accidental double submission.
-             */
             const form =
                 document.getElementById(
                     "twoFactorForm"
                 );
-
             const button =
                 document.getElementById(
                     "twoFactorSubmitBtn"
                 );
-
             form?.addEventListener(
                 "submit",
-                function () {
+                function (event) {
 
+                    syncTwoFactorCode();
+
+                    /*
+                    * Do not submit until
+                    * all 6 digits are entered.
+                    */
+                    if (
+                        hiddenCodeInput.value.length !== 6
+                    ) {
+                        event.preventDefault();
+
+                        const firstEmpty =
+                            otpInputs.find(
+                                (input) => !input.value
+                            );
+
+                        firstEmpty?.focus();
+
+                        if (
+                            typeof showToast ===
+                            "function"
+                        ) {
+                            showToast(
+                                "Please enter all 6 digits of the verification code.",
+                                "error"
+                            );
+                        }
+                        return;
+                    }
+                    /*
+                    * Prevent accidental
+                    * double submission.
+                    */
                     if (button) {
                         button.disabled =
                             true;
-
                         button.setAttribute(
                             "aria-busy",
                             "true"
                         );
-
                         button.textContent =
                             "Verifying…";
                     }

@@ -30,6 +30,10 @@ class AuthenticatedSessionController extends Controller
 
     /**
      * Handle an incoming authentication request.
+     *
+     * Password authentication succeeds first,
+     * but the user is NOT fully authenticated
+     * until the 2FA code is verified.
      */
     public function store(
         LoginRequest $request
@@ -37,7 +41,6 @@ class AuthenticatedSessionController extends Controller
         try {
             $user = $request->authenticate();
         } catch (ValidationException $e) {
-
             AuditLogService::log(
                 module: 'Authentication',
                 action: 'Failed Login',
@@ -63,54 +66,19 @@ class AuthenticatedSessionController extends Controller
         ]);
 
         /*
-         * Check whether the user's 7-day 2FA
-         * verification window is still valid.
-         */
-        if (
-            $user->hasRecentTwoFactorVerification()
-        ) {
-            /*
-             * 2FA is still valid.
-             * Complete authentication now.
-             */
-            Auth::login(
-                $user,
-                $request->boolean('remember')
-            );
-
-            $request
-                ->session()
-                ->regenerate();
-
-            $user->forceFill([
-                'last_login_at' => now(),
-            ])->save();
-
-            AuditLogService::log(
-                module: 'Authentication',
-                action: 'Login',
-                description:
-                    'Logged in successfully.'
-            );
-
-            return redirect()->intended(
-                route(
-                    'dashboard',
-                    absolute: false
-                )
-            );
-        }
-
-        /*
-         * 2FA is required.
+         * 2FA is REQUIRED for EVERY successful login.
          *
-         * User is still NOT authenticated.
+         * There is intentionally NO 7-day bypass here.
          */
         $code = $this->codeService->issue(
             $user,
             AuthenticationCodeService::TYPE_TWO_FACTOR
         );
 
+        /*
+         * Send the new 6-digit code to the
+         * user's registered email address.
+         */
         $user->notify(
             new TwoFactorCodeNotification(
                 $code
@@ -119,12 +87,17 @@ class AuthenticatedSessionController extends Controller
 
         /*
          * Regenerate the session before storing
-         * pending authentication state.
+         * the pending authentication state.
          */
         $request
             ->session()
             ->regenerate();
 
+        /*
+         * Store only the pending 2FA information.
+         *
+         * The user is NOT authenticated yet.
+         */
         $request->session()->put([
             'two_factor_user_id' =>
                 $user->id,
@@ -133,6 +106,9 @@ class AuthenticatedSessionController extends Controller
                 $request->boolean('remember'),
         ]);
 
+        /*
+         * Redirect to the 2FA verification page.
+         */
         return redirect()
             ->route('two-factor');
     }

@@ -24,14 +24,43 @@ class FuelLogController extends Controller
         $record = FleetSetting::query()
             ->latest('id')
             ->first();
+
         $settings = $record?->settings ?? [];
-        $fuelSettings =
-            $settings['fuel'] ?? [];
+        $fuelSettings = $settings['fuel'] ?? [];
+
+        $fuelStations = is_array(
+            $fuelSettings['fuelStations'] ?? null
+        )
+            ? $fuelSettings['fuelStations']
+            : [];
+
+        $fuelStations = collect($fuelStations)
+            ->map(function ($station) {
+                return [
+                    'id' => (string) ($station['id'] ?? ''),
+                    'name' => trim(
+                        (string) ($station['name'] ?? '')
+                    ),
+                    // Fuel stations are always contractual.
+                    'contractType' => 'Contractual',
+                    'active' =>
+                        ($station['active'] ?? true) !== false,
+                ];
+            })
+            ->filter(function ($station) {
+                return $station['id'] !== '' &&
+                    $station['name'] !== '';
+            })
+            ->values()
+            ->all();
+
         return [
             'requireOdometer' =>
                 $fuelSettings['requireOdometer'] ?? true,
+
             'requireStation' =>
                 $fuelSettings['requireStation'] ?? false,
+
             'highCostAlert' =>
                 max(
                     0,
@@ -40,6 +69,9 @@ class FuelLogController extends Controller
                         ?? 5000
                     )
                 ),
+
+            'fuelStations' =>
+                $fuelStations,
         ];
     }
 
@@ -176,6 +208,8 @@ class FuelLogController extends Controller
             (bool) $fuelSettings['requireOdometer'];
         $requireStation =
             (bool) $fuelSettings['requireStation'];
+        $fuelStations =
+            $fuelSettings['fuelStations'] ?? [];
 
         $validator = Validator::make(
             $request->all(),
@@ -260,6 +294,48 @@ class FuelLogController extends Controller
             ], 422);
         }
 
+        $submittedStation = trim(
+            (string) $request->input('fuel_station', '')
+        );
+
+        if (
+            $submittedStation !== '' &&
+            !$this->isActiveFuelStation(
+                $submittedStation,
+                $fuelStations
+            )
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'The selected fuel station is invalid or inactive.',
+                'errors' => [
+                    'fuel_station' => [
+                        'Please select an active contractual fuel station.'
+                    ],
+                ],
+            ], 422);
+        }
+
+        if (
+            $requireStation &&
+            !$this->isActiveFuelStation(
+                $submittedStation,
+                $fuelStations
+            )
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'A valid active contractual fuel station is required.',
+                'errors' => [
+                    'fuel_station' => [
+                        'Please select an active contractual fuel station.'
+                    ],
+                ],
+            ], 422);
+        }
+
         try {
             $fuelLog = DB::transaction(function () use (
                 $validator,
@@ -267,6 +343,15 @@ class FuelLogController extends Controller
                 $user
             ) {
                 $validated = $validator->validated();
+
+                if (
+                    isset($validated['fuel_station']) &&
+                    $validated['fuel_station'] !== null
+                ) {
+                    $validated['fuel_station'] = trim(
+                        $validated['fuel_station']
+                    );
+                }
                 /*
                 |--------------------------------------------------------------------------
                 | Driver Limited Access
@@ -562,6 +647,8 @@ class FuelLogController extends Controller
             $this->getFuelSettings();
         $requireStation =
             (bool) $fuelSettings['requireStation'];
+        $fuelStations =
+            $fuelSettings['fuelStations'] ?? [];
 
         $validator = Validator::make(
             $request->all(),
@@ -610,6 +697,77 @@ class FuelLogController extends Controller
             ], 422);
         }
 
+        $submittedStation = trim(
+            (string) $request->input('fuel_station', '')
+        );
+        $currentStation = trim(
+            (string) $fuelLog->fuel_station
+        );
+        /*
+        |--------------------------------------------------------------------------
+        | Fuel Station Validation
+        |--------------------------------------------------------------------------
+        |
+        | Active stations are required for new selections.
+        | An inactive station may remain only when it is the
+        | existing station of this historical fuel record.
+        |
+        */
+        if ($submittedStation !== '') {
+            $isActiveStation =
+                $this->isActiveFuelStation(
+                    $submittedStation,
+                    $fuelStations
+                );
+
+            $isCurrentInactiveStation =
+                $currentStation !== '' &&
+                strcasecmp(
+                    $submittedStation,
+                    $currentStation
+                ) === 0 &&
+                $this->isConfiguredFuelStation(
+                    $currentStation,
+                    $fuelStations
+                ) &&
+                !$this->isActiveFuelStation(
+                    $currentStation,
+                    $fuelStations
+                );
+
+            if (
+                !$isActiveStation &&
+                !$isCurrentInactiveStation
+            ) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        'The selected fuel station is invalid or inactive.',
+                    'errors' => [
+                        'fuel_station' => [
+                            'Please select an active contractual fuel station.'
+                        ],
+                    ],
+                ], 422);
+            }
+        }
+
+        if (
+            $requireStation &&
+            $submittedStation === ''
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'A valid fuel station is required.',
+                'errors' => [
+                    'fuel_station' => [
+                        'Please select a fuel station.'
+                    ],
+                ],
+            ], 422);
+        }
+
         try {
             $result = DB::transaction(function () use (
                 $validator,
@@ -629,6 +787,15 @@ class FuelLogController extends Controller
                     );
 
                 $validated = $validator->validated();
+
+                if (
+                    isset($validated['fuel_station']) &&
+                    $validated['fuel_station'] !== null
+                ) {
+                    $validated['fuel_station'] = trim(
+                        $validated['fuel_station']
+                    );
+                }
 
                 $previousCost =
                     (float) $fuelLog->cost;
@@ -837,6 +1004,63 @@ class FuelLogController extends Controller
             'message' =>
                 'Fuel records cannot be deleted because they affect vehicle fuel and mileage history.',
         ], 422);
+    }
+
+    private function isActiveFuelStation(
+        ?string $stationName,
+        array $fuelStations
+    ): bool {
+        $stationName = trim(
+            (string) $stationName
+        );
+
+        if ($stationName === '') {
+            return false;
+        }
+
+        foreach ($fuelStations as $station) {
+            if (
+                ($station['contractType'] ?? 'Contractual') ===
+                    'Contractual' &&
+                ($station['active'] ?? true) === true &&
+                strcasecmp(
+                    trim((string) ($station['name'] ?? '')),
+                    $stationName
+                ) === 0
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isConfiguredFuelStation(
+        ?string $stationName,
+        array $fuelStations
+    ): bool {
+        $stationName = trim(
+            (string) $stationName
+        );
+
+        if ($stationName === '') {
+            return false;
+        }
+
+        foreach ($fuelStations as $station) {
+            if (
+                ($station['contractType'] ?? 'Contractual') ===
+                    'Contractual' &&
+                strcasecmp(
+                    trim((string) ($station['name'] ?? '')),
+                    $stationName
+                ) === 0
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 

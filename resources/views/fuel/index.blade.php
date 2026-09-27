@@ -22,7 +22,7 @@
                       class="btn-primary"
                   >
                       <i class="ph ph-plus"></i>
-                      Add Fuel Record
+                      Request Fuel Record
                   </button>
               @endif
             </div>

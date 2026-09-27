@@ -203,31 +203,38 @@ function validateMaintenanceForm(form) {
     } else {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const scheduled = new Date(scheduledDate.value);
-        if (isNaN(scheduled.getTime())) {
-            fail(scheduledDate, "Scheduled date is invalid.");
-        } else if (!isEditForm && scheduled < today) {
-            /* Past-date rule applies to Add only; Edit may update historical records. */
-            fail(scheduledDate, "Scheduled date cannot be in the past.");
+        const scheduledDate = fields.maintenanceScheduledDate;
+        if (!scheduledDate || !scheduledDate.value) {
+            fail(scheduledDate, "Scheduled date is required.");
+        } else {
+            const today = new Date();
+            const todayLocal =
+                today.getFullYear() +
+                "-" +
+                String(today.getMonth() + 1).padStart(2, "0") +
+                "-" +
+                String(today.getDate()).padStart(2, "0");
+            if (scheduledDate.value < todayLocal) {
+                fail(scheduledDate, "Scheduled date cannot be in the past.");
+            }
         }
     }
 
     const completionDate = fields.maintenanceCompletionDate;
     if (completionDate && completionDate.value) {
+        const today = getMaintenanceLocalDate();
+        const completionValue = completionDate.value;
+        if (completionValue < today) {
+            fail(completionDate, "Completion date cannot be in the past.");
+        }
         const scheduledDateValue = fields.maintenanceScheduledDate
             ? fields.maintenanceScheduledDate.value
             : "";
-        if (scheduledDateValue) {
-            const scheduled = new Date(scheduledDateValue);
-            const completion = new Date(completionDate.value);
-            if (!isNaN(scheduled.getTime()) && !isNaN(completion.getTime())) {
-                if (completion < scheduled) {
-                    fail(
-                        completionDate,
-                        "Completion date cannot be earlier than scheduled date.",
-                    );
-                }
-            }
+        if (scheduledDateValue && completionValue < scheduledDateValue) {
+            fail(
+                completionDate,
+                "Completion date cannot be earlier than scheduled date.",
+            );
         }
     }
 

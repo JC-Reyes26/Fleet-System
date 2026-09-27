@@ -108,22 +108,44 @@
                 @csrf
 
                 <div class="form-group">
-
-                    <label for="forgotPasswordCode">
+                    <label for="forgotPasswordDigit1">
                         Verification Code
                     </label>
 
+                    <div
+                        class="otp-input-group"
+                        id="forgotPasswordOtpInputs"
+                    >
+                        @for ($i = 1; $i <= 6; $i++)
+                            <input
+                                type="text"
+                                id="forgotPasswordDigit{{ $i }}"
+                                class="auth-code-input otp-digit @error('code') is-invalid @enderror"
+                                inputmode="numeric"
+                                autocomplete="{{ $i === 1 ? 'one-time-code' : 'off' }}"
+                                maxlength="1"
+                                pattern="[0-9]"
+                                aria-label="Verification code digit {{ $i }}"
+                                required
+                                @if ($i === 1)
+                                    autofocus
+                                @endif
+                            >
+                        @endfor
+                    </div>
+
+                    {{-- 
+                        Hidden field sent to Laravel.
+                        Example:
+                        1 2 3 4 5 6
+                        becomes:
+                        code = 123456
+                    --}}
                     <input
-                        type="text"
+                        type="hidden"
                         id="forgotPasswordCode"
                         name="code"
-                        class="auth-code-input @error('code') is-invalid @enderror"
-                        placeholder="000000"
-                        maxlength="6"
-                        inputmode="numeric"
-                        autocomplete="one-time-code"
-                        required
-                        autofocus
+                        value="{{ old('code') }}"
                     >
 
                     @error('code')
@@ -291,22 +313,165 @@
             @endif
 
 
-            const codeInput =
+            const otpInputs = Array.from(
+                document.querySelectorAll(
+                    "#forgotPasswordOtpInputs .otp-digit"
+                )
+            );
+            const hiddenCodeInput =
                 document.getElementById(
                     "forgotPasswordCode"
                 );
+            function syncForgotPasswordCode() {
+                if (!hiddenCodeInput) {
+                    return;
+                }
+                hiddenCodeInput.value =
+                    otpInputs
+                        .map((input) => input.value)
+                        .join("");
+            }
+            otpInputs.forEach(
+                (input, index) => {
+                    /*
+                    * Block letters, symbols, and
+                    * any non-numeric keyboard input.
+                    */
+                    input.addEventListener(
+                        "keydown",
+                        function (event) {
+                            const allowedKeys = [
+                                "Backspace",
+                                "Delete",
+                                "Tab",
+                                "ArrowLeft",
+                                "ArrowRight",
+                                "ArrowUp",
+                                "ArrowDown"
+                            ];
+                            /*
+                            * Allow:
+                            * Ctrl + A
+                            * Ctrl + C
+                            * Ctrl + X
+                            */
+                            if (
+                                event.ctrlKey ||
+                                event.metaKey
+                            ) {
+                                return;
+                            }
+                            /*
+                            * Allow navigation keys.
+                            */
+                            if (
+                                allowedKeys.includes(
+                                    event.key
+                                )
+                            ) {
+                                /*
+                                * Backspace:
+                                * move to previous box when
+                                * current box is empty.
+                                */
+                                if (
+                                    event.key === "Backspace" &&
+                                    !this.value &&
+                                    index > 0
+                                ) {
+                                    event.preventDefault();
+                                    otpInputs[
+                                        index - 1
+                                    ].focus();
+                                }
 
-            codeInput?.addEventListener(
-                "input",
-                function () {
-
-                    this.value =
-                        this.value
-                            .replace(/\D/g, "")
-                            .slice(0, 6);
+                                /*
+                                * Left arrow.
+                                */
+                                if (
+                                    event.key === "ArrowLeft" &&
+                                    index > 0
+                                ) {
+                                    event.preventDefault();
+                                    otpInputs[
+                                        index - 1
+                                    ].focus();
+                                }
+                                /*
+                                * Right arrow.
+                                */
+                                if (
+                                    event.key === "ArrowRight" &&
+                                    index <
+                                        otpInputs.length - 1
+                                ) {
+                                    event.preventDefault();
+                                    otpInputs[
+                                        index + 1
+                                    ].focus();
+                                }
+                                return;
+                            }
+                            /*
+                            * Only allow digits 0-9.
+                            */
+                            if (
+                                !/^[0-9]$/.test(
+                                    event.key
+                                )
+                            ) {
+                                event.preventDefault();
+                            }
+                        }
+                    );
+                    /*
+                    * Extra protection:
+                    * remove anything that is not a digit.
+                    */
+                    input.addEventListener(
+                        "input",
+                        function () {
+                            this.value =
+                                this.value
+                                    .replace(/[^0-9]/g, "")
+                                    .slice(0, 1);
+                            /*
+                            * Automatically move
+                            * to the next box.
+                            */
+                            if (
+                                this.value &&
+                                index <
+                                    otpInputs.length - 1
+                            ) {
+                                otpInputs[
+                                    index + 1
+                                ].focus();
+                            }
+                            syncForgotPasswordCode();
+                        }
+                    );
+                    /*
+                    * Completely disable paste.
+                    */
+                    input.addEventListener(
+                        "paste",
+                        function (event) {
+                            event.preventDefault();
+                        }
+                    );
+                    /*
+                    * Disable drop of text into
+                    * the OTP fields.
+                    */
+                    input.addEventListener(
+                        "drop",
+                        function (event) {
+                            event.preventDefault();
+                        }
+                    );
                 }
             );
-
 
             const form =
                 document.getElementById(
@@ -317,21 +482,37 @@
                 document.getElementById(
                     "verifyForgotPasswordSubmitBtn"
                 );
-
             form?.addEventListener(
                 "submit",
-                function () {
-
+                function (event) {
+                    syncForgotPasswordCode();
+                    if (
+                        hiddenCodeInput.value.length !== 6
+                    ) {
+                        event.preventDefault();
+                        const firstEmpty =
+                            otpInputs.find(
+                                (input) => !input.value
+                            );
+                        firstEmpty?.focus();
+                        if (
+                            typeof showToast ===
+                            "function"
+                        ) {
+                            showToast(
+                                "Please enter all 6 digits of the verification code.",
+                                "error"
+                            );
+                        }
+                        return;
+                    }
                     if (button) {
-
                         button.disabled =
                             true;
-
                         button.setAttribute(
                             "aria-busy",
                             "true"
                         );
-
                         button.textContent =
                             "Verifying…";
                     }
@@ -342,7 +523,6 @@
                 document.getElementById(
                     "forgotPasswordResendBtn"
                 );
-
             const forgotResendText =
                 document.getElementById(
                     "forgotPasswordResendText"

@@ -11,20 +11,23 @@ window.getMaintenanceModuleSettings =
         const defaults = {
             overdueWarnDays: 3,
             requireCost: true,
-            defaultType:
-                "Preventive Maintenance",
+            defaultType: "Preventive Maintenance",
+            serviceTypes: [],
+            providers: [],
         };
-
         try {
-            const response = await fetch(
-                "/settings/data",
-                {
-                    headers: {
-                        Accept: "application/json",
-                    },
-                    credentials: "same-origin",
-                }
-            );
+            const response =
+                await fetch(
+                    "/settings/data",
+                    {
+                        headers: {
+                            Accept:
+                                "application/json",
+                        },
+                        credentials:
+                            "same-origin",
+                    }
+                );
             if (!response.ok) {
                 throw new Error(
                     "Unable to load Maintenance settings."
@@ -34,13 +37,13 @@ window.getMaintenanceModuleSettings =
                 await response.json();
             const settings =
                 data?.settings?.maintenance;
-
             if (
                 !settings ||
                 typeof settings !== "object"
             ) {
                 return defaults;
             }
+
             const allowedTypes = [
                 "Preventive Maintenance",
                 "Corrective Repair",
@@ -51,87 +54,326 @@ window.getMaintenanceModuleSettings =
                 "Engine Service",
                 "Other",
             ];
+
+            const serviceTypes =
+                Array.isArray(
+                    settings.serviceTypes
+                )
+                    ? settings.serviceTypes
+                        .filter(
+                            (service) =>
+                                service &&
+                                service.active !== false &&
+                                service.id &&
+                                service.name
+                        )
+                        .map(
+                            (service) => ({
+                                id: String(
+                                    service.id
+                                ),
+                                name: String(
+                                    service.name
+                                ),
+                                defaultCost:
+                                    Number(
+                                        service.defaultCost
+                                    ) || 0,
+                            })
+                        )
+                    : [];
+
+            const providers =
+                Array.isArray(
+                    settings.providers
+                )
+                    ? settings.providers
+                        .filter(
+                            (provider) =>
+                                provider &&
+                                provider.active !== false &&
+                                provider.id &&
+                                provider.name
+                        )
+                        .map(
+                            (provider) => ({
+                                id: String(
+                                    provider.id
+                                ),
+                                name: String(
+                                    provider.name
+                                ),
+                                type:
+                                    provider.type ===
+                                    "Workshop"
+                                        ? "Workshop"
+                                        : "Technician",
+                                contractType:
+                                    provider.contractType ===
+                                    "In-house"
+                                        ? "In-house"
+                                        : "Contractual",
+                            })
+                        )
+                    : [];
             return {
                 overdueWarnDays:
                     Math.max(
-                        1,
+                        0,
                         Math.min(
                             90,
                             Number(
-                                settings.overdueWarnDays
-                                ?? 3
+                                settings.overdueWarnDays ??
+                                    3
                             )
                         )
                     ),
-
                 requireCost:
-                    settings.requireCost !== false,
-
+                    settings.requireCost !==
+                    false,
                 defaultType:
                     allowedTypes.includes(
                         settings.defaultType
                     )
                         ? settings.defaultType
                         : defaults.defaultType,
+                serviceTypes,
+                providers,
             };
         } catch (error) {
             console.error(
                 "Maintenance settings load error:",
                 error
             );
-
             return defaults;
         }
     };
+
+function getMaintenanceLocalDate() {
+    const now = new Date();
+    return (
+        now.getFullYear() +
+        "-" +
+        String(now.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(now.getDate()).padStart(2, "0")
+    );
+}
+function setMaintenanceScheduledDateMinimum() {
+    const scheduledDate = document.getElementById("maintenanceScheduledDate");
+    if (!scheduledDate) {
+        return;
+    }
+    const today = getMaintenanceLocalDate();
+    scheduledDate.min = today;
+}
+function setMaintenanceCompletionDateMinimum() {
+    const completionDate = document.getElementById("maintenanceCompletionDate");
+    if (!completionDate) {
+        return;
+    }
+    const today = getMaintenanceLocalDate();
+    const scheduledDate = document.getElementById("maintenanceScheduledDate");
+    const scheduledValue = scheduledDate?.value || "";
+    const minimumDate =
+        scheduledValue && scheduledValue > today ? scheduledValue : today;
+    completionDate.min = minimumDate;
+}
     
-function applyMaintenanceAddSettings(
-    settings
-) {
-    const serviceType =
-        document.getElementById(
-            "maintenanceServiceType"
-        );
-    const status =
-        document.getElementById(
-            "maintenanceStatus"
-        );
-    const cost =
-        document.getElementById(
-            "maintenanceCost"
-        );
-    const costMark =
-        document.getElementById(
-            "maintenanceCostRequiredMark"
-        );
+function applyMaintenanceAddSettings(settings) {
+    setMaintenanceScheduledDateMinimum();
+    setMaintenanceCompletionDateMinimum();
+    const requestType = document.getElementById("maintenanceRequestType");
+    const serviceType = document.getElementById("maintenanceServiceType");
+    const provider = document.getElementById("maintenanceTechnician");
+    const scheduledDate = document.getElementById("maintenanceScheduledDate");
+    const completionDate = document.getElementById("maintenanceCompletionDate");
+    const cost = document.getElementById("maintenanceCost");
+    const costMark = document.getElementById("maintenanceCostRequiredMark");
+    const priority = document.getElementById("maintenancePriority");
+    const status = document.getElementById("maintenanceStatus");
+
+    if (requestType && !requestType.value) {
+        requestType.value = "Normal";
+    }
     /*
     |--------------------------------------------------------------------------
-    | Default Maintenance Type
+    | Service Type Dropdown
     |--------------------------------------------------------------------------
     */
-    if (
-        serviceType &&
-        !serviceType.value
-    ) {
-        serviceType.value =
-            settings.defaultType;
+    if (serviceType) {
+        const currentValue = serviceType.value;
+        serviceType.innerHTML = '<option value="">Select Service Type</option>';
+        settings.serviceTypes.forEach((service) => {
+            const option = document.createElement("option");
+            option.value = service.id;
+            option.textContent = service.name;
+            option.dataset.cost = String(service.defaultCost);
+            serviceType.appendChild(option);
+        });
+
+        /*
+         * Restore selected value if possible.
+         */
+        if (
+            settings.serviceTypes.some(
+                (service) => String(service.id) === String(currentValue),
+            )
+        ) {
+            serviceType.value = currentValue;
+        }
+
+        /*
+         * Use default type on fresh form.
+         */
+        if (!serviceType.value && settings.defaultType) {
+            const matching = settings.serviceTypes.find(
+                (service) => service.name === settings.defaultType,
+            );
+            if (matching) {
+                serviceType.value = matching.id;
+            }
+        }
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Technician / Workshop Dropdown
+    |--------------------------------------------------------------------------
+    */
+    if (provider) {
+        const currentValue = provider.value;
+        provider.innerHTML =
+            '<option value="">Select Technician / Workshop</option>';
+        settings.providers.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = item.id;
+            option.textContent = `${item.name} — ${item.type} — ${item.contractType}`;
+            provider.appendChild(option);
+        });
+
+        if (
+            settings.providers.some(
+                (item) => String(item.id) === String(currentValue),
+            )
+        ) {
+            provider.value = currentValue;
+        }
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Cost Requirement
     |--------------------------------------------------------------------------
     */
-    const completed =
-        status?.value === "Completed";
-    const costRequired =
-        settings.requireCost &&
-        completed;
+    const completed = status?.value === "Completed";
+    const costRequired = settings.requireCost && completed;
     if (cost) {
-        cost.required =
-            costRequired;
+        cost.required = costRequired;
+        /*
+         * Cost comes from the selected
+         * service type.
+         */
+        cost.readOnly = true;
     }
     if (costMark) {
-        costMark.hidden =
-            !costRequired;
+        costMark.hidden = !costRequired;
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Request Type / Priority / Status Behavior / Emergency Behavior
+    |--------------------------------------------------------------------------
+    */
+    const isEmergency = requestType?.value === "Emergency";
+    if (priority) {
+        const currentPriority = priority.value;
+        /*
+         * Rebuild priority options based on request type.
+         */
+        priority.innerHTML = `
+        <option value="">Select Priority</option>
+        <option value="High">High</option>
+        <option value="Normal">Normal</option>
+        <option value="Low">Low</option>
+    `;
+        if (isEmergency) {
+            /*
+             * Emergency Maintenance:
+             * Emergency is the only priority and is automatic.
+             */
+            const emergencyOption = document.createElement("option");
+            emergencyOption.value = "Emergency";
+            emergencyOption.textContent = "Emergency";
+            priority.appendChild(emergencyOption);
+            priority.value = "Emergency";
+            priority.disabled = true;
+        } else {
+            /*
+             * Normal Maintenance:
+             * Emergency priority is not available.
+             */
+            priority.disabled = false;
+            if (
+                currentPriority &&
+                ["High", "Normal", "Low"].includes(currentPriority)
+            ) {
+                priority.value = currentPriority;
+            } else {
+                priority.value = "Normal";
+            }
+        }
+    }
+    if (status) {
+        /*
+         * Normal Maintenance always starts as Scheduled.
+         */
+        if (isEmergency) {
+            status.value = "In Progress";
+            status.disabled = true;
+        } else {
+            status.value = "Scheduled";
+            status.disabled = true;
+        }
+    }
+    if (isEmergency) {
+        /*
+         * Emergency maintenance starts immediately.
+         */
+        if (scheduledDate) {
+            const today = getMaintenanceLocalDate();
+            scheduledDate.value = today;
+            scheduledDate.readOnly = true;
+        }
+
+        if (completionDate) {
+            completionDate.value = "";
+            completionDate.disabled = true;
+        }
+    } else {
+        /*
+         * Normal maintenance allows future scheduling.
+         */
+        if (scheduledDate) {
+            scheduledDate.readOnly = false;
+            setMaintenanceScheduledDateMinimum();
+        }
+        if (completionDate) {
+            completionDate.disabled = false;
+            setMaintenanceCompletionDateMinimum();
+        }
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Automatic Cost
+    |--------------------------------------------------------------------------
+    */
+    if (serviceType && cost) {
+        const selectedOption = serviceType.selectedOptions?.[0];
+        const defaultCost = Number(selectedOption?.dataset?.cost);
+        if (Number.isFinite(defaultCost)) {
+            cost.value = defaultCost.toFixed(2);
+        } else {
+            cost.value = "";
+        }
     }
 }
 
@@ -562,13 +804,17 @@ function createMaintenanceRow(form, savedMaintenance = null) {
 }
 
 async function saveMaintenance(form) {
+    const serviceTypeSelect = document.getElementById("maintenanceServiceType");
+    const technicianSelect = document.getElementById("maintenanceTechnician");
+    const selectedService = serviceTypeSelect?.selectedOptions?.[0];
+    const selectedProvider = technicianSelect?.selectedOptions?.[0];
     const values = {
         vehicle_id: document.getElementById("maintenanceVehicle")?.value || "",
-        maintenance_type:
-            document.getElementById("maintenanceServiceType")?.value || "",
-        technician:
-            document.getElementById("maintenanceTechnician")?.value.trim() ||
-            "",
+        request_type:
+            document.getElementById("maintenanceRequestType")?.value ||
+            "Normal",
+        maintenance_type: selectedService?.textContent?.trim() || "",
+        technician: selectedProvider?.textContent?.trim() || "",
         maintenance_date:
             document.getElementById("maintenanceScheduledDate")?.value || "",
         completion_date:
@@ -644,8 +890,46 @@ async function initMaintenanceAdd() {
     const maintenanceSettings = await window.getMaintenanceModuleSettings();
 
     applyMaintenanceAddSettings(maintenanceSettings);
+    /*
+     * Service Type → automatic cost
+     */
+    document
+        .getElementById("maintenanceServiceType")
+        ?.addEventListener("change", () => {
+            const serviceType = document.getElementById(
+                "maintenanceServiceType",
+            );
+            const cost = document.getElementById("maintenanceCost");
+            const selectedOption = serviceType?.selectedOptions?.[0];
+            const defaultCost = Number(selectedOption?.dataset?.cost);
+            if (cost && Number.isFinite(defaultCost)) {
+                cost.value = defaultCost.toFixed(2);
+            } else if (cost) {
+                cost.value = "";
+            }
+        });
+    /*
+     * Request Type → Normal / Emergency
+     */
+    document
+        .getElementById("maintenanceRequestType")
+        ?.addEventListener("change", () => {
+            applyMaintenanceAddSettings(maintenanceSettings);
+        });
 
     maintenanceAddInitialized = true;
+
+    document
+        .getElementById("maintenanceScheduledDate")
+        ?.addEventListener("focus", () => {
+            setMaintenanceScheduledDateMinimum();
+            setMaintenanceCompletionDateMinimum();
+        });
+    document
+        .getElementById("maintenanceScheduledDate")
+        ?.addEventListener("change", () => {
+            setMaintenanceCompletionDateMinimum();
+        });
 
     document
         .getElementById("maintenanceStatus")

@@ -18,16 +18,60 @@ async function getEditFuelSettings() {
         }
         const data = await response.json();
         const settings = data?.settings?.fuel || {};
+        const fuelStations = Array.isArray(settings.fuelStations)
+            ? settings.fuelStations
+                  .filter(
+                      (station) =>
+                          station &&
+                          station.id &&
+                          station.name &&
+                          station.contractType === "Contractual" &&
+                          station.active !== false,
+                  )
+                  .map((station) => ({
+                      id: String(station.id),
+                      name: String(station.name).trim(),
+                      contractType: "Contractual",
+                  }))
+                  .filter((station) => station.name !== "")
+            : [];
+
         return {
             requireStation: settings.requireStation === true,
-
             highCostAlert: Math.max(0, Number(settings.highCostAlert ?? 5000)),
+            fuelStations,
         };
     } catch {
         return {
             requireStation: false,
             highCostAlert: 5000,
+            fuelStations: [],
         };
+    }
+}
+
+function populateEditFuelStationSelect(stations, currentStation = "") {
+    const select = document.getElementById("editFuelStation");
+    if (!select) {
+        return;
+    }
+    select.innerHTML = '<option value="">Select Fuel Station</option>';
+    stations.forEach((station) => {
+        const option = document.createElement("option");
+        option.value = station.name;
+        option.textContent = `${station.name} — Contractual`;
+        option.dataset.stationId = station.id;
+        option.dataset.contractType = "Contractual";
+        select.appendChild(option);
+    });
+
+    if (
+        currentStation &&
+        Array.from(select.options).some(
+            (option) => option.value === currentStation,
+        )
+    ) {
+        select.value = currentStation;
     }
 }
 
@@ -35,6 +79,8 @@ function applyEditFuelSettings(settings) {
     const station = document.getElementById("editFuelStation");
     const mark = document.getElementById("editFuelStationRequiredMark");
     const required = settings.requireStation === true;
+    const currentStation = station?.value || "";
+    populateEditFuelStationSelect(settings.fuelStations || [], currentStation);
     if (station) {
         station.required = required;
     }
@@ -65,7 +111,11 @@ function canEditFuelRecords() {
 }
 
 let editFuelInitialized = false;
-
+let editFuelSettings = {
+    requireStation: false,
+    highCostAlert: 5000,
+    fuelStations: [],
+};
 
 function populateEditFuelForm(row) {
     if (!row) {
@@ -174,7 +224,30 @@ function populateEditFuelForm(row) {
     setValue("editFuelCostPerLiter", costPerLiter);
     setValue("editFuelTotalCost", totalCost);
     setValue("editFuelOdometer", odometer);
-    setValue("editFuelStation", station);
+    const stationSelect = document.getElementById("editFuelStation");
+
+    if (stationSelect) {
+        const stationValue = String(station || "").trim();
+    /*
+    |--------------------------------------------------------------------------
+    | Try active station first
+    |--------------------------------------------------------------------------
+    */
+        stationSelect.value = stationValue;
+    /*
+    |--------------------------------------------------------------------------
+    | Preserve existing inactive station
+    |--------------------------------------------------------------------------
+    */
+        if (stationValue && stationSelect.value !== stationValue) {
+            const option = document.createElement("option");
+            option.value = stationValue;
+            option.textContent = `${stationValue} — Contractual (Current Record)`;
+            option.dataset.current = "true";
+            stationSelect.appendChild(option);
+            stationSelect.value = stationValue;
+        }
+    }
     setValue("editFuelReceipt", receipt);
     setSelect("editFuelPayment", payment);
     setValue("editFuelNotes", notes);
@@ -269,7 +342,7 @@ async function updateFuelRecord(form, fuelId) {
 
         refuel_time: getValue("editFuelRefuelTime") || null,
         cost_per_liter: getValue("editFuelCostPerLiter"),
-        fuel_station: getValue("editFuelStation").trim() || null,
+        fuel_station: getValue("editFuelStation") || null,
         receipt_number: getValue("editFuelReceipt").trim() || null,
         payment_method: getValue("editFuelPayment") || null,
         notes: getValue("editFuelNotes").trim() || null,
@@ -318,9 +391,8 @@ async function initEditFuelModal() {
         return;
     }
 
-    const fuelSettings = await getEditFuelSettings();
-
-    applyEditFuelSettings(fuelSettings);
+    editFuelSettings = await getEditFuelSettings();
+    applyEditFuelSettings(editFuelSettings);
 
     editFuelInitialized = true;
 
@@ -363,20 +435,18 @@ async function initEditFuelModal() {
         .getElementById("editFuelCostPerLiter")
         ?.addEventListener("input", () => {
             requestAnimationFrame(() => {
-                updateEditFuelHighCostWarning(fuelSettings);
+                updateEditFuelHighCostWarning(editFuelSettings);
             });
         });
 }
 
 function initFuelEdit() {
-    if (!canEditFuelRecords()) {
-        return;
-    }
     const form = document.getElementById("editFuelForm");
-
     const modal = document.getElementById("editFuelModal");
+    const updateButton = document.getElementById("updateFuelBtn");
 
-    if (!form || !modal) {
+    if (!form || !modal || !updateButton) {
+        console.warn("Fuel Edit: required elements not found.");
         return;
     }
 
@@ -386,30 +456,47 @@ function initFuelEdit() {
 
     form.dataset.fuelEditInitialized = "true";
 
-    form.addEventListener("submit", async (event) => {
+    const handleUpdate = async (event) => {
         event.preventDefault();
 
-        if (!modal.currentRow || !document.body.contains(modal.currentRow)) {
-            return;
-        }
+        console.log("Fuel Edit: Update button clicked.");
+
         if (!modal.currentFuelId) {
             showToast?.("Fuel record ID not found.", "error");
-
-            return;
-        }
-        if (typeof validateFuelForm === "function" && !validateFuelForm(form)) {
             return;
         }
 
-        const updateButton = document.getElementById("updateFuelBtn");
-
-        if (updateButton) {
-            updateButton.disabled = true;
-
-            updateButton.textContent = "Updating...";
+        /*
+    |--------------------------------------------------------------------------
+    | Client-side permission check
+    |--------------------------------------------------------------------------
+    */
+        if (!canEditFuelRecords()) {
+            showToast?.(
+                "You do not have permission to update fuel records.",
+                "error",
+            );
+            return;
         }
+
+        /*
+    |--------------------------------------------------------------------------
+    | Native form validation
+    |--------------------------------------------------------------------------
+    */
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        updateButton.disabled = true;
+        updateButton.textContent = "Updating...";
 
         try {
+            console.log("Fuel Edit: sending update request.", {
+                fuelId: modal.currentFuelId,
+            });
+
             await updateFuelRecord(form, modal.currentFuelId);
 
             closeEditFuelModal();
@@ -417,11 +504,13 @@ function initFuelEdit() {
             if (typeof loadFuelRecords === "function") {
                 await loadFuelRecords();
             }
+
             if (typeof updateFuelStatistics === "function") {
                 updateFuelStatistics();
             }
+
             if (typeof refreshFuelTable === "function") {
-                refreshFuelTable({
+                await refreshFuelTable({
                     resetPage: false,
                     refreshStatistics: true,
                     reason: "edit",
@@ -433,20 +522,33 @@ function initFuelEdit() {
             console.error("FUEL UPDATE ERROR:", error);
 
             showToast?.(
-                error.message || "Unable to update fuel record.",
+                error?.message || "Unable to update fuel record.",
                 "error",
             );
         } finally {
-            if (updateButton) {
-                updateButton.disabled = false;
-
-                updateButton.textContent = "Update Fuel Record";
-            }
+            updateButton.disabled = false;
+            updateButton.textContent = "Update Fuel Record";
         }
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Direct button click
+    |--------------------------------------------------------------------------
+    */
+    updateButton.addEventListener("click", handleUpdate);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prevent double submit from form
+    |--------------------------------------------------------------------------
+    */
+    form.addEventListener("submit", (event) => {
+        event.preventDefault();
     });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    initEditFuelModal();
+document.addEventListener("DOMContentLoaded", async () => {
+    await initEditFuelModal();
     initFuelEdit();
 });

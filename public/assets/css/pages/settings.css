@@ -402,3 +402,52 @@
 
     pointer-events: none;
 }
+
+/* Maintenance Settings spacing */
+
+.settings-subsection {
+    margin-top: var(--space-7);
+}
+
+.settings-subsection + .settings-subsection {
+    margin-top: var(--space-8);
+}
+
+.settings-subsection .settings-data-actions {
+    margin-top: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.settings-subsection .table-responsive {
+    margin-top: var(--space-2);
+}
+
+
+/* Maintenance Settings Editor Modal */
+
+.maintenance-settings-editor .modal-body {
+    padding-top: var(--space-7);
+    padding-bottom: var(--space-7);
+}
+
+.maintenance-settings-editor .form-group {
+    margin-bottom: var(--space-5);
+}
+
+.maintenance-settings-editor .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.maintenance-settings-editor .form-group label {
+    display: block;
+    margin-bottom: var(--space-2);
+}
+
+.maintenance-settings-editor .settings-check-list {
+    margin-top: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.maintenance-settings-editor .modal-footer {
+    margin-top: var(--space-2);
+}

@@ -126,7 +126,9 @@
                 Fuel Station
                 <span id="editFuelStationRequiredMark">*</span>
             </label>
-            <input type="text" id="editFuelStation" />
+            <select id="editFuelStation">
+              <option value="">Select Fuel Station</option>
+            </select>
           </div>
 
           <div class="form-group">

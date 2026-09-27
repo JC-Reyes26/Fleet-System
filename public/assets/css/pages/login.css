@@ -655,10 +655,51 @@ body.login-body #navbar {
     }
 }
 
+
+
 .auth-resend-button:disabled,
 .two-factor-resend:disabled {
     color: var(--color-text-light) !important;
     cursor: not-allowed;
     opacity: 0.75;
     text-decoration: none !important;
+}
+
+/* =========================================================
+   OTP SEPARATE DIGIT INPUTS
+   ========================================================= */
+
+.otp-input-group {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.otp-input-group .otp-digit {
+    width: 48px;
+    height: 56px;
+    padding: 0;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.otp-input-group .otp-digit:focus {
+    outline: none;
+}
+
+@media (max-width: 400px) {
+
+    .otp-input-group {
+        gap: 6px;
+    }
+
+    .otp-input-group .otp-digit {
+        width: 42px;
+        height: 52px;
+        font-size: 22px;
+    }
 }

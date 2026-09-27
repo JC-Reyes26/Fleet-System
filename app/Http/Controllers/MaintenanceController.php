@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class MaintenanceController extends Controller
@@ -27,6 +28,127 @@ class MaintenanceController extends Controller
         $settings = $record?->settings ?? [];
         $maintenanceSettings =
             $settings['maintenance'] ?? [];
+        /*
+        |--------------------------------------------------------------------------
+        | Default service types
+        |--------------------------------------------------------------------------
+        | Used only when serviceTypes is not yet configured
+        |--------------------------------------------------------------------------
+        */
+        $defaultServiceTypes = [
+            [
+                'id' => 'preventive_maintenance',
+                'name' => 'Preventive Maintenance',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+            [
+                'id' => 'corrective_repair',
+                'name' => 'Corrective Repair',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+            [
+                'id' => 'inspection',
+                'name' => 'Inspection',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+            [
+                'id' => 'oil_change',
+                'name' => 'Oil Change',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+            [
+                'id' => 'tire_service',
+                'name' => 'Tire Service',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+            [
+                'id' => 'brake_service',
+                'name' => 'Brake Service',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+            [
+                'id' => 'engine_service',
+                'name' => 'Engine Service',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+            [
+                'id' => 'other',
+                'name' => 'Other',
+                'defaultCost' => 0,
+                'active' => true,
+            ],
+        ];
+        /*
+        |--------------------------------------------------------------------------
+        | Service Types
+        |--------------------------------------------------------------------------
+        */
+        $serviceTypes =
+            is_array($maintenanceSettings['serviceTypes'] ?? null)
+                ? $maintenanceSettings['serviceTypes']
+                : $defaultServiceTypes;
+        $activeServiceTypes = collect($serviceTypes)
+            ->filter(function ($service) {
+                return is_array($service)
+                    && !empty($service['id'])
+                    && !empty($service['name'])
+                    && ($service['active'] ?? true) !== false;
+            })
+            ->map(function ($service) {
+                return [
+                    'id' => (string) $service['id'],
+                    'name' => trim((string) $service['name']),
+                    'defaultCost' => (float) ($service['defaultCost'] ?? 0),
+                ];
+            })
+            ->filter(fn ($service) => $service['name'] !== '')
+            ->values()
+            ->all();
+        /*
+        |--------------------------------------------------------------------------
+        | Providers
+        |--------------------------------------------------------------------------
+        */
+        $providers =
+            is_array($maintenanceSettings['providers'] ?? null)
+                ? $maintenanceSettings['providers']
+                : [];
+        $activeProviders = collect($providers)
+            ->filter(function ($provider) {
+                return is_array($provider)
+                    && !empty($provider['id'])
+                    && !empty($provider['name'])
+                    && ($provider['active'] ?? true) !== false;
+            })
+            ->map(function ($provider) {
+                $name = trim((string) $provider['name']);
+                $type =
+                    ($provider['type'] ?? 'Technician') === 'Workshop'
+                        ? 'Workshop'
+                        : 'Technician';
+                $contractType =
+                    ($provider['contractType'] ?? 'Contractual') === 'In-house'
+                        ? 'In-house'
+                        : 'Contractual';
+                return [
+                    'id' => (string) $provider['id'],
+                    'name' => $name,
+                    'type' => $type,
+                    'contractType' => $contractType,
+                    'display' =>
+                        "{$name} — {$type} — {$contractType}",
+                ];
+            })
+            ->filter(fn ($provider) => $provider['name'] !== '')
+            ->values()
+            ->all();
         return [
             'overdueWarnDays' => max(
                 1,
@@ -38,11 +160,9 @@ class MaintenanceController extends Controller
                     )
                 )
             ),
-
             'requireCost' =>
                 $maintenanceSettings['requireCost']
                 ?? true,
-
             'defaultType' =>
                 trim(
                     (string) (
@@ -50,6 +170,10 @@ class MaintenanceController extends Controller
                         ?? 'Preventive Maintenance'
                     )
                 ) ?: 'Preventive Maintenance',
+            'serviceTypes' =>
+                $activeServiceTypes,
+            'providers' =>
+                $activeProviders,
         ];
     }
 
@@ -403,75 +527,102 @@ class MaintenanceController extends Controller
                     $maintenanceSettings['defaultType'],
             ]);
         }
+        /*
+        |--------------------------------------------------------------------------
+        | Emergency Maintenance
+        |--------------------------------------------------------------------------
+        | Emergency requests start immediately.
+        |--------------------------------------------------------------------------
+        */
+        if ($request->input('request_type') === 'Emergency') {
+            $request->merge([
+                'maintenance_date' => now()->toDateString(),
+                'priority' => 'Emergency',
+                'status' => 'In Progress',
+                'completion_date' => null,
+            ]);
+        } else {
+            $request->merge([
+                'request_type' => 'Normal',
+                'status' => 'Scheduled',
+            ]);
+        }
 
         $validator = Validator::make(
             $request->all(),
             [
+                'request_type' => [
+                    'required',
+                    Rule::in([
+                        'Normal',
+                        'Emergency',
+                    ]),
+                ],
                 'vehicle_id' => [
                     'required',
                     'exists:vehicles,id',
                 ],
-
                 'maintenance_type' => [
                     'required',
                     'string',
                     'max:100',
+                    Rule::in(
+                        collect($maintenanceSettings['serviceTypes'])
+                            ->pluck('name')
+                            ->all()
+                    ),
                 ],
-
                 'description' => [
                     'required',
                     'string',
                 ],
-
                 'maintenance_date' => [
                     'required',
                     'date',
+                    'after_or_equal:today',
                 ],
-
                 'completion_date' => [
                     'nullable',
                     'date',
+                    'after_or_equal:today',
                     'after_or_equal:maintenance_date',
                 ],
-
                 'next_schedule' => [
                     'nullable',
                     'date',
                 ],
-
                 'technician' => [
-                    'nullable',
+                    'required',
                     'string',
                     'max:255',
+                    Rule::in(
+                        collect($maintenanceSettings['providers'])
+                            ->pluck('display')
+                            ->all()
+                    ),
                 ],
-
                 'priority' => [
                     'required',
                     'in:Low,Normal,High,Emergency',
                 ],
-
                 'odometer' => [
                     'nullable',
                     'integer',
                     'min:0',
                 ],
-
                 'parts_used' => [
                     'nullable',
                     'string',
                 ],
-
                 'cost' => [
                     'nullable',
                     'numeric',
                     'min:0',
                 ],
-
                 'status' => [
                     'required',
                     'in:Scheduled,In Progress,Completed,Cancelled',
                 ],
-
                 'notes' => [
                     'nullable',
                     'string',
@@ -634,6 +785,25 @@ class MaintenanceController extends Controller
         $maintenanceSettings =
             $this->getMaintenanceSettings();
 
+        $activeServiceTypeNames = collect(
+            $maintenanceSettings['serviceTypes']
+        )
+            ->pluck('name')
+            ->values()
+            ->all();
+        $activeProviderValues = collect(
+            $maintenanceSettings['providers']
+        )
+            ->pluck('display')
+            ->values()
+            ->all();
+        $currentServiceType =
+            (string) $maintenance->maintenance_type;
+        $currentTechnician =
+            (string) $maintenance->technician;
+        $currentRequestType =
+            $maintenance->request_type ?: 'Normal';
+
         $validator = Validator::make(
             $request->all(),
             [
@@ -645,7 +815,30 @@ class MaintenanceController extends Controller
                     'required',
                     'string',
                     'max:100',
+                    function (
+                        $attribute,
+                        $value,
+                        $fail
+                    ) use (
+                        $activeServiceTypeNames,
+                        $currentServiceType
+                    ) {
+                        if (
+                            !in_array(
+                                $value,
+                                $activeServiceTypeNames,
+                                true
+                            )
+                            &&
+                            $value !== $currentServiceType
+                        ) {
+                            $fail(
+                                'The selected service type is no longer active.'
+                            );
+                        }
+                    },
                 ],
+
                 'description' => [
                     'required',
                     'string',
@@ -653,10 +846,12 @@ class MaintenanceController extends Controller
                 'maintenance_date' => [
                     'required',
                     'date',
+                    'after_or_equal:today',
                 ],
                 'completion_date' => [
                     'nullable',
                     'date',
+                    'after_or_equal:today',
                     'after_or_equal:maintenance_date',
                 ],
                 'next_schedule' => [
@@ -664,13 +859,39 @@ class MaintenanceController extends Controller
                     'date',
                 ],
                 'technician' => [
-                    'nullable',
+                    'required',
                     'string',
                     'max:255',
+                    function (
+                        $attribute,
+                        $value,
+                        $fail
+                    ) use (
+                        $activeProviderValues,
+                        $currentTechnician
+                    ) {
+                        if (
+                            !in_array(
+                                $value,
+                                $activeProviderValues,
+                                true
+                            )
+                            &&
+                            $value !== $currentTechnician
+                        ) {
+                            $fail(
+                                'The selected technician or workshop is no longer active.'
+                            );
+                        }
+                    },
                 ],
                 'priority' => [
                     'required',
-                    'in:Low,Normal,High,Emergency',
+                    Rule::in(
+                        $currentRequestType === 'Emergency'
+                            ? ['Emergency']
+                            : ['Low', 'Normal', 'High']
+                    ),
                 ],
                 'odometer' => [
                     'nullable',
@@ -1342,6 +1563,9 @@ class MaintenanceController extends Controller
 
             'vehicle_id' =>
                 $maintenance->vehicle_id,
+
+            'request_type' =>
+                $maintenance->request_type,
 
             'maintenance_type' =>
                 $maintenance->maintenance_type,
