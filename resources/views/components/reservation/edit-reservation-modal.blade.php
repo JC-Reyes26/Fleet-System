@@ -41,11 +41,15 @@
           </div>
 
           <div class="form-group">
-            <label for="editReservationPatient">Patient Name *</label>
+            <label
+                for="editReservationPatient"
+                id="editReservationPatientLabel"
+            >
+                Patient Name
+            </label>
             <input
-              type="text"
-              id="editReservationPatient"
-              required
+                type="text"
+                id="editReservationPatient"
             />
           </div>
 
@@ -60,38 +64,198 @@
               <option value="Staff Transport">Staff Transport</option>
               <option value="Supply Delivery">Supply Delivery</option>
             </select>
+
+            <small
+                class="form-hint"
+                id="reservationTypeHint"
+            >
+                Select the type of transportation request.
+            </small>
           </div>
 
           <div class="form-group">
             <label for="editReservationVehicle">Vehicle *</label>
-            <select id="editReservationVehicle" required>
+            <select id="editReservationVehicle">
               
             </select>
           </div>
 
           <div class="form-group">
             <label for="editReservationDriver">Driver *</label>
-            <select id="editReservationDriver" required>
+            <select id="editReservationDriver">
               <option value="">Select Vehicle First</option>
             </select>
+            <small class="form-hint">
+                Driver is based on the selected vehicle.
+            </small>
           </div>
 
+          <!-- Pickup Location -->
           <div class="form-group">
-            <label for="editReservationPickup">Pickup Location *</label>
-            <input
-              type="text"
-              id="editReservationPickup"
-              required
-            />
+              <label for="editReservationPickup">
+                  Pickup Location *
+              </label>
+
+              <div class="facility-autocomplete">
+                  <input
+                      type="text"
+                      id="editReservationPickup"
+                      class="form-control"
+                      placeholder="Search hospital or facility..."
+                      autocomplete="off"
+                      required
+                  />
+
+                  <div
+                      id="editReservationPickupSuggestions"
+                      class="facility-suggestions"
+                      hidden
+                  ></div>
+              </div>
+
+              <small class="form-hint">
+                  Hospital, facility, address, or other pickup location.
+              </small>
           </div>
 
+          <!-- Destination -->
           <div class="form-group">
-            <label for="editReservationDestination">Destination *</label>
-            <input
-              type="text"
-              id="editReservationDestination"
-              required
-            />
+              <label for="editReservationDestination">
+                  Destination *
+              </label>
+
+              <div class="facility-autocomplete">
+                  <input
+                      type="text"
+                      id="editReservationDestination"
+                      class="form-control"
+                      placeholder="Search hospital or facility..."
+                      autocomplete="off"
+                      required
+                  />
+
+                  <div
+                      id="editReservationDestinationSuggestions"
+                      class="facility-suggestions"
+                      hidden
+                  ></div>
+              </div>
+
+              <small class="form-hint">
+                  Hospital, facility, address, or other destination location.
+              </small>
+          </div>
+
+          <!-- Logistics Integration -->
+          <div
+              class="form-group full-width"
+              id="editReservationLogisticsSection"
+              hidden
+          >
+              <div class="section-header">
+                  <h3>Logistics Information</h3>
+                  <p>
+                      Shipment details from the external Logistics system.
+                  </p>
+              </div>
+
+              <div class="form-group">
+                  <label for="editReservationShipment">
+                      Logistics Shipment
+                  </label>
+
+                  <input
+                      type="text"
+                      id="editReservationShipment"
+                      class="form-control"
+                      placeholder="Waiting for Logistics integration"
+                      readonly
+                      disabled
+                  />
+
+                  <small class="form-hint">
+                      Select an active shipment from the centralized Logistics system.
+                  </small>
+              </div>
+
+              <div class="form-grid">
+                  <div class="form-group">
+                      <label for="editLogisticsExternalId">
+                          Logistics Reference
+                      </label>
+                      <input
+                          type="text"
+                          id="editLogisticsExternalId"
+                          placeholder="Waiting for Logistics integration"
+                          readonly
+                      />
+                  </div>
+
+                  <div class="form-group">
+                      <label for="editLogisticsPoNumber">
+                          PO Number
+                      </label>
+                      <input
+                          type="text"
+                          id="editLogisticsPoNumber"
+                          placeholder="Waiting for Logistics integration"
+                          readonly
+                      />
+                  </div>
+
+                  <div class="form-group">
+                      <label for="editLogisticsSupplier">
+                          Supplier
+                      </label>
+                      <input
+                          type="text"
+                          id="editLogisticsSupplier"
+                          placeholder="Waiting for Logistics integration"
+                          readonly
+                      />
+                  </div>
+
+                  <div class="form-group">
+                      <label for="editLogisticsTrackingNumber">
+                          Tracking / AWB Number
+                      </label>
+                      <input
+                          type="text"
+                          id="editLogisticsTrackingNumber"
+                          placeholder="Waiting for Logistics integration"
+                          readonly
+                      />
+                  </div>
+
+                  <div class="form-group">
+                      <label for="editLogisticsStatus">
+                          Logistics Status
+                      </label>
+                      <input
+                          type="text"
+                          id="editLogisticsStatus"
+                          value="Not Synced"
+                          readonly
+                      />
+                  </div>
+
+                  <div class="form-group">
+                      <label for="editLogisticsEta">
+                          External ETA
+                      </label>
+                      <input
+                          type="text"
+                          id="editLogisticsEta"
+                          placeholder="Waiting for Logistics integration"
+                          readonly
+                      />
+                  </div>
+              </div>
+
+              <small class="form-hint">
+                  Logistics information will be populated automatically
+                  once the external Logistics system is integrated.
+              </small>
           </div>
 
           <div class="form-group">
@@ -121,6 +285,13 @@
               <option value="High">High</option>
               <option value="Emergency">Emergency</option>
             </select>
+
+            <small
+                class="form-hint"
+                id="reservationPriorityHint"
+            >
+                Emergency priority is reserved for Emergency Transfer requests.
+            </small>
           </div>
 
           <div class="form-group">

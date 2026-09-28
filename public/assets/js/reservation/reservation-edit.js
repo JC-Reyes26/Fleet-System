@@ -32,6 +32,32 @@ async function getEditReservationSettings() {
     }
 }
 
+function applyEditReservationPatientRequirement() {
+    const patientInput = document.getElementById("editReservationPatient");
+    const patientLabel = document.getElementById("editReservationPatientLabel");
+    if (!patientInput || !patientLabel) {
+        return;
+    }
+    const requestType = document.getElementById("editReservationType")?.value;
+    const required = [
+        "Patient Transport",
+        "Emergency Transfer",
+        "Medical Appointment",
+        "Laboratory Transport",
+    ].includes(requestType);
+    patientLabel.textContent = required ? "Patient Name *" : "Patient Name";
+}
+
+function applyEditReservationLogisticsVisibility() {
+    const section = document.getElementById("editReservationLogisticsSection");
+
+    if (!section) {
+        return;
+    }
+    const requestType = document.getElementById("editReservationType")?.value;
+    section.hidden = requestType !== "Supply Delivery";
+}
+
 function applyEditReservationDateSettings(settings) {
     const dateInput = document.getElementById("editReservationDate");
     if (!dateInput) {
@@ -75,8 +101,10 @@ function applyReservationEditRbac() {
     | Fleet Manager can edit reservation approval status.
     */
     if (role === "fleet_manager") {
+        setReservationEditFieldAccess("editReservationNumber", true);
+        setReservationEditFieldAccess("editReservationVehicle", true);
+        setReservationEditFieldAccess("editReservationDriver", true);
         setReservationEditFieldAccess("editReservationStatus", true);
-
         return;
     }
     /*
@@ -87,8 +115,10 @@ function applyReservationEditRbac() {
     | modify the reservation approval status.
     */
     if (role === "dispatcher") {
+        setReservationEditFieldAccess("editReservationNumber", true);
+        setReservationEditFieldAccess("editReservationVehicle", true);
+        setReservationEditFieldAccess("editReservationDriver", true);
         setReservationEditFieldAccess("editReservationStatus", false);
-
         return;
     }
     /*
@@ -262,6 +292,17 @@ async function initEditReservationModal() {
 
   applyEditReservationDateSettings(reservationSettings);
 
+  setupFacilityAutocomplete(
+      "editReservationPickup",
+      "editReservationPickupSuggestions",
+      "editPickup",
+  );
+  setupFacilityAutocomplete(
+      "editReservationDestination",
+      "editReservationDestinationSuggestions",
+      "editDestination",
+  );
+
   modal.dataset.editReservationModalInitialized = "true";
   const getRowText = (row, selector) => {
     const el = row.querySelector(selector);
@@ -284,6 +325,21 @@ async function initEditReservationModal() {
     setValue("editReservationNumber", getRowText(row, ".reservation-number"));
     setValue("editReservationPatient", getRowText(row, ".patient-name"));
     setValue("editReservationType", getRowData(row, "requestType"));
+    const shipmentId = getRowData(row, "shipmentId");
+
+    applyEditReservationPatientRequirement();
+    applyEditReservationLogisticsVisibility();
+
+    const shipmentField = document.getElementById("editReservationShipment");
+
+    if (shipmentField) {
+        shipmentField.value = shipmentId
+            ? `Shipment #${shipmentId}`
+            : "Waiting for Logistics integration";
+
+        shipmentField.readOnly = true;
+        shipmentField.disabled = true;
+    }
 
     if (getReservationEditRole() !== "department_head") {
         const vehicleId = getRowData(row, "vehicleId");
@@ -343,6 +399,17 @@ async function initEditReservationModal() {
   });
 
   const form = document.getElementById("editReservationForm");
+  const editReservationType = document.getElementById("editReservationType");
+  if (
+      editReservationType &&
+      editReservationType.dataset.behaviorInitialized !== "true"
+  ) {
+      editReservationType.dataset.behaviorInitialized = "true";
+      editReservationType.addEventListener("change", () => {
+          applyEditReservationPatientRequirement();
+          applyEditReservationLogisticsVisibility();
+      });
+  }
   if (form && !form.dataset.editReservationFormInitialized) {
     form.dataset.editReservationFormInitialized = "true";
 
@@ -388,10 +455,24 @@ async function initEditReservationModal() {
           isValid = false;
       }
 
-      if (!reservationPatient || !reservationPatient.value.trim()) {
-        showReservationFieldError(reservationPatient, "Patient Name is required.");
-        if (!firstInvalid) firstInvalid = reservationPatient;
-        isValid = false;
+      const requiresPatientName = [
+          "Patient Transport",
+          "Emergency Transfer",
+          "Medical Appointment",
+          "Laboratory Transport",
+      ].includes(reservationType?.value);
+      if (
+          requiresPatientName &&
+          (!reservationPatient || !reservationPatient.value.trim())
+      ) {
+          showReservationFieldError(
+              reservationPatient,
+              "Patient Name is required.",
+          );
+          if (!firstInvalid) {
+              firstInvalid = reservationPatient;
+          }
+          isValid = false;
       }
 
       if (!reservationType || !reservationType.value) {

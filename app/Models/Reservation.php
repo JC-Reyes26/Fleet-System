@@ -9,6 +9,8 @@ use App\Models\Driver;
 use App\Models\Dispatch;
 use App\Models\RoutePlan;
 use App\Models\User;
+use App\Models\Shipment;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Reservation extends Model
@@ -21,6 +23,7 @@ class Reservation extends Model
         'department',
         'patient_name',
         'request_type',
+        'shipment_id',
         'vehicle_id',
         'driver_id',
         'pickup_location',
@@ -74,5 +77,10 @@ class Reservation extends Model
             User::class,
             'archived_by'
         );
+    }
+
+    public function shipment(): BelongsTo
+    {
+        return $this->belongsTo(Shipment::class);
     }
 }

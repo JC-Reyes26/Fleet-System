@@ -59,6 +59,8 @@ function validateReservationForm(form) {
     const reservationNumber = document.getElementById("reservationNumber");
     const reservationPatient = document.getElementById("reservationPatient");
     const reservationType = document.getElementById("reservationType");
+    const reservationShipment = document.getElementById("reservationShipment");
+    const isSupplyDelivery = reservationType?.value === "Supply Delivery";
     const reservationVehicle = document.getElementById("reservationVehicle");
     const reservationDriver = document.getElementById("reservationDriver");
     const reservationPickup = document.getElementById("reservationPickup");
@@ -98,7 +100,17 @@ function validateReservationForm(form) {
     }
 
     // Patient Name
-    if (!reservationPatient || !reservationPatient.value.trim()) {
+    // Patient Name is required only for patient-related requests.
+    const requiresPatientName = [
+        "Patient Transport",
+        "Emergency Transfer",
+        "Medical Appointment",
+        "Laboratory Transport",
+    ].includes(reservationType?.value);
+    if (
+        requiresPatientName &&
+        (!reservationPatient || !reservationPatient.value.trim())
+    ) {
         showReservationFieldError(
             reservationPatient,
             "Patient Name is required.",
@@ -116,6 +128,22 @@ function validateReservationForm(form) {
             firstInvalid = reservationType;
         }
         isValid = false;
+    }
+
+    // Logistics Shipment
+    if (isSupplyDelivery) {
+        if (!reservationShipment || !reservationShipment.value) {
+            showReservationFieldError(
+                reservationShipment,
+                "Logistics Shipment is required.",
+            );
+
+            if (!firstInvalid) {
+                firstInvalid = reservationShipment;
+            }
+
+            isValid = false;
+        }
     }
 
     /*
@@ -283,6 +311,13 @@ function initReservationModal() {
         if (!isDepartmentHead && typeof loadReservationOptions === "function") {
             await loadReservationOptions();
         }
+        if (
+            typeof isSupplyDeliveryReservation === "function" &&
+            isSupplyDeliveryReservation() &&
+            typeof loadSupplyDeliveryShipments === "function"
+        ) {
+            await loadSupplyDeliveryShipments();
+        }
     });
 
     // Close button
@@ -331,6 +366,7 @@ function initReservationModal() {
             document.getElementById("reservationNumber"),
             document.getElementById("reservationPatient"),
             document.getElementById("reservationType"),
+            document.getElementById("reservationShipment"),
             document.getElementById("reservationVehicle"),
             document.getElementById("reservationDriver"),
             document.getElementById("reservationPickup"),

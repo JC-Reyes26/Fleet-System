@@ -250,6 +250,16 @@ Route::middleware([
         )->name('reservation.bulkArchive');
 
         Route::get(
+            '/reservation/supply-delivery-shipments',
+            [ReservationController::class, 'supplyDeliveryShipments']
+        )->name('reservation.supply-delivery-shipments');
+
+        Route::get(
+            '/reservation/hospital-facilities',
+            [ReservationController::class, 'hospitalFacilities']
+        )->name('reservation.hospital-facilities');
+
+        Route::get(
             '/reservation',
             [ReservationController::class, 'index']
         )->name('reservation.index');
@@ -259,15 +269,10 @@ Route::middleware([
             [ReservationController::class, 'store']
         )->name('reservation.store');
 
-        Route::get(
-            '/reservation/{reservation}',
-            [ReservationController::class, 'show']
-        )->name('reservation.show');
-
-        Route::put(
-            '/reservation/{reservation}',
-            [ReservationController::class, 'update']
-        )->name('reservation.update');
+        Route::post(
+            '/reservation/{reservation}/apply-dispatch-recommendation',
+            [ReservationController::class, 'applyDispatchRecommendation']
+        )->name('reservation.apply-dispatch-recommendation');
 
         Route::post(
             '/reservation/{reservation}/archive',
@@ -279,11 +284,16 @@ Route::middleware([
             [ReservationController::class, 'restore']
         )->name('reservation.restore');
 
-        Route::post(
-            '/reservation/{reservation}/apply-dispatch-recommendation',
-            [ReservationController::class, 'applyDispatchRecommendation']
-        )->name('reservation.apply-dispatch-recommendation');
-        
+        Route::put(
+            '/reservation/{reservation}',
+            [ReservationController::class, 'update']
+        )->name('reservation.update');
+
+        Route::get(
+            '/reservation/{reservation}',
+            [ReservationController::class, 'show']
+        )->name('reservation.show');
+
     });
 
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Reservation;
 use App\Models\Vehicle;
 use App\Models\Driver;
+use App\Models\HospitalFacility;
 use Illuminate\Http\Request;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
@@ -13,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ReservationController extends Controller
 {   
@@ -143,6 +145,7 @@ class ReservationController extends Controller
             'vehicle',
             'driver',
             'requester',
+            //'shipment',
         ]);
 
         if ($request->boolean('show_archived')) {
@@ -329,10 +332,16 @@ class ReservationController extends Controller
 
         $reservationSettings =
             $this->getReservationSettings();
-        $minimumDate =
-            $reservationSettings['allowSameDay']
-                ? now()->toDateString()
-                : now()->addDay()->toDateString();
+        $isEmergencyTransfer =
+    $request->input('request_type') === 'Emergency Transfer';
+    $minimumDate =
+        $isEmergencyTransfer
+            ? now()->toDateString()
+            : (
+                $reservationSettings['allowSameDay']
+                    ? now()->toDateString()
+                    : now()->addDay()->toDateString()
+            );
         $maximumDate =
             now()
                 ->addDays(
@@ -350,13 +359,29 @@ class ReservationController extends Controller
                     'unique:reservations,reservation_number',
                 ],
                 'patient_name' => [
-                    'required',
+                    'nullable',
                     'string',
                     'max:255',
+                    Rule::requiredIf(function () use ($request) {
+                        return in_array(
+                            $request->input('request_type'),
+                            [
+                                'Patient Transport',
+                                'Emergency Transfer',
+                                'Medical Appointment',
+                                'Laboratory Transport',
+                            ],
+                            true
+                        );
+                    }),
                 ],
                 'request_type' => [
                     'required',
                     'in:Patient Transport,Emergency Transfer,Medical Appointment,Laboratory Transport,Staff Transport,Supply Delivery',
+                ],
+                'shipment_id' => [
+                    'nullable',
+                    'integer',
                 ],
                 'vehicle_id' => [
                     'nullable',
@@ -367,14 +392,20 @@ class ReservationController extends Controller
                     'exists:drivers,id',
                 ],
                 'pickup_location' => [
-                    'required',
+                    'nullable',
                     'string',
                     'max:255',
+                    Rule::requiredIf(function () use ($request) {
+                        return $request->input('request_type') !== 'Supply Delivery';
+                    }),
                 ],
                 'destination' => [
-                    'required',
+                    'nullable',
                     'string',
                     'max:255',
+                    Rule::requiredIf(function () use ($request) {
+                        return $request->input('request_type') !== 'Supply Delivery';
+                    }),
                 ],
                 'schedule_date' => [
                     'required',
@@ -427,6 +458,47 @@ class ReservationController extends Controller
         try {
             $validated = $validator->validated();
 
+            if ($validated['request_type'] === 'Supply Delivery') {
+                $shipment = \App\Models\Shipment::find(
+                    $validated['shipment_id']
+                );
+
+                if (!$shipment) {
+                    throw new \Exception(
+                        'Selected Logistics shipment was not found.'
+                    );
+                }
+
+                if (in_array(
+                    $shipment->status,
+                    [
+                        'arrived_at_dock',
+                        'received',
+                    ],
+                    true
+                )) {
+                    throw new \Exception(
+                        'The selected shipment is already completed or has already arrived at the HIMS receiving dock.'
+                    );
+                }
+
+                $validated['pickup_location'] =
+                    $shipment->origin_address
+                    ?: $shipment->pickup_location_name;
+                $validated['destination'] =
+                    $shipment->destination_facility;
+                if (
+                    !$validated['pickup_location'] ||
+                    !$validated['destination']
+                ) {
+                    throw new \Exception(
+                        'The selected Logistics shipment does not have a valid pickup location or destination.'
+                    );
+                }
+            } else {
+                $validated['shipment_id'] = null;
+            }
+
             $validated['requested_by'] =
                 $request->user()->id;
             /*
@@ -462,14 +534,64 @@ class ReservationController extends Controller
 
             $validated['department'] =
                 $request->user()->department;
-            
-            $validated['status'] =
-                $reservationSettings['requireApproval']
-                    ? 'Pending'
-                    : 'Approved';
-            
-            $validated['reservation_number'] = $validated['reservation_number']
-                ?? $this->generateReservationNumber();
+            /*
+            |--------------------------------------------------------------------------
+            | Emergency Transfer / Normal Reservation
+            |--------------------------------------------------------------------------
+            */
+            $isEmergencyTransfer =
+                $validated['request_type'] === 'Emergency Transfer';
+            if ($isEmergencyTransfer) {
+                /*
+                |--------------------------------------------------------------------------
+                | Emergency transfers bypass normal approval.
+                |--------------------------------------------------------------------------
+                */
+                $validated['priority'] = 'Emergency';
+                $validated['status'] = 'Approved';
+                /*
+                |--------------------------------------------------------------------------
+                | Emergency transfer is immediate.
+                |--------------------------------------------------------------------------
+                */
+                $validated['schedule_date'] =
+                    now()->toDateString();
+                $validated['schedule_time'] =
+                    now()->format('H:i');
+            } else {
+                /*
+                |--------------------------------------------------------------------------
+                | Prevent Emergency priority on non-emergency requests.
+                |--------------------------------------------------------------------------
+                */
+                if (
+                    ($validated['priority'] ?? null) ===
+                    'Emergency'
+                ) {
+                    return response()->json([
+                        'success' => false,
+                        'message' =>
+                            'Emergency priority can only be used for Emergency Transfer requests.',
+                        'errors' => [
+                            'priority' => [
+                                'Please select Emergency Transfer for emergency requests.'
+                            ],
+                        ],
+                    ], 422);
+                }
+                /*
+                |--------------------------------------------------------------------------
+                | Normal reservation approval flow.
+                |--------------------------------------------------------------------------
+                */
+                $validated['status'] =
+                    $reservationSettings['requireApproval']
+                        ? 'Pending'
+                        : 'Approved';
+            }
+            $validated['reservation_number'] =
+                $validated['reservation_number']
+                    ?? $this->generateReservationNumber();
 
             $this->validateVehicleAndDriverAvailability(
                 $validated['vehicle_id'] ?? null,
@@ -482,14 +604,17 @@ class ReservationController extends Controller
 
             $reservation->load([
                 'vehicle',
-                'driver'
+                'driver',
+                //'shipment',
             ]);
 
             AuditLogService::log(
                 module: 'Reservation Management',
                 action: 'Created',
                 description:
-                    "Created reservation {$reservation->reservation_number}.",
+                    $isEmergencyTransfer
+                        ? "Created emergency transfer reservation {$reservation->reservation_number}; approval workflow bypassed for immediate processing."
+                        : "Created reservation {$reservation->reservation_number}.",
                 record: $reservation,
                 newValues:
                     $this->getReservationAuditValues(
@@ -498,36 +623,62 @@ class ReservationController extends Controller
             );
 
             if ($reservation->status === 'Pending') {
-            /*
-            |--------------------------------------------------------------------------
-            | Notify the requester
-            |--------------------------------------------------------------------------
-            */
-            FleetNotificationService::createWhenEnabled(
-                'reservationPending',
-                'Pending Reservation',
-                "Reservation {$reservation->reservation_number} is waiting for approval.",
-                true,
-                route('reservation.index')
-            );
-            /*
-            |--------------------------------------------------------------------------
-            | Notify Fleet Manager + Dispatcher
-            |--------------------------------------------------------------------------
-            */
-            FleetNotificationService::createForRolesWhenEnabled(
-                settingKey: 'reservationPending',
-                roles: [
-                    'fleet_manager',
-                    'dispatcher',
-                ],
-                title: 'Pending Reservation',
-                message: "Reservation {$reservation->reservation_number} is waiting for approval.",
-                default: true,
-                link: route('reservation.index'),
-                excludeUserId: $request->user()->id
-            );
-        }
+                /*
+                |--------------------------------------------------------------------------
+                | Normal Pending Reservation
+                |--------------------------------------------------------------------------
+                */
+                FleetNotificationService::createWhenEnabled(
+                    'reservationPending',
+                    'Pending Reservation',
+                    "Reservation {$reservation->reservation_number} is waiting for approval.",
+                    true,
+                    route('reservation.index')
+                );
+                FleetNotificationService::createForRolesWhenEnabled(
+                    settingKey: 'reservationPending',
+                    roles: [
+                        'fleet_manager',
+                        'dispatcher',
+                    ],
+                    title: 'Pending Reservation',
+                    message:
+                        "Reservation {$reservation->reservation_number} is waiting for approval.",
+                    default: true,
+                    link: route('reservation.index'),
+                    excludeUserId: $request->user()->id
+                );
+            } elseif ($isEmergencyTransfer) {
+                /*
+                |--------------------------------------------------------------------------
+                | Emergency Transfer
+                |--------------------------------------------------------------------------
+                |
+                | No approval is required.
+                | Notify the operational users immediately.
+                |
+                */
+                FleetNotificationService::createWhenEnabled(
+                    'reservationPending',
+                    'Emergency Transfer',
+                    "Emergency reservation {$reservation->reservation_number} has been automatically approved and is ready for immediate Route Planning.",
+                    true,
+                    route('reservation.index')
+                );
+                FleetNotificationService::createForRolesWhenEnabled(
+                    settingKey: 'reservationPending',
+                    roles: [
+                        'fleet_manager',
+                        'dispatcher',
+                    ],
+                    title: 'Emergency Transfer',
+                    message:
+                        "Emergency reservation {$reservation->reservation_number} requires immediate processing.",
+                    default: true,
+                    link: route('reservation.index'),
+                    excludeUserId: $request->user()->id
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -554,6 +705,7 @@ class ReservationController extends Controller
             'vehicle',
             'driver',
             'requester',
+            //'shipment',
         ]);
 
         return response()->json([
@@ -629,9 +781,21 @@ class ReservationController extends Controller
                             $reservation->id,
                     ],
                     'patient_name' => [
-                        'required',
+                        'nullable',
                         'string',
                         'max:255',
+                        Rule::requiredIf(function () use ($request) {
+                            return in_array(
+                                $request->input('request_type'),
+                                [
+                                    'Patient Transport',
+                                    'Emergency Transfer',
+                                    'Medical Appointment',
+                                    'Laboratory Transport',
+                                ],
+                                true
+                            );
+                        }),
                     ],
                     'request_type' => [
                         'required',
@@ -646,14 +810,20 @@ class ReservationController extends Controller
                         'exists:drivers,id',
                     ],
                     'pickup_location' => [
-                        'required',
+                        'nullable',
                         'string',
                         'max:255',
+                        Rule::requiredIf(function () use ($request) {
+                            return $request->input('request_type') !== 'Supply Delivery';
+                        }),
                     ],
                     'destination' => [
-                        'required',
+                        'nullable',
                         'string',
                         'max:255',
+                        Rule::requiredIf(function () use ($request) {
+                            return $request->input('request_type') !== 'Supply Delivery';
+                        }),
                     ],
                     'schedule_date' => [
                         'required',
@@ -796,23 +966,41 @@ class ReservationController extends Controller
                 $request->all(),
                 [
                     'patient_name' => [
-                        'required',
+                        'nullable',
                         'string',
                         'max:255',
+                        Rule::requiredIf(function () use ($request) {
+                            return in_array(
+                                $request->input('request_type'),
+                                [
+                                    'Patient Transport',
+                                    'Emergency Transfer',
+                                    'Medical Appointment',
+                                    'Laboratory Transport',
+                                ],
+                                true
+                            );
+                        }),
                     ],
                     'request_type' => [
                         'required',
                         'in:Patient Transport,Emergency Transfer,Medical Appointment,Laboratory Transport,Staff Transport,Supply Delivery',
                     ],
                     'pickup_location' => [
-                        'required',
+                        'nullable',
                         'string',
                         'max:255',
+                        Rule::requiredIf(function () use ($request) {
+                            return $request->input('request_type') !== 'Supply Delivery';
+                        }),
                     ],
                     'destination' => [
-                        'required',
+                        'nullable',
                         'string',
                         'max:255',
+                        Rule::requiredIf(function () use ($request) {
+                            return $request->input('request_type') !== 'Supply Delivery';
+                        }),
                     ],
                     'schedule_date' => [
                         'required',
@@ -992,6 +1180,12 @@ class ReservationController extends Controller
 
         try {
             $validated = $validator->validated();
+
+            if (($validated['request_type'] ?? null) === 'Supply Delivery') {
+                $validated['shipment_id'] = $reservation->shipment_id;
+            } else {
+                $validated['shipment_id'] = null;
+}
 
             /*
             |--------------------------------------------------------------------------
@@ -1554,6 +1748,9 @@ class ReservationController extends Controller
             'request_type' =>
                 $reservation->request_type,
 
+            'shipment_id' =>
+                $reservation->shipment_id,
+
             'vehicle_id' =>
                 $reservation->vehicle_id,
 
@@ -1678,5 +1875,72 @@ class ReservationController extends Controller
             oldValues: $changedOldValues,
             newValues: $changedNewValues
         );
+    }
+
+    public function supplyDeliveryShipments()
+    {
+        $this->authorize('create', Reservation::class);
+
+        return response()->json([
+            'success' => true,
+            'integration_ready' => true,
+            'integration_connected' => false,
+            'shipments' => [],
+            'message' =>
+                'Logistics integration is not connected yet.',
+        ]);
+    }
+
+    public function hospitalFacilities(Request $request)
+    {
+        $this->authorize('create', Reservation::class);
+
+        $search = trim(
+            (string) $request->input('search', '')
+        );
+
+        $facilities = HospitalFacility::query()
+            ->where('status', true)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where(
+                        'name',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'address',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'city',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'province',
+                        'like',
+                        "%{$search}%"
+                    );
+                });
+            })
+            ->orderBy('name')
+            ->limit(10)
+            ->get([
+                'id',
+                'name',
+                'address',
+                'city',
+                'province',
+                'latitude',
+                'longitude',
+                'type',
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'facilities' => $facilities,
+        ]);
     }
 }

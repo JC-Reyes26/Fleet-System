@@ -24,7 +24,7 @@
                       class="btn-primary"
                   >
                       <i class="ph ph-plus"></i>
-                      Add Reservation
+                      Request Reservation
                   </button>
               @endif
             </div>

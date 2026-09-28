@@ -207,6 +207,7 @@ function renderReservationTable(reservations) {
                 data-reservation-number="${reservation.reservation_number ?? ""}"
                 data-patient-name="${reservation.patient_name ?? ""}"
                 data-request-type="${reservation.request_type ?? ""}"
+                data-shipment-id="${reservation.shipment_id ?? ""}"
                 data-vehicle-id="${reservation.vehicle_id ?? ""}"
                 data-driver-id="${reservation.driver_id ?? ""}"
                 data-pickup-location="${reservation.pickup_location ?? ""}"
