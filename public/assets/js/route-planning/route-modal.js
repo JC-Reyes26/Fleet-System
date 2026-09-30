@@ -412,37 +412,64 @@ function resetRouteOptimization() {
 
 function applyReservationToRouteForm(reservation) {
     if (!reservation) {
-        resetRouteResourceDisplay();
         return;
     }
-    const origin = document.getElementById("routeOrigin");
-    const destination = document.getElementById("routeDestination");
-    const priority = document.getElementById("routePriority");
-    const departureDate = document.getElementById("routeDepartureDate");
-    const departureTime = document.getElementById("routeDepartureTime");
-    if (origin) {
-        origin.value = reservation.pickup_location || "";
+    const originInput = document.getElementById("routeOrigin");
+    const destinationInput = document.getElementById("routeDestination");
+    const priorityInput = document.getElementById("routePriority");
+    const departmentInput = document.getElementById("routeDepartment");
+    const departureDateInput = document.getElementById("routeDepartureDate");
+    const departureTimeInput = document.getElementById("routeDepartureTime");
+
+    if (originInput) {
+        originInput.value = reservation.pickup_location || "";
+
+        originInput.dataset.latitude =
+            reservation.origin_latitude ??
+            reservation.pickup_facility?.latitude ??
+            "";
+        originInput.dataset.longitude =
+            reservation.origin_longitude ??
+            reservation.pickup_facility?.longitude ??
+            "";
     }
-    if (destination) {
-        destination.value = reservation.destination || "";
+    if (destinationInput) {
+        destinationInput.value = reservation.destination || "";
+        destinationInput.dataset.latitude =
+            reservation.destination_latitude ??
+            reservation.destination_facility?.latitude ??
+            "";
+        destinationInput.dataset.longitude =
+            reservation.destination_longitude ??
+            reservation.destination_facility?.longitude ??
+            "";
     }
-    if (priority) {
-        priority.value = reservation.priority || "Normal";
+    if (priorityInput) {
+        priorityInput.value = reservation.priority || "Normal";
     }
-    if (departureDate) {
-        departureDate.value = String(reservation.schedule_date || "").slice(
-            0,
-            10,
+    if (departmentInput) {
+        departmentInput.value = reservation.department || "";
+    }
+    if (departureDateInput) {
+        departureDateInput.value = formatRouteDateForInput(
+            reservation.schedule_date,
         );
     }
-    if (departureTime) {
-        departureTime.value = String(reservation.schedule_time || "").slice(
-            0,
-            5,
-        );
+    if (departureTimeInput) {
+        departureTimeInput.value = reservation.schedule_time || "";
     }
-    applyReservationResourceDisplay(reservation);
-    resetRouteOptimization();
+    // Keep selected vehicle and driver from the approved Reservation.
+    if (typeof setRouteFormVehicle === "function") {
+        setRouteFormVehicle(reservation.vehicle_id || "");
+    }
+    if (typeof setRouteFormDriver === "function") {
+        setRouteFormDriver(reservation.driver_id || "");
+    }
+    // Store the selected facility information for later route calculations.
+    window.selectedRouteReservationFacilities = {
+        pickup: reservation.pickup_facility || null,
+        destination: reservation.destination_facility || null,
+    };
 }
 
 async function populateRouteReservations(selectedReservation = null) {
@@ -523,29 +550,115 @@ function collectRouteFormData() {
     const get = (id) => document.getElementById(id)?.value?.trim() || "";
     const stops = getRouteStopsFromForm();
     const optimization = routeLastOptimization;
+    const originInput = document.getElementById("routeOrigin");
+    const destinationInput = document.getElementById("routeDestination");
     /*
     |--------------------------------------------------------------------------
-    | Coordinate source
+    | Coordinate Source
     |--------------------------------------------------------------------------
     |
-    | Applied optimization:
-    |     optimized coordinate order
+    | Priority:
     |
-    | Preview only:
-    |     original coordinate order
+    | 1. Applied optimization coordinates
+    | 2. Preview/original optimization coordinates
+    | 3. Reservation HospitalFacility coordinates stored
+    |    on the origin/destination input datasets
     |
+    | Route coordinates use:
+    |     { lat, lng }
+    |
+    |--------------------------------------------------------------------------
     */
-    const routeCoordinates =
-        optimization?.optimizationApplied === true
-            ? optimization.routeCoordinates || null
-            : optimization?.originalRouteCoordinates ||
-              optimization?.routeCoordinates ||
-              null;
+    let originCoordinate = null;
+    let destinationCoordinate = null;
+    /*
+    |--------------------------------------------------------------------------
+    | Applied optimization
+    |--------------------------------------------------------------------------
+    */
+    if (
+        optimization?.optimizationApplied === true &&
+        optimization?.routeCoordinates
+    ) {
+        originCoordinate = optimization.routeCoordinates.origin || null;
+        destinationCoordinate =
+            optimization.routeCoordinates.destination || null;
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Preview / non-applied optimization
+    |--------------------------------------------------------------------------
+    */
+    if (!originCoordinate) {
+        originCoordinate =
+            optimization?.originalRouteCoordinates?.origin ||
+            optimization?.routeCoordinates?.origin ||
+            null;
+    }
+    if (!destinationCoordinate) {
+        destinationCoordinate =
+            optimization?.originalRouteCoordinates?.destination ||
+            optimization?.routeCoordinates?.destination ||
+            null;
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Reservation / HospitalFacility fallback
+    |--------------------------------------------------------------------------
+    */
+    const originLatitude =
+        originCoordinate?.lat ??
+        (hasRouteCoordinateValue(originInput?.dataset.latitude)
+            ? Number(originInput.dataset.latitude)
+            : null);
+    const originLongitude =
+        originCoordinate?.lng ??
+        (hasRouteCoordinateValue(originInput?.dataset.longitude)
+            ? Number(originInput.dataset.longitude)
+            : null);
+    const destinationLatitude =
+        destinationCoordinate?.lat ??
+        (hasRouteCoordinateValue(destinationInput?.dataset.latitude)
+            ? Number(destinationInput.dataset.latitude)
+            : null);
+    const destinationLongitude =
+        destinationCoordinate?.lng ??
+        (hasRouteCoordinateValue(destinationInput?.dataset.longitude)
+            ? Number(destinationInput.dataset.longitude)
+            : null);
+    /*
+    |--------------------------------------------------------------------------
+    | Stop Coordinates
+    |--------------------------------------------------------------------------
+    |
+    | If optimization already produced persisted/geocoded stop coordinates,
+    | use them. Otherwise leave them null and the routing pipeline can
+    | geocode the stop when needed.
+    |
+    |--------------------------------------------------------------------------
+    */
+    const stopCoordinates = stops.map((location, index) => {
+        const stopCoordinate =
+            optimization?.routeCoordinates?.stops?.[index]?.coordinate ||
+            optimization?.originalRouteCoordinates?.stops?.[index]
+                ?.coordinate ||
+            null;
+        return {
+            location,
+            latitude: stopCoordinate?.lat ?? null,
+            longitude: stopCoordinate?.lng ?? null,
+        };
+    });
+
     return {
         reservationId: get("routeReservation"),
         routeNumber: get("routeNumber"),
         origin: get("routeOrigin"),
         destination: get("routeDestination"),
+        originLatitude,
+        originLongitude,
+        destinationLatitude,
+        destinationLongitude,
         stops,
         vehicle: get("routeVehicle"),
         driver: get("routeDriver"),
@@ -566,18 +679,7 @@ function collectRouteFormData() {
         optimizationStrategy: get("routeOptStrategy"),
         optimizationScore:
             document.getElementById("routeOptScore")?.dataset.raw || "",
-        originLatitude: routeCoordinates?.origin?.lat ?? null,
-        originLongitude: routeCoordinates?.origin?.lng ?? null,
-        destinationLatitude: routeCoordinates?.destination?.lat ?? null,
-        destinationLongitude: routeCoordinates?.destination?.lng ?? null,
-        stopCoordinates: stops.map((location, index) => {
-            const stopCoordinate = routeCoordinates?.stops?.[index];
-            return {
-                location,
-                latitude: stopCoordinate?.coordinate?.lat ?? null,
-                longitude: stopCoordinate?.coordinate?.lng ?? null,
-            };
-        }),
+        stopCoordinates,
     };
 }
 
@@ -1541,6 +1643,7 @@ function openViewRouteModal(record) {
         }
     };
     set("viewRouteNumber", record.routeNumber);
+    set("viewRouteReservationNumber", record.reservationNumber);
     set("viewRouteStatus", record.status);
     set("viewRoutePriority", record.priority);
     set("viewRouteOrigin", record.origin);
@@ -2103,9 +2206,23 @@ function initRoutePlanningModals() {
     ].forEach((id) => {
         const field = document.getElementById(id);
         field?.addEventListener("input", () => {
+            /*
+        |----------------------------------------------------------------------
+        | Origin/Destination text changed manually.
+        | Do not keep coordinates from the previous hospital.
+        |----------------------------------------------------------------------
+        */
+            if (id === "routeOrigin" || id === "routeDestination") {
+                delete field.dataset.latitude;
+                delete field.dataset.longitude;
+            }
             resetRouteOptimization();
         });
         field?.addEventListener("change", () => {
+            if (id === "routeOrigin" || id === "routeDestination") {
+                delete field.dataset.latitude;
+                delete field.dataset.longitude;
+            }
             resetRouteOptimization();
         });
     });
@@ -2185,10 +2302,22 @@ function initRoutePlanningModals() {
             if (!record) {
                 return;
             }
-            if (viewButton) {
-                openViewRouteModal(record);
+            /*
+            |--------------------------------------------------------------------------
+            | Route History → Map Selection
+            |--------------------------------------------------------------------------
+            |
+            | Only selecting/viewing a route changes the map.
+            | Edit/Delete actions remain modal-only actions.
+            |
+            */
+            if (!editButton && !deleteButton) {
+                setSelectedRoutePlanningRecord(record.id);
                 await updateRouteMapPanel(record);
                 updateOptimizationSummaryPanel(record);
+            }
+            if (viewButton) {
+                openViewRouteModal(record);
                 return;
             }
             if (editButton && !editButton.disabled && canUpdateRoute()) {

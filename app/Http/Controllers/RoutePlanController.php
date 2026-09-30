@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Reservation;
 use App\Models\RoutePlan;
 use App\Models\FleetSetting;
+use App\Models\HospitalFacility;
 use App\Services\AuditLogService;
 use App\Services\TomTomRoutingService;
 use Illuminate\Http\Request;
@@ -202,8 +203,135 @@ class RoutePlanController extends Controller
             ->orderBy('schedule_time', 'asc')
             ->get();
 
+        $facilities = HospitalFacility::query()
+            ->where('status', true)
+            ->get([
+                'id',
+                'name',
+                'address',
+                'city',
+                'province',
+                'latitude',
+                'longitude',
+                'type',
+            ]);
+
+        $normalizeLocation = static function ($value): string {
+            return mb_strtolower(
+                preg_replace('/\s+/', ' ', trim((string) $value))
+            );
+        };
+
+        $findFacility = static function ($location) use (
+            $facilities,
+            $normalizeLocation
+        ) {
+            $normalized = $normalizeLocation($location);
+
+            if ($normalized === '') {
+                return null;
+            }
+
+            // Exact match first
+            $facility = $facilities->first(function ($item) use (
+                $normalized,
+                $normalizeLocation
+            ) {
+                return $normalizeLocation($item->name) === $normalized
+                    || $normalizeLocation($item->address) === $normalized;
+            });
+
+            if ($facility) {
+                return $facility;
+            }
+
+            // Partial match fallback
+            return $facilities->first(function ($item) use (
+                $normalized,
+                $normalizeLocation
+            ) {
+                $name = $normalizeLocation($item->name);
+                $address = $normalizeLocation($item->address);
+
+                return ($name !== '' && str_contains($normalized, $name))
+                    || ($name !== '' && str_contains($name, $normalized))
+                    || ($address !== '' && str_contains($normalized, $address))
+                    || ($address !== '' && str_contains($address, $normalized));
+            });
+        };
+
+        $reservations->each(function ($reservation) use (
+            $findFacility
+        ) {
+            $pickupFacility = $findFacility($reservation->pickup_location);
+            $destinationFacility = $findFacility($reservation->destination);
+
+            $reservation->pickup_facility = $pickupFacility
+                ? [
+                    'id' => $pickupFacility->id,
+                    'name' => $pickupFacility->name,
+                    'address' => $pickupFacility->address,
+                    'city' => $pickupFacility->city,
+                    'province' => $pickupFacility->province,
+                    'latitude' => $pickupFacility->latitude,
+                    'longitude' => $pickupFacility->longitude,
+                    'type' => $pickupFacility->type,
+                ]
+                : null;
+
+            $reservation->destination_facility = $destinationFacility
+                ? [
+                    'id' => $destinationFacility->id,
+                    'name' => $destinationFacility->name,
+                    'address' => $destinationFacility->address,
+                    'city' => $destinationFacility->city,
+                    'province' => $destinationFacility->province,
+                    'latitude' => $destinationFacility->latitude,
+                    'longitude' => $destinationFacility->longitude,
+                    'type' => $destinationFacility->type,
+                ]
+                : null;
+
+            $reservation->origin_latitude = $pickupFacility?->latitude;
+            $reservation->origin_longitude = $pickupFacility?->longitude;
+
+            $reservation->destination_latitude = $destinationFacility?->latitude;
+            $reservation->destination_longitude = $destinationFacility?->longitude;
+        });
+
         return response()->json([
+            'success' => true,
             'reservations' => $reservations,
+        ]);
+    }
+
+    /**
+     * Get active hospital/facility markers for the
+     * Route Planning overview map.
+     */
+    public function mapOverview()
+    {
+        $this->authorize('viewAny', RoutePlan::class);
+
+        $facilities = HospitalFacility::query()
+            ->where('status', true)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+                'address',
+                'city',
+                'province',
+                'latitude',
+                'longitude',
+                'type',
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'facilities' => $facilities,
         ]);
     }
 
@@ -324,6 +452,23 @@ class RoutePlanController extends Controller
                 $validated = $validator->validated();
                 /*
                 |--------------------------------------------------------------------------
+                | Resolve Reservation Hospital Coordinates
+                |--------------------------------------------------------------------------
+                |
+                | HospitalFacility is the authoritative source for hospital coordinates.
+                | Frontend coordinates remain useful for preview, but the backend
+                | resolves them again before saving the RoutePlan.
+                |
+                */
+                $originFacility = $this->resolveFacilityCoordinates(
+                    $reservation->pickup_location
+                );
+
+                $destinationFacility = $this->resolveFacilityCoordinates(
+                    $reservation->destination
+                );
+                /*
+                |--------------------------------------------------------------------------
                 | Lock Reservation
                 |--------------------------------------------------------------------------
                 */
@@ -335,6 +480,13 @@ class RoutePlanController extends Controller
                     ->findOrFail(
                         $validated['reservation_id']
                     );
+
+                $originFacility = $this->resolveFacilityCoordinates(
+                    $reservation->pickup_location
+                );
+                $destinationFacility = $this->resolveFacilityCoordinates(
+                    $reservation->destination
+                );
                 /*
                 |--------------------------------------------------------------------------
                 | Reservation must be Approved
@@ -395,15 +547,23 @@ class RoutePlanController extends Controller
                     'origin' =>
                         $reservation->pickup_location,
                     'origin_latitude' =>
-                        $validated['origin_latitude'] ?? null,
+                        $originFacility['latitude']
+                        ?? $validated['origin_latitude']
+                        ?? null,
                     'origin_longitude' =>
-                        $validated['origin_longitude'] ?? null,
+                        $originFacility['longitude']
+                        ?? $validated['origin_longitude']
+                        ?? null,
                     'destination' =>
                         $reservation->destination,
                     'destination_latitude' =>
-                        $validated['destination_latitude'] ?? null,
+                        $destinationFacility['latitude']
+                        ?? $validated['destination_latitude']
+                        ?? null,
                     'destination_longitude' =>
-                        $validated['destination_longitude'] ?? null,
+                        $destinationFacility['longitude']
+                        ?? $validated['destination_longitude']
+                        ?? null,
                     'priority' =>
                         $reservation->priority,
                     'department' =>
@@ -1080,6 +1240,13 @@ class RoutePlanController extends Controller
                     ->findOrFail(
                         $validated['reservation_id']
                     );
+
+                $originFacility = $this->resolveFacilityCoordinates(
+                    $reservation->pickup_location
+                );
+                $destinationFacility = $this->resolveFacilityCoordinates(
+                    $reservation->destination
+                );
                 /*
                 |--------------------------------------------------------------------------
                 | Target Reservation Must Be Approved
@@ -1144,15 +1311,15 @@ class RoutePlanController extends Controller
                     'origin' =>
                         $reservation->pickup_location,
                     'origin_latitude' =>
-                        null,
+                        $originFacility['latitude'] ?? null,
                     'origin_longitude' =>
-                        null,
+                        $originFacility['longitude'] ?? null,
                     'destination' =>
                         $reservation->destination,
                     'destination_latitude' =>
-                        null,
+                        $destinationFacility['latitude'] ?? null,
                     'destination_longitude' =>
-                        null,
+                        $destinationFacility['longitude'] ?? null,
                     'priority' =>
                         $reservation->priority,
                     'department' =>
@@ -1247,19 +1414,16 @@ class RoutePlanController extends Controller
                     'array',
                     'min:2',
                 ],
-
                 'coordinates.*.latitude' => [
                     'required',
                     'numeric',
                     'between:-90,90',
                 ],
-
                 'coordinates.*.longitude' => [
                     'required',
                     'numeric',
                     'between:-180,180',
                 ],
-
                 'depart_at' => [
                     'nullable',
                     'date',
@@ -1289,13 +1453,10 @@ class RoutePlanController extends Controller
 
             return response()->json([
                 'success' => true,
-
                 'provider' =>
                     $result['provider'],
-
                 'distance_meters' =>
                     $result['distance_meters'],
-
                 'distance_km' =>
                     $result['distance_meters'] !== null
                         ? round(
@@ -1303,10 +1464,8 @@ class RoutePlanController extends Controller
                             2
                         )
                         : null,
-
                 'travel_time_seconds' =>
                     $result['travel_time_seconds'],
-
                 'travel_time_minutes' =>
                     $result['travel_time_seconds'] !== null
                         ? round(
@@ -1314,10 +1473,8 @@ class RoutePlanController extends Controller
                             1
                         )
                         : null,
-
                 'traffic_delay_seconds' =>
                     $result['traffic_delay_seconds'],
-
                 'traffic_delay_minutes' =>
                     $result['traffic_delay_seconds'] !== null
                         ? round(
@@ -1325,28 +1482,34 @@ class RoutePlanController extends Controller
                             1
                         )
                         : null,
-
                 'traffic_length_meters' =>
                     $result['traffic_length_meters'],
-
                 'no_traffic_travel_time_seconds' =>
                     $result['no_traffic_travel_time_seconds'],
-
                 'historic_traffic_travel_time_seconds' =>
                     $result['historic_traffic_travel_time_seconds'],
-
                 'live_traffic_travel_time_seconds' =>
                     $result['live_traffic_travel_time_seconds'],
-
                 'departure_time' =>
                     $result['departure_time'],
-
                 'arrival_time' =>
                     $result['arrival_time'],
-
                 'optimized_waypoints' =>
                     $result['optimized_waypoints'],
-
+                /*
+                |--------------------------------------------------------------------------
+                | Turn-by-Turn Navigation Instructions
+                |--------------------------------------------------------------------------
+                |
+                | Passed from TomTomRoutingService so the frontend can
+                | determine the next maneuver, maneuver location,
+                | route offset, and human-readable instruction.
+                |
+                */
+                'instructions' =>
+                    array_values(
+                        $result['instructions'] ?? []
+                    ),
                 'points' =>
                     $result['points'],
             ]);
@@ -1469,6 +1632,93 @@ class RoutePlanController extends Controller
             'assigned_vehicles' =>
                 $assignedVehicles,
         ]);
+    }
+
+    /**
+     * Resolve a hospital/facility location into saved coordinates.
+     *
+     * Uses the existing HospitalFacility master data instead of
+     * depending only on frontend-supplied coordinates.
+     */
+    private function resolveFacilityCoordinates(?string $location): ?array
+    {
+        $normalized = mb_strtolower(
+            preg_replace('/\s+/', ' ', trim((string) $location))
+        );
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        $facilities = HospitalFacility::query()
+            ->where('status', true)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->get([
+                'id',
+                'name',
+                'address',
+                'city',
+                'province',
+                'latitude',
+                'longitude',
+                'type',
+            ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Exact match
+        |--------------------------------------------------------------------------
+        */
+        $facility = $facilities->first(function ($item) use ($normalized) {
+            $name = mb_strtolower(
+                preg_replace('/\s+/', ' ', trim((string) $item->name))
+            );
+
+            $address = mb_strtolower(
+                preg_replace('/\s+/', ' ', trim((string) $item->address))
+            );
+
+            return $name === $normalized
+                || $address === $normalized;
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Partial match fallback
+        |--------------------------------------------------------------------------
+        */
+        if (!$facility) {
+            $facility = $facilities->first(function ($item) use ($normalized) {
+                $name = mb_strtolower(
+                    preg_replace('/\s+/', ' ', trim((string) $item->name))
+                );
+
+                $address = mb_strtolower(
+                    preg_replace('/\s+/', ' ', trim((string) $item->address))
+                );
+
+                return ($name !== '' && str_contains($normalized, $name))
+                    || ($name !== '' && str_contains($name, $normalized))
+                    || ($address !== '' && str_contains($normalized, $address))
+                    || ($address !== '' && str_contains($address, $normalized));
+            });
+        }
+
+        if (!$facility) {
+            return null;
+        }
+
+        return [
+            'latitude' => (float) $facility->latitude,
+            'longitude' => (float) $facility->longitude,
+            'facility_id' => $facility->id,
+            'name' => $facility->name,
+            'address' => $facility->address,
+            'city' => $facility->city,
+            'province' => $facility->province,
+            'type' => $facility->type,
+        ];
     }
 
     /**

@@ -191,8 +191,11 @@
                   <div class="card-header route-map-header">
                     <div>
                         <h3>Route Map Preview</h3>
-                        <p class="card-subtitle">
-                            Interactive route preview using OpenStreetMap
+                        <p
+                            class="card-subtitle"
+                            id="routeMapState"
+                        >
+                            Hospital &amp; Fleet Overview
                         </p>
                     </div>
 
@@ -290,76 +293,153 @@
                         </div>
                     </header>
 
-
                     <!-- Full Map -->
                     <main class="full-route-map-content">
+                        <!-- Navigation Map -->
                         <div
                             id="fullRouteLeafletMap"
                             class="full-route-leaflet-map"
                             role="region"
-                            aria-label="Full route map"
+                            aria-label="Full route navigation map"
                         ></div>
-
-
-                        <!-- Floating Route Information -->
-                        <div class="full-route-info-card">
-
-                            <div class="full-route-info-item">
-                                <span>Distance</span>
-                                <strong id="fullMapDistanceLabel">—</strong>
-                            </div>
-
-                            <div class="full-route-info-item">
-                                <span>ETA</span>
-                                <strong id="fullMapEtaLabel">—</strong>
-                            </div>
-
-                            <div class="full-route-info-item">
-                                <span>Status</span>
-                                <strong id="fullMapStatusLabel">—</strong>
-                            </div>
-
-                        </div>
-
-
-                        <!-- Driver Controls -->
-                        <div
-                            class="full-route-driver-controls"
-                            id="fullRouteDriverControls"
-                            hidden
+                        <!-- ==========================================
+                            NEXT NAVIGATION INSTRUCTION
+                        =========================================== -->
+                        <section
+                            class="full-map-navigation-card"
+                            aria-label="Next navigation instruction"
                         >
-
-                            <button
-                                type="button"
-                                class="driver-route-status-btn"
-                                id="fullRouteStatusBtn"
-                                data-status="En Route"
-                            >
+                            <div class="full-map-navigation-icon">
                                 <i
-                                    class="ph ph-navigation-arrow"
+                                    class="ph ph-arrow-up-right"
+                                    id="fullMapNextInstructionIcon"
                                     aria-hidden="true"
                                 ></i>
-
-                                <span id="fullRouteStatusBtnText">
-                                    En Route
+                            </div>
+                            <div class="full-map-navigation-content">
+                                <span class="full-map-navigation-label">
+                                    NEXT
                                 </span>
-                            </button>
-
-
-                            <button
-                                type="button"
-                                class="driver-return-hospital-btn"
-                                id="returnToHospitalBtn"
+                                <strong
+                                    id="fullMapNextInstruction"
+                                    class="full-map-next-instruction"
+                                >
+                                    Continue on route
+                                </strong>
+                                <span
+                                    id="fullMapNextInstructionStreet"
+                                    class="full-map-next-street"
+                                ></span>
+                            </div>
+                            <strong
+                                id="fullMapNextInstructionDistance"
+                                class="full-map-next-distance"
                             >
-                                <i
-                                    class="ph ph-hospital"
-                                    aria-hidden="true"
-                                ></i>
-
-                                <span>Return to Hospital</span>
-                            </button>
+                                —
+                            </strong>
+                        </section>
+                        <!-- ==========================================
+                            NAVIGATION MODE LABEL
+                        =========================================== -->
+                        <div
+                            class="full-map-navigation-mode"
+                            aria-live="polite"
+                        >
+                            <i class="ph-fill ph-navigation"></i>
+                            <span id="fullMapNavigationModeLabel">
+                                Driver Navigation
+                            </span>
                         </div>
+                        <!-- ==========================================
+                            RECENTER BUTTON
+                        =========================================== -->
+                        <button
+                            type="button"
+                            class="full-map-recenter-btn"
+                            id="fullMapRecenterBtn"
+                            aria-label="Recenter on vehicle"
+                            title="Recenter on vehicle"
+                        >
+                            <i
+                                class="ph ph-crosshair"
+                                aria-hidden="true"
+                            ></i>
+                        </button>
+                        <!-- ==========================================
+                            BOTTOM NAVIGATION INFORMATION
+                        =========================================== -->
+                        <section
+                            class="full-route-navigation-bottom"
+                            aria-label="Route navigation information"
+                        >   
+                            <div id="fullMapGpsIndicator" class="full-map-gps-indicator is-no-signal">
+                                <i id="fullMapGpsIndicatorIcon" class="ph ph-crosshair-slash"></i>
+
+                                <div class="full-map-gps-indicator-content">
+                                    <span id="fullMapGpsIndicatorLabel">GPS</span>
+                                    <span id="fullMapGpsIndicatorDetail">Waiting for location</span>
+                                </div>
+                            </div>
+                            <div class="full-route-navigation-stats">
+                                <div class="full-route-navigation-stat">
+                                    <span>Remaining</span>
+                                    <strong id="fullMapDistanceLabel">
+                                        —
+                                    </strong>
+                                </div>
+                                <div class="full-route-navigation-divider"></div>
+                                <div class="full-route-navigation-stat">
+                                    <span>ETA</span>
+                                    <strong id="fullMapEtaLabel">
+                                        —
+                                    </strong>
+                                </div>
+                                <div class="full-route-navigation-divider"></div>
+                                <div class="full-route-navigation-stat">
+                                    <span>Status</span>
+                                    <strong id="fullMapStatusLabel">
+                                        —
+                                    </strong>
+                                </div>
+                            </div>
+                            <!-- Driver Controls -->
+                            <div
+                                class="full-route-driver-controls"
+                                id="fullRouteDriverControls"
+                                hidden
+                            >
+                                <button
+                                    type="button"
+                                    class="driver-route-status-btn"
+                                    id="fullRouteStatusBtn"
+                                    data-status="En Route"
+                                >
+                                    <i
+                                        class="ph ph-navigation-arrow"
+                                        aria-hidden="true"
+                                    ></i>
+
+                                    <span id="fullRouteStatusBtnText">
+                                        En Route
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="driver-return-hospital-btn"
+                                    id="returnToHospitalBtn"
+                                >
+                                    <i
+                                        class="ph ph-hospital"
+                                        aria-hidden="true"
+                                    ></i>
+                                    <span>
+                                        Return to Hospital
+                                    </span>
+                                </button>
+                            </div>
+                        </section>
                     </main>
+
                 </div>
             </div>
 
@@ -615,6 +695,7 @@
           <div class="modal-body">
             <div class="view-route-grid">
               <div><label>Route Number</label><p id="viewRouteNumber"></p></div>
+              <div><label>Reservation Number</label><p id="viewRouteReservationNumber"></p></div>
               <div><label>Status</label><p id="viewRouteStatus"></p></div>
               <div><label>Priority</label><p id="viewRoutePriority"></p></div>
               <div><label>Departure</label><p id="viewRouteDeparture"></p></div>
@@ -693,14 +774,14 @@
 
       <div
         id="routeDriverStatusConfirmModal"
-        class="route-status-confirm-overlay"
+        class="modal-overlay"
         role="dialog"
         aria-modal="true"
         aria-labelledby="routeDriverStatusConfirmTitle"
         aria-describedby="routeDriverStatusConfirmDescription"
       >
-        <div class="route-status-confirm-modal">
-          <div class="route-status-confirm-icon">
+        <div class="custom-modal delete-modal">
+          <div class="delete-icon">
             <i class="ph-fill ph-warning-circle"></i>
           </div>
           <h2 id="routeDriverStatusConfirmTitle">
@@ -713,22 +794,22 @@
             </strong>?
           </p>
           <p
-            class="route-status-confirm-note"
+            class="delete-note"
             id="routeDriverStatusConfirmMessage"
           >
             The dispatch status will be updated in the system.
           </p>
-          <div class="route-status-confirm-footer">
+          <div class="modal-footer">
             <button
               type="button"
-              class="route-status-confirm-cancel"
+              class="btn-outline"
               id="cancelRouteDriverStatusConfirm"
             >
               Cancel
             </button>
             <button
               type="button"
-              class="route-status-confirm-submit"
+              class="btn-primary"
               id="confirmRouteDriverStatus"
             >
               <i class="ph ph-check"></i>

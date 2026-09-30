@@ -66,12 +66,54 @@ class TomTomRoutingService
         */
         $query = [
             'key' => $apiKey,
+            /*
+            |--------------------------------------------------------------------------
+            | Traffic-aware routing
+            |--------------------------------------------------------------------------
+            */
             'traffic' => 'true',
+            /*
+            |--------------------------------------------------------------------------
+            | Route calculation
+            |--------------------------------------------------------------------------
+            */
             'routeType' => 'fastest',
             'travelMode' => 'car',
             'computeBestOrder' => 'true',
+            /*
+            |--------------------------------------------------------------------------
+            | Route geometry
+            |--------------------------------------------------------------------------
+            */
             'routeRepresentation' => 'polyline',
+            /*
+            |--------------------------------------------------------------------------
+            | Traffic metrics
+            |--------------------------------------------------------------------------
+            */
             'computeTravelTimeFor' => 'all',
+            /*
+            |--------------------------------------------------------------------------
+            | Turn-by-turn guidance
+            |--------------------------------------------------------------------------
+            |
+            | TomTom returns human-readable maneuver messages together
+            | with maneuver metadata.
+            |
+            */
+            'instructionsType' => 'text',
+            'language' => 'en-GB',
+            'sectionType' => 'lanes',
+            /*
+            |--------------------------------------------------------------------------
+            | Fine-grained announcement points
+            |--------------------------------------------------------------------------
+            |
+            | Allows the navigation frontend to later use early,
+            | main, and confirmation announcement points.
+            |
+            */
+            'instructionAnnouncementPoints' => 'all',
         ];
 
         if ($departAt) {
@@ -154,57 +196,156 @@ class TomTomRoutingService
             array_values(
                 $data['optimizedWaypoints'] ?? []
             );
+        /*
+        |--------------------------------------------------------------------------
+        | Turn-by-Turn Guidance
+        |--------------------------------------------------------------------------
+        |
+        | TomTom returns guidance instructions under:
+        |
+        | routes[0].guidance.instructions
+        |
+        | Normalize the response so the frontend does not have to
+        | depend directly on every TomTom field name.
+        |
+        */
+        $guidanceInstructions = [];
+        foreach (
+            $route['guidance']['instructions'] ?? []
+            as $instruction
+        ) {
+            $point = $instruction['point'] ?? null;
+            $latitude = isset($point['latitude'])
+                ? (float) $point['latitude']
+                : null;
+            $longitude = isset($point['longitude'])
+                ? (float) $point['longitude']
+                : null;
+            $guidanceInstructions[] = [
+                'route_offset_meters' =>
+                    isset($instruction['routeOffsetInMeters'])
+                        ? (int) $instruction['routeOffsetInMeters']
+                        : null,
+                'travel_time_seconds' =>
+                    isset($instruction['travelTimeInSeconds'])
+                        ? (int) $instruction['travelTimeInSeconds']
+                        : null,
+                'point' => (
+                    $latitude !== null &&
+                    $longitude !== null
+                )
+                    ? [
+                        'latitude' => $latitude,
+                        'longitude' => $longitude,
+                    ]
+                    : null,
+                'point_index' =>
+                    isset($instruction['pointIndex'])
+                        ? (int) $instruction['pointIndex']
+                        : null,
+                'instruction_type' =>
+                    $instruction['instructionType'] ?? null,
+                'maneuver' =>
+                    $instruction['maneuver'] ?? null,
+                'message' =>
+                    $instruction['message'] ?? null,
+                'combined_message' =>
+                    $instruction['combinedMessage'] ?? null,
+                'street' =>
+                    $instruction['street'] ?? null,
+                'road_numbers' =>
+                    array_values(
+                        $instruction['roadNumbers'] ?? []
+                    ),
+                'signpost_text' =>
+                    $instruction['signpostText'] ?? null,
+                'junction_type' =>
+                    $instruction['junctionType'] ?? null,
+                'turn_angle_degrees' =>
+                    isset(
+                        $instruction['turnAngleInDecimalDegrees']
+                    )
+                        ? (int) $instruction[
+                            'turnAngleInDecimalDegrees'
+                        ]
+                        : null,
+                'roundabout_exit_number' =>
+                    isset(
+                        $instruction['roundaboutExitNumber']
+                    )
+                        ? (int) $instruction[
+                            'roundaboutExitNumber'
+                        ]
+                        : null,
+                'driving_side' =>
+                    $instruction['drivingSide'] ?? null,
+                /*
+                |--------------------------------------------------------------------------
+                | Optional announcement points
+                |--------------------------------------------------------------------------
+                */
+                'announcements' => [
+                    'early' =>
+                        $instruction[
+                            'earlyWarningAnnouncement'
+                        ] ?? null,
+                    'main' =>
+                        $instruction[
+                            'mainAnnouncement'
+                        ] ?? null,
+                    'confirmation' =>
+                        $instruction[
+                            'confirmationAnnouncement'
+                        ] ?? null,
+                ],
+            ];
+        }
 
         return [
             'provider' => 'TomTom',
-
             'distance_meters' =>
                 isset($summary['lengthInMeters'])
                     ? (int) $summary['lengthInMeters']
                     : null,
-
             'travel_time_seconds' =>
                 isset($summary['travelTimeInSeconds'])
                     ? (int) $summary['travelTimeInSeconds']
                     : null,
-
             'traffic_delay_seconds' =>
                 isset($summary['trafficDelayInSeconds'])
                     ? (int) $summary['trafficDelayInSeconds']
                     : null,
-
             'traffic_length_meters' =>
                 isset($summary['trafficLengthInMeters'])
                     ? (int) $summary['trafficLengthInMeters']
                     : null,
-
             'no_traffic_travel_time_seconds' =>
                 isset($summary['noTrafficTravelTimeInSeconds'])
                     ? (int) $summary['noTrafficTravelTimeInSeconds']
                     : null,
-
             'historic_traffic_travel_time_seconds' =>
                 isset($summary['historicTrafficTravelTimeInSeconds'])
                     ? (int) $summary['historicTrafficTravelTimeInSeconds']
                     : null,
-
             'live_traffic_travel_time_seconds' =>
                 isset($summary['liveTrafficIncidentsTravelTimeInSeconds'])
                     ? (int) $summary['liveTrafficIncidentsTravelTimeInSeconds']
                     : null,
-
             'departure_time' =>
                 $summary['departureTime'] ?? null,
-
             'arrival_time' =>
                 $summary['arrivalTime'] ?? null,
-
             'optimized_waypoints' =>
                 $optimizedWaypoints,
-
+            /*
+            |--------------------------------------------------------------------------
+            | Navigation Guidance
+            |--------------------------------------------------------------------------
+            */
+            'instructions' =>
+                $guidanceInstructions,
             'points' =>
                 $points,
-
             'route' =>
                 $route,
         ];

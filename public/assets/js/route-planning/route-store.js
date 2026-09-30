@@ -53,6 +53,19 @@ let routePlanningRecords = [];
  * @type {Array<Object>}
  */
 let routeAvailableReservations = [];
+/**
+ * Currently selected Route Plan for the map/detail view.
+ *
+ * UI-only state.
+ * Laravel/MySQL remains the source of truth.
+ */
+let selectedRoutePlanningRecordId = null;
+/**
+ * Hospital/facility data used by the
+ * Route Planning overview map.
+ */
+let routePlanningMapFacilities = [];
+
 /* ==========================================
    CSRF + API HELPERS
 ========================================== */
@@ -581,7 +594,63 @@ function normalizeRouteRecord(raw, index = 0) {
 /* ==========================================
    LOCAL FRONTEND STATE HELPERS
 ========================================== */
-
+/**
+ * Set the currently selected Route Plan.
+ */
+function setSelectedRoutePlanningRecord(id) {
+    const key = String(id || "").trim();
+    if (!key) {
+        selectedRoutePlanningRecordId = null;
+        return null;
+    }
+    const record = getRouteRecordById(key);
+    if (!record) {
+        selectedRoutePlanningRecordId = null;
+        return null;
+    }
+    selectedRoutePlanningRecordId = key;
+    return record;
+}
+/**
+ * Get the currently selected Route Plan.
+ */
+function getSelectedRoutePlanningRecord() {
+    if (!selectedRoutePlanningRecordId) {
+        return null;
+    }
+    return getRouteRecordById(selectedRoutePlanningRecordId);
+}
+/**
+ * Clear the current Route Plan selection.
+ *
+ * The map can then return to the overview.
+ */
+function clearSelectedRoutePlanningRecord() {
+    selectedRoutePlanningRecordId = null;
+}
+/**
+ * Load hospital/facility markers for the
+ * default Route Planning overview map.
+ */
+async function fetchRoutePlanningMapOverview() {
+    const data = await routeApiRequest(`${ROUTE_API_BASE}/map-overview`, {
+        method: "GET",
+    });
+    routePlanningMapFacilities = Array.isArray(data.facilities)
+        ? data.facilities
+        : [];
+    return routePlanningMapFacilities.slice();
+}
+/**
+ * Return the currently loaded hospital/facility markers.
+ */
+function getRoutePlanningMapFacilities() {
+    return Array.isArray(routePlanningMapFacilities)
+        ? routePlanningMapFacilities.map((facility) => ({
+              ...facility,
+          }))
+        : [];
+}
 /**
  * Replace the current browser state with
  * Route Plans returned by Laravel.
@@ -896,7 +965,7 @@ async function deleteRoutePlanApi(id) {
 
     return data;
 }
-*/ 
+*/
 /**
  * Duplicate Route Plan using a specific
  * target Approved Reservation.
@@ -952,10 +1021,7 @@ function buildRouteCoordinates(input) {
     const originLatitude = Number(input.originLatitude);
     const originLongitude = Number(input.originLongitude);
 
-    if (
-        Number.isFinite(originLatitude) &&
-        Number.isFinite(originLongitude)
-    ) {
+    if (Number.isFinite(originLatitude) && Number.isFinite(originLongitude)) {
         coordinates.push({
             latitude: originLatitude,
             longitude: originLongitude,
@@ -970,10 +1036,7 @@ function buildRouteCoordinates(input) {
         const latitude = Number(stop?.latitude);
         const longitude = Number(stop?.longitude);
 
-        if (
-            Number.isFinite(latitude) &&
-            Number.isFinite(longitude)
-        ) {
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
             coordinates.push({
                 latitude,
                 longitude,
@@ -981,13 +1044,9 @@ function buildRouteCoordinates(input) {
         }
     });
 
-    const destinationLatitude = Number(
-        input.destinationLatitude,
-    );
+    const destinationLatitude = Number(input.destinationLatitude);
 
-    const destinationLongitude = Number(
-        input.destinationLongitude,
-    );
+    const destinationLongitude = Number(input.destinationLongitude);
 
     if (
         Number.isFinite(destinationLatitude) &&
@@ -1008,14 +1067,9 @@ function buildRouteCoordinates(input) {
  * Laravel remains responsible for communicating
  * with the TomTom API.
  */
-async function calculateTrafficRouteApi(
-    coordinates,
-    departAt = null,
-) {
+async function calculateTrafficRouteApi(coordinates, departAt = null) {
     if (!Array.isArray(coordinates) || coordinates.length < 2) {
-        throw new Error(
-            "At least an origin and destination are required.",
-        );
+        throw new Error("At least an origin and destination are required.");
     }
     const payload = {
         coordinates,
@@ -1023,13 +1077,10 @@ async function calculateTrafficRouteApi(
     if (departAt) {
         payload.depart_at = departAt;
     }
-    return routeApiRequest(
-        `${ROUTE_API_BASE}/traffic-route`,
-        {
-            method: "POST",
-            body: JSON.stringify(payload),
-        },
-    );
+    return routeApiRequest(`${ROUTE_API_BASE}/traffic-route`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
 }
 
 /**
@@ -1041,27 +1092,20 @@ async function calculateTrafficRouteApi(
  * Fallback:
  * Existing OSRM routing
  */
-async function calculateRouteWithTrafficFallback(
-    input,
-) {
-    const coordinates =
-        buildRouteCoordinates(input);
+async function calculateRouteWithTrafficFallback(input) {
+    const coordinates = buildRouteCoordinates(input);
     if (coordinates.length < 2) {
-        throw new Error(
-            "Route coordinates are incomplete.",
-        );
+        throw new Error("Route coordinates are incomplete.");
     }
     try {
-        const result =
-            await calculateTrafficRouteApi(
-                coordinates,
-                input.departAt || null,
-            );
+        const result = await calculateTrafficRouteApi(
+            coordinates,
+            input.departAt || null,
+        );
         return {
             ...result,
             fallback: false,
-            provider:
-                result.provider || "TomTom",
+            provider: result.provider || "TomTom",
         };
     } catch (tomTomError) {
         console.warn(
@@ -1339,3 +1383,9 @@ function writeRouteTemplates(list) {
         return false;
     }
 }
+
+window.setSelectedRoutePlanningRecord = setSelectedRoutePlanningRecord;
+window.getSelectedRoutePlanningRecord = getSelectedRoutePlanningRecord;
+window.clearSelectedRoutePlanningRecord = clearSelectedRoutePlanningRecord;
+window.fetchRoutePlanningMapOverview = fetchRoutePlanningMapOverview;
+window.getRoutePlanningMapFacilities = getRoutePlanningMapFacilities;

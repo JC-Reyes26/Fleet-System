@@ -1021,16 +1021,30 @@ function clearRouteLeafletMap() {
     if (routeLeafletRouteLayer) {
         routeLeafletRouteLayer.clearLayers();
     }
-
     if (routeLeafletMarkerLayer) {
         routeLeafletMarkerLayer.clearLayers();
     }
+    if (routeLeafletVehicleMarkerLayer) {
+        routeLeafletVehicleMarkerLayer.clearLayers();
+    }
+    routeLeafletVehicleMarker = null;
+    routeLastTrackedVehicle = null;
+    routeLeafletOverviewVehicleMarkers = [];
 }
 
 function createRouteMarkerIcon(type, label = "") {
     let markerClass = "route-map-marker";
     let content = "";
-    if (type === "origin") {
+
+    if (type === "hospital" || type === "facility") {
+        markerClass += " route-map-marker-hospital";
+        content = `
+            <i
+                class="ph ph-hospital"
+                aria-hidden="true"
+            ></i>
+        `;
+    } else if (type === "origin") {
         markerClass += " route-map-marker-origin";
         content = `
             <i
@@ -1101,7 +1115,10 @@ function renderRouteVehicleMarker(markerLayer, currentMarker, trackedVehicle) {
     const latitude = Number(location.latitude);
     const longitude = Number(location.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return currentMarker || null;
+        if (currentMarker) {
+            currentMarker.remove();
+        }
+        return null;
     }
     const ageSeconds = Number(location.age_seconds);
     if (Number.isFinite(ageSeconds) && ageSeconds > 120) {
@@ -1159,13 +1176,16 @@ function renderRouteVehicleMarker(markerLayer, currentMarker, trackedVehicle) {
 async function loadRoutePlanningVehicleLocation(record) {
     if (!record?.vehicleId) {
         routeLastTrackedVehicle = null;
+        if (routeLeafletVehicleMarker) {
+            routeLeafletVehicleMarker.remove();
+            routeLeafletVehicleMarker = null;
+        }
         window.updateFullRouteMapVehicleLocation?.(null, record);
         return;
     }
     if (!routeLeafletVehicleMarkerLayer) {
         return;
     }
-
     try {
         const response = await fetch("/tracking/vehicles", {
             method: "GET",
@@ -1188,7 +1208,6 @@ async function loadRoutePlanningVehicleLocation(record) {
                 (vehicle) =>
                     String(vehicle.vehicle_id) === String(record.vehicleId),
             ) || null;
-
         routeLastTrackedVehicle = trackedVehicle;
         routeLeafletVehicleMarker = renderRouteVehicleMarker(
             routeLeafletVehicleMarkerLayer,
@@ -1366,6 +1385,203 @@ function makeRouteCoordinate(lat, lng, displayName = "") {
         lng: Number(lng),
         displayName: String(displayName || "").trim(),
     };
+}
+/**
+ * Render all active hospitals/facilities on
+ * the default Route Planning map.
+ */
+function renderRoutePlanningHospitalOverview(facilities) {
+    if (!routeLeafletMap || !routeLeafletMarkerLayer) {
+        return;
+    }
+    routeLeafletMarkerLayer.clearLayers();
+    const bounds = [];
+    const list = Array.isArray(facilities)
+        ? facilities
+        : [];
+    list.forEach((facility) => {
+        const latitude = Number(facility?.latitude);
+        const longitude = Number(facility?.longitude);
+
+        if (
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+            return;
+        }
+        const marker = L.marker(
+            [latitude, longitude],
+            {
+                icon: createRouteMarkerIcon(
+                    "hospital",
+                    facility.name,
+                ),
+            },
+        );
+        const location = [
+            facility.address,
+            facility.city,
+            facility.province,
+        ]
+            .filter(Boolean)
+            .join(", ");
+
+        marker.bindPopup(`
+            <strong>
+                ${escapeRouteHtml(facility.name || "Hospital")}
+            </strong>
+            ${
+                location
+                    ? `<br>${escapeRouteHtml(location)}`
+                    : ""
+            }
+            ${
+                facility.type
+                    ? `<br><strong>Type:</strong> ${escapeRouteHtml(
+                          facility.type,
+                      )}`
+                    : ""
+            }
+        `);
+        marker.addTo(routeLeafletMarkerLayer);
+        bounds.push([latitude, longitude]);
+    });
+    if (bounds.length > 0) {
+        routeLeafletMap.fitBounds(bounds, {
+            padding: [40, 40],
+            maxZoom: 13,
+        });
+    }
+}
+/**
+ * Render all currently available vehicle GPS
+ * positions on the default overview map.
+ *
+ * Only vehicles with valid and recent GPS
+ * locations are displayed.
+ */
+function renderRoutePlanningOverviewVehicles(vehicles) {
+    if (!routeLeafletMap || !routeLeafletVehicleMarkerLayer) {
+        return;
+    }
+    routeLeafletVehicleMarkerLayer.clearLayers();
+    routeLeafletOverviewVehicleMarkers = [];
+    const list = Array.isArray(vehicles)
+        ? vehicles
+        : [];
+    list.forEach((vehicle) => {
+        if (
+            !vehicle ||
+            vehicle.has_location !== true ||
+            !vehicle.location
+        ) {
+            return;
+        }
+        const latitude = Number(vehicle.location.latitude);
+        const longitude = Number(vehicle.location.longitude);
+        if (
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+            return;
+        }
+        const ageSeconds = Number(
+            vehicle.location.age_seconds,
+        );
+        if (
+            Number.isFinite(ageSeconds) &&
+            ageSeconds > 120
+        ) {
+            return;
+        }
+        const marker = renderRouteVehicleMarker(
+            routeLeafletVehicleMarkerLayer,
+            null,
+            vehicle,
+        );
+        if (marker) {
+            routeLeafletOverviewVehicleMarkers.push(
+                marker,
+            );
+        }
+    });
+}
+/**
+ * Load and render the default Hospital & Fleet
+ * Overview state.
+ */
+async function renderRoutePlanningOverview() {
+    const viewToken = routeMapViewToken;
+    await initRouteLeafletMap();
+    if (!routeLeafletMap) {
+        return;
+    }
+    if (
+        typeof window.fetchRoutePlanningMapOverview !==
+        "function"
+    ) {
+        return;
+    }
+    let facilities = [];
+    try {
+        facilities =
+            window.getRoutePlanningMapFacilities?.() || [];
+
+        if (facilities.length === 0) {
+            facilities =
+                await window.fetchRoutePlanningMapOverview();
+        }
+    } catch (error) {
+        console.error(
+            "Unable to load Route Planning map facilities:",
+            error,
+        );
+    }
+    if (viewToken !== routeMapViewToken) {
+        return;
+    }
+    routeLeafletRouteLayer?.clearLayers();
+    routeLeafletMarkerLayer?.clearLayers();
+    routeLeafletVehicleMarkerLayer?.clearLayers();
+    routeLeafletVehicleMarker = null;
+    routeLeafletOverviewVehicleMarkers = [];
+    renderRoutePlanningHospitalOverview(
+        facilities,
+    );
+    try {
+        const response = await fetch(
+            "/tracking/vehicles",
+            {
+                method: "GET",
+                headers: {
+                    Accept: "application/json",
+                    "X-Requested-With":
+                        "XMLHttpRequest",
+                },
+                credentials: "same-origin",
+                cache: "no-store",
+            },
+        );
+
+        if (response.ok) {
+            const data = await response.json();
+            if (viewToken === routeMapViewToken) {
+                renderRoutePlanningOverviewVehicles(
+                    Array.isArray(data.vehicles)
+                        ? data.vehicles
+                        : [],
+                );
+            }
+        }
+    } catch (error) {
+        console.warn(
+            "Unable to load overview vehicle locations:",
+            error,
+        );
+    }
+    window.setTimeout(() => {
+        routeLeafletMap?.invalidateSize();
+    }, 100);
 }
 /**
  * Convert route addresses into coordinates.
@@ -1624,6 +1840,21 @@ async function requestTomTomRoute(routeCoordinates, record) {
         optimizedWaypoints: Array.isArray(data.optimized_waypoints)
             ? data.optimized_waypoints
             : [],
+        /*
+        |--------------------------------------------------------------------------
+        | Turn-by-Turn Navigation Instructions
+        |--------------------------------------------------------------------------
+        |
+        | Passed from Laravel/TomTom so Full Map can determine:
+        | - next maneuver
+        | - maneuver location
+        | - route offset
+        | - message
+        | - road/street
+        | - turn angle
+        |--------------------------------------------------------------------------
+        */
+        instructions: Array.isArray(data.instructions) ? data.instructions : [],
         points: latLngs,
         geometry,
         raw: data,
@@ -1701,6 +1932,7 @@ async function calculateTrafficRouteFromCoordinates(
             durationMinutes: Number(osrmRoute.durationSeconds || 0) / 60,
             trafficDelayMinutes: 0,
             optimizedWaypoints: [],
+            instructions: [],
             points: osrmRoute.points || [],
             geometry: osrmRoute.geometry || null,
             route: osrmRoute,
@@ -1818,6 +2050,7 @@ async function calculateRouteWithOsrm(record, options = {}) {
             distanceKm:
                 distanceKm !== null ? Number(distanceKm.toFixed(2)) : null,
             durationMinutes,
+            instructions: [],
             route,
             routeCoordinates,
         };
@@ -2027,6 +2260,8 @@ function drawRouteOnLeaflet(route, routeCoordinates, record) {
 ========================================== */
 let currentRoutePlanningMapRecord = null;
 let currentRoutePlanningMapRoute = null;
+let routeMapViewToken = 0;
+let routeLeafletOverviewVehicleMarkers = [];
 
 function getCurrentRoutePlanningMapRecord() {
     return currentRoutePlanningMapRecord;
@@ -2036,8 +2271,17 @@ function getCurrentRoutePlanningMapRoute() {
 }
 
 async function updateRouteMapPanel(record) {
+    const viewToken = ++routeMapViewToken;
     currentRoutePlanningMapRecord = record || null;
     currentRoutePlanningMapRoute = null;
+
+    const stateElement = document.getElementById("routeMapState");
+
+    if (stateElement) {
+        stateElement.textContent = record
+            ? `Selected Route · ${record.routeNumber || "Route"}`
+            : "Hospital & Fleet Overview";
+    }
 
     const distanceEl = document.getElementById("mapDistanceLabel");
     const etaEl = document.getElementById("mapEtaLabel");
@@ -2048,22 +2292,23 @@ async function updateRouteMapPanel(record) {
     | No selected RoutePlan
     |--------------------------------------------------------------------------
     */
-    if (!record) {
-        clearRouteLeafletMap();
-        if (distanceEl) {
-            distanceEl.textContent = "—";
-        }
-        if (etaEl) {
-            etaEl.textContent = "—";
-        }
-        if (statusEl) {
-            statusEl.textContent = "—";
-        }
-        if (strategyEl) {
-            strategyEl.textContent = "—";
-        }
-        return;
-    }
+   if (!record) {
+       clearRouteLeafletMap();
+       if (distanceEl) {
+           distanceEl.textContent = "—";
+       }
+       if (etaEl) {
+           etaEl.textContent = "—";
+       }
+       if (statusEl) {
+           statusEl.textContent = "—";
+       }
+       if (strategyEl) {
+           strategyEl.textContent = "—";
+       }
+       await renderRoutePlanningOverview();
+       return;
+   }
 
     /*
     |--------------------------------------------------------------------------
@@ -2097,7 +2342,9 @@ async function updateRouteMapPanel(record) {
             draw: true,
             silent: true,
         });
-
+        if (viewToken !== routeMapViewToken) {
+            return;
+        }
         currentRoutePlanningMapRoute = routeResult || null;
     } catch (error) {
         console.error("Unable to calculate Route Planning map route:", error);
@@ -2162,7 +2409,7 @@ function updateOptimizationSummaryPanel(record) {
             : "—",
     );
 }
-
+/*
 function getSelectedRoutePlanningRecord(records) {
     const selectedRecord = getCurrentRoutePlanningMapRecord?.();
     if (!selectedRecord?.id) {
@@ -2175,7 +2422,7 @@ function getSelectedRoutePlanningRecord(records) {
         ) || null
     );
 }
-
+*/
 /**
  * Pure UI refresh.
  *
@@ -2224,10 +2471,10 @@ function refreshRoutePlanningTable(options = {}) {
         }
 
         /*
-    |--------------------------------------------------------------------------
-    | No actual database Route Plans
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | No actual database Route Plans
+        |--------------------------------------------------------------------------
+        */
 
         if (all.length === 0) {
             updateRouteEmptyState(true);
@@ -2241,10 +2488,10 @@ function refreshRoutePlanningTable(options = {}) {
         updateRouteEmptyState(false);
 
         /*
-    |--------------------------------------------------------------------------
-    | Pagination
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | Pagination
+        |--------------------------------------------------------------------------
+        */
 
         const pageSize = routePaginationState.pageSize;
         const total = matched.length;
@@ -2287,35 +2534,31 @@ function refreshRoutePlanningTable(options = {}) {
         renderRoutePagination(total);
 
         /*
-    |--------------------------------------------------------------------------
-    | Side panels
-    |--------------------------------------------------------------------------
-    */
-
+        |--------------------------------------------------------------------------
+        | Side panels
+        |--------------------------------------------------------------------------
+        */
         const focusId = options.focusId;
-
-        /*
-|--------------------------------------------------------------------------
-| Preserve currently selected route
-|--------------------------------------------------------------------------
-|
-| Pagination, filtering, sorting, and table refreshes
-| must NOT silently change the selected map/summary route.
-|
-*/
-        const selectedRecord = getSelectedRoutePlanningRecord(all);
-        const panelRecord =
-            (focusId &&
-                matched.find(
-                    (record) => String(record.id) === String(focusId),
-                )) ||
-            selectedRecord ||
-            null;
-        if (options.refreshMap !== false && panelRecord) {
+        let panelRecord = null;
+        if (focusId) {
+            const focusedRecord = matched.find(
+                (record) => String(record.id) === String(focusId),
+            );
+            if (focusedRecord) {
+                setSelectedRoutePlanningRecord(focusedRecord.id);
+                panelRecord = focusedRecord;
+            }
+        }
+        if (!panelRecord) {
+            panelRecord = getSelectedRoutePlanningRecord();
+        }
+        if (options.refreshMap !== false) {
             void updateRouteMapPanel(panelRecord);
         }
         if (panelRecord) {
             updateOptimizationSummaryPanel(panelRecord);
+        } else {
+            updateOptimizationSummaryPanel(null);
         }
 
         return matched;
@@ -2577,4 +2820,3 @@ window.drawRouteOnMapTarget = drawRouteOnMapTarget;
 window.renderRouteVehicleMarker = renderRouteVehicleMarker;
 window.calculateTrafficRouteFromCoordinates =
     calculateTrafficRouteFromCoordinates;
-

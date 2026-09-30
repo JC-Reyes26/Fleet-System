@@ -540,6 +540,11 @@ Route::middleware([
         )->name('route-planning.availableReservations');
 
         Route::get(
+            '/route-planning/map-overview',
+            [RoutePlanController::class, 'mapOverview']
+        )->name('route-planning.map-overview');
+
+        Route::get(
             '/route-planning/stats',
             [RoutePlanController::class, 'stats']
         )->name('route-planning.stats');
