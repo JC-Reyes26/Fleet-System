@@ -265,8 +265,9 @@ function renderDispatchTable(dispatches) {
         return;
     }
 
-    const canUpdate =
-        window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") === true;
+    const role = window.FleetRBAC?.getRole?.() || window.FLEET_RBAC?.role || "";
+    //const canUpdate =
+    //    window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") === true;
     const canArchive =
         window.FleetRBAC?.hasPermission?.("dispatch", "canArchive") === true;
     const canBulkArchive =
@@ -274,6 +275,12 @@ function renderDispatchTable(dispatches) {
         true;
     const canRestore =
         window.FleetRBAC?.hasPermission?.("dispatch", "canRestore") === true;
+    const canReviewReassignment =
+        window.FLEET_RBAC?.dispatch?.canReviewReassignment === true ||
+        window.FleetRBAC?.hasPermission?.(
+            "dispatch",
+            "canReviewReassignment",
+        ) === true;
 
     if (!Array.isArray(dispatches) || dispatches.length === 0) {
         tableBody.innerHTML = "";
@@ -320,14 +327,22 @@ function renderDispatchTable(dispatches) {
             dispatch.departure_time || routePlan?.departure_time || "",
         ).slice(0, 5);
         const priority = routePlan?.priority || reservation.priority || "";
-        const status = dispatch.trip_status || "Pending";
+        const status = String(dispatch.trip_status || "Pending").trim();
+        const openReassignment = Array.isArray(dispatch.reassignments)
+            ? dispatch.reassignments.find(
+                  (item) =>
+                      String(item?.status || "")
+                          .trim()
+                          .toLowerCase() === "requested",
+              )
+            : null;
         const remarks = dispatch.remarks || "";
         const contact = reservation.contact_number || "";
         const statusClass = getDispatchStatusClass(status);
-        const canEdit = canUpdate && !dispatch.archived_at;
-        const isLifecycleLocked = ["Completed", "Cancelled"].includes(status);
+        //const canEdit = canUpdate && !dispatch.archived_at;
+        //const isLifecycleLocked = ["Completed", "Cancelled"].includes(status);
         const isArchived = Boolean(dispatch.archived_at);
-        const canArchiveThisDispatch = canArchive && !isArchived;
+        //const canArchiveThisDispatch = canArchive && !isArchived;
         const safeDispatchNumber = escapeDispatchHtml(
             dispatch.dispatch_number || "N/A",
         );
@@ -471,21 +486,36 @@ function renderDispatchTable(dispatches) {
                                 <i class="ph ph-eye"></i>
                             </button>
                             ${
-                                canUpdate && !isArchived
+                                role === "driver" &&
+                                status === "Pending" &&
+                                !openReassignment
                                     ? `
                                         <button
                                             type="button"
-                                            class="action-btn edit-dispatch"
+                                            class="action-btn request-reassignment"
                                             data-id="${escapeDispatchHtml(dispatch.id)}"
-                                            data-status="${safeStatus}"
-                                            aria-label="Edit ${safeDispatchNumber}"
-                                            title="${
-                                                isLifecycleLocked
-                                                    ? `This dispatch cannot be edited because it is already ${safeStatus}`
-                                                    : "Edit Dispatch"
-                                            }"
+                                            aria-label="Request reassignment for ${safeDispatchNumber}"
+                                            title="Request Reassignment"
                                         >
-                                            <i class="ph ph-pencil-simple"></i>
+                                            <i class="ph ph-arrows-left-right"></i>
+                                        </button>
+                                    `
+                                    : ""
+                            }
+                            ${
+                                canReviewReassignment &&
+                                openReassignment &&
+                                status === "Pending"
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="action-btn btn-review-reassignment"
+                                            data-id="${escapeDispatchHtml(openReassignment.id)}"
+                                            data-dispatch-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Review reassignment for ${safeDispatchNumber}"
+                                            title="Review Reassignment Request"
+                                        >
+                                            <i class="ph ph-arrows-left-right"></i>
                                         </button>
                                     `
                                     : ""

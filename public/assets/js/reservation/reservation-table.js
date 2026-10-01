@@ -16,12 +16,24 @@ document.addEventListener("DOMContentLoaded", () => {
         await loadReservations();
     });
 });
+document.addEventListener("DOMContentLoaded", () => {
+    const role = window.FleetRBAC?.getRole?.() || "";
+    const showArchived = document.getElementById("showArchivedReservations");
+    if (showArchived) {
+        showArchived
+            .closest("label")
+            ?.classList.toggle("d-none", role !== "fleet_manager");
+    }
+});
 
 async function loadReservations() {
     try {
+        const role = window.FleetRBAC?.getRole?.() || "";
+        const canViewArchived = role === "fleet_manager";
         const showArchived =
+            canViewArchived &&
             document.getElementById("showArchivedReservations")?.checked ===
-            true;
+                true;
         const url = showArchived
             ? "/reservation?show_archived=1"
             : "/reservation";
@@ -45,7 +57,6 @@ async function loadReservations() {
         return reservations;
     } catch (error) {
         console.error("RESERVATION LOAD ERROR:", error);
-
         return [];
     }
 }
@@ -168,6 +179,11 @@ function renderReservationTable(reservations) {
     const canRestore =
         window.FleetRBAC?.hasPermission?.("reservations", "canRestore") ===
         true;
+    const canApprove =
+        window.FleetRBAC?.hasPermission?.("reservations", "canApprove") ===
+        true;
+    const canReject =
+        window.FleetRBAC?.hasPermission?.("reservations", "canReject") === true;
     const canUpdate =
         window.FleetRBAC?.hasPermission?.("reservations", "canUpdate") === true;
 
@@ -177,8 +193,8 @@ function renderReservationTable(reservations) {
 
         const canEditThisReservation =
             canUpdate &&
-            (role === "fleet_manager" ||
-                role === "dispatcher" ||
+            !reservation.archived_at &&
+            (role === "dispatcher" ||
                 (role === "department_head" &&
                     reservation.status === "Pending"));
 
@@ -223,7 +239,9 @@ function renderReservationTable(reservations) {
 
                 <td>
                     ${
-                        canBulkArchive && !reservation.archived_at
+                        canArchive &&
+                        !reservation.archived_at &&
+                        reservation.status !== "Pending"
                             ? `
                                 <input
                                     type="checkbox"
@@ -315,7 +333,46 @@ function renderReservationTable(reservations) {
                                 : ""
                         }
                         ${
-                            canArchive && !reservation.archived_at
+                            canApprove &&
+                            reservation.status === "Pending" &&
+                            !reservation.archived_at
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="action-btn approve-reservation"
+                                        data-id="${reservation.id}"
+                                        data-reservation-number="${reservation.reservation_number ?? ""}"
+                                        aria-label="Approve ${reservation.reservation_number}"
+                                        title="Approve Reservation"
+                                    >
+                                        <i class="ph ph-check"></i>
+                                    </button>
+                                `
+                                : ""
+                        }
+
+                        ${
+                            canReject &&
+                            reservation.status === "Pending" &&
+                            !reservation.archived_at
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="action-btn reject-reservation"
+                                        data-id="${reservation.id}"
+                                        data-reservation-number="${reservation.reservation_number ?? ""}"
+                                        aria-label="Reject ${reservation.reservation_number}"
+                                        title="Reject Reservation"
+                                    >
+                                        <i class="ph ph-x"></i>
+                                    </button>
+                                `
+                                : ""
+                        }
+                        ${
+                            canArchive &&
+                            !reservation.archived_at &&
+                            reservation.status !== "Pending"
                                 ? `
                                     <button
                                         type="button"

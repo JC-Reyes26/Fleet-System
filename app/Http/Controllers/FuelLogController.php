@@ -604,7 +604,7 @@ class FuelLogController extends Controller
             return response()->json([
                 'success' => true,
                 'message' =>
-                    'Fuel record added successfully.',
+                    'Fuel record requested successfully.',
                 'fuelLog' => $fuelLog,
             ], 201);
 

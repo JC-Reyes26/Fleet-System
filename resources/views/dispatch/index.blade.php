@@ -24,7 +24,7 @@
                       class="btn-primary"
                   >
                       <i class="ph ph-plus"></i>
-                      Create Dispatch
+                      Request Dispatch
                   </button>
               @endif
             </div>
@@ -338,8 +338,12 @@
 
     @include('components.dispatch.view-dispatch-modal')
 
-    @if($dispatchPermissions['canUpdate'] ?? false)
-        @include('components.dispatch.edit-dispatch-modal')
+    @if($dispatchPermissions['role'] === 'driver')
+        @include('components.dispatch.request-reassignment-modal')
+    @endif
+
+    @if($dispatchPermissions['canReviewReassignment'] ?? false)
+        @include('components.dispatch.reassignment-review-modal')
     @endif
 
     @if(
@@ -367,21 +371,25 @@
     <!-- Main JS -->
     @push('scripts')
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+
     <script src="{{ asset('assets/js/components/dropdown.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-modal.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-add.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-view.js') }}"></script>
-    <script src="{{ asset('assets/js/dispatch/dispatch-edit.js') }}"></script>
+    //<script src="{{ asset('assets/js/dispatch/dispatch-edit.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-delete.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-filter.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-table.js') }}"></script>
+    <script src="{{ asset('assets/js/dispatch/dispatch-lifecycle.js') }}"></script>
+    <script src="{{ asset('assets/js/dispatch/dispatch-reassignment.js') }}"></script>
+    <script src="{{ asset('assets/js/dispatch/dispatch-reassignment-review.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-stats.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-sort.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-pagination.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-export.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-print.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-bulk.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
 
     @endpush
 

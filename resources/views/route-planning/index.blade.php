@@ -21,7 +21,7 @@
                       id="newRouteBtn"
                   >
                       <i class="ph ph-plus"></i>
-                      New Route
+                      Request Route
                   </button>
               @endif
             </div>
@@ -545,7 +545,7 @@
         <div class="custom-modal">
           <div class="modal-header">
             <div>
-              <h2 id="routeFormModalTitle">New Route</h2>
+              <h2 id="routeFormModalTitle">Request Route</h2>
               <p>Plan a transportation route before dispatch.</p>
             </div>
             <button type="button" class="modal-close" id="closeRouteFormModal" aria-label="Close route form">

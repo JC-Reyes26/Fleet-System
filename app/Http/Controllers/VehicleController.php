@@ -344,7 +344,7 @@ class VehicleController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Vehicle added successfully.',
+            'message' => 'Vehicle requested successfully.',
             'vehicle' => $vehicle->load('drivers'),
         ]);
     }

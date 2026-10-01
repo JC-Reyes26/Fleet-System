@@ -326,6 +326,42 @@ class FleetNotificationService
 
         /*
         |--------------------------------------------------------------------------
+        | Dispatch Reassignment Requester Notification
+        |--------------------------------------------------------------------------
+        |
+        | Supported event key:
+        | dispatch_reassignment_request:
+        | {dispatch_id}:{reassignment_id}:requester:{user_id}
+        |
+        | This is used for notifications that must remain visible
+        | to the driver who originally requested the reassignment,
+        | even after the dispatch is assigned to another driver.
+        |--------------------------------------------------------------------------
+        */
+        if (
+            str_starts_with(
+                $eventKey,
+                'dispatch_reassignment_request:'
+            )
+        ) {
+            $parts =
+                explode(
+                    ':',
+                    $eventKey
+                );
+
+            $requesterUserId =
+                isset($parts[4])
+                    ? (int) $parts[4]
+                    : 0;
+
+            return (
+                $requesterUserId ===
+                (int) $user->id
+            );
+        }
+        /*
+        |--------------------------------------------------------------------------
         | Dispatch Notification
         |--------------------------------------------------------------------------
         |
@@ -533,6 +569,123 @@ class FleetNotificationService
     }
 
     /**
+     * Create notification for a specific user
+     * if the notification setting is enabled.
+     */
+    public static function createForUserWhenEnabled(
+        User $user,
+        string $settingKey,
+        string $title,
+        string $message,
+        string $eventKey,
+        bool $default = true,
+        ?string $link = null
+    ): ?FleetNotification {
+        if (
+            !self::enabled(
+                $settingKey,
+                $default
+            )
+        ) {
+            return null;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | RBAC Guard
+        |--------------------------------------------------------------------------
+        |
+        | Make sure the recipient is allowed to access
+        | the module represented by the notification link.
+        |
+        */
+        if (
+            !self::userCanAccessLink(
+                $user,
+                $link
+            )
+        ) {
+            return null;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Prevent Duplicate Notification
+        |--------------------------------------------------------------------------
+        |
+        | One specific event should only create one notification
+        | for the same user.
+        |
+        */
+        $existing = FleetNotification::query()
+            ->where(
+                'user_id',
+                $user->id
+            )
+            ->where(
+                'event_key',
+                $eventKey
+            )
+            ->first();
+
+        if ($existing) {
+            $updates = [];
+
+            if (
+                $existing->title !==
+                $title
+            ) {
+                $updates['title'] =
+                    $title;
+            }
+
+            if (
+                $existing->message !==
+                $message
+            ) {
+                $updates['message'] =
+                    $message;
+            }
+
+            if (
+                $link &&
+                $existing->link !==
+                    $link
+            ) {
+                $updates['link'] =
+                    $link;
+            }
+
+            if (!empty($updates)) {
+                $existing->update($updates);
+                $existing->refresh();
+            }
+
+            return $existing;
+        }
+
+        return FleetNotification::create([
+            'user_id' =>
+                $user->id,
+
+            'title' =>
+                $title,
+
+            'message' =>
+                $message,
+
+            'status' =>
+                'Unread',
+
+            'event_key' =>
+                $eventKey,
+
+            'link' =>
+                $link,
+        ]);
+    }
+
+    /**
      * Create unique notification if setting is enabled.
      */
     public static function createUniqueWhenEnabled(
@@ -651,4 +804,5 @@ class FleetNotificationService
                 $link,
         ]);
     }
+    
 }

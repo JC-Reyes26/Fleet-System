@@ -452,23 +452,6 @@ class RoutePlanController extends Controller
                 $validated = $validator->validated();
                 /*
                 |--------------------------------------------------------------------------
-                | Resolve Reservation Hospital Coordinates
-                |--------------------------------------------------------------------------
-                |
-                | HospitalFacility is the authoritative source for hospital coordinates.
-                | Frontend coordinates remain useful for preview, but the backend
-                | resolves them again before saving the RoutePlan.
-                |
-                */
-                $originFacility = $this->resolveFacilityCoordinates(
-                    $reservation->pickup_location
-                );
-
-                $destinationFacility = $this->resolveFacilityCoordinates(
-                    $reservation->destination
-                );
-                /*
-                |--------------------------------------------------------------------------
                 | Lock Reservation
                 |--------------------------------------------------------------------------
                 */
@@ -481,6 +464,16 @@ class RoutePlanController extends Controller
                         $validated['reservation_id']
                     );
 
+                /*
+                |--------------------------------------------------------------------------
+                | Resolve Reservation Hospital Coordinates
+                |--------------------------------------------------------------------------
+                |
+                | HospitalFacility is the authoritative source for hospital coordinates.
+                | Frontend coordinates remain useful for preview, but the backend
+                | resolves them again before saving the RoutePlan.
+                |
+                */
                 $originFacility = $this->resolveFacilityCoordinates(
                     $reservation->pickup_location
                 );

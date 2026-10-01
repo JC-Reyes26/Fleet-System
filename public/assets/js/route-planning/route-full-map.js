@@ -13,6 +13,7 @@
 
     let currentFullMapRecord = null;
     let currentFullMapRoute = null;
+    let currentFullMapLiveVehicle = null;
 
     let isNavigationFollowing = true;
     let lastNavigationLocation = null;
@@ -441,37 +442,12 @@
          * Re-apply the latest live vehicle marker after
          * clearing the map layers.
          */
-        const trackedVehicle = window.getLastRoutePlanningTrackedVehicle?.();
-
+        const trackedVehicle =
+            currentFullMapLiveVehicle ||
+            window.getLastRoutePlanningTrackedVehicle?.() ||
+            null;
         if (trackedVehicle) {
             updateFullRouteMapVehicleLocation(trackedVehicle);
-        } else {
-            const gpsLocation = window.FleetGPS?.getCurrentLocation?.();
-            const gpsVehicleId = window.FleetGPS?.getVehicleId?.();
-
-            if (
-                gpsLocation &&
-                gpsVehicleId &&
-                record?.vehicleId &&
-                String(gpsVehicleId) === String(record.vehicleId)
-            ) {
-                updateFullRouteMapVehicleLocation({
-                    vehicle_id: gpsVehicleId,
-                    vehicle_label: record.vehicle || "Vehicle",
-                    plate_number: "—",
-                    vehicle_status: record.tripStatus || "On Trip",
-                    has_location: true,
-                    location: {
-                        latitude: Number(gpsLocation.latitude),
-                        longitude: Number(gpsLocation.longitude),
-                        speed: gpsLocation.speed ?? null,
-                        heading: gpsLocation.heading ?? null,
-                        accuracy: gpsLocation.accuracy ?? null,
-                        age_seconds: 0,
-                        recorded_at: new Date().toISOString(),
-                    },
-                });
-            }
         }
 
         updateFullMapInfo(currentFullMapRecord, route);
@@ -485,39 +461,32 @@
     NAVIGATION HELPERS
     ===================================================== */
     function getCurrentFullMapGpsLocation() {
-        const gpsLocation = window.FleetGPS?.getCurrentLocation?.();
-        if (
-            gpsLocation &&
-            Number.isFinite(Number(gpsLocation.latitude)) &&
-            Number.isFinite(Number(gpsLocation.longitude))
-        ) {
-            return {
-                latitude: Number(gpsLocation.latitude),
-                longitude: Number(gpsLocation.longitude),
-            };
+        const liveVehicle = currentFullMapLiveVehicle;
+        const trackedLocation =
+            liveVehicle?.location ||
+            window.getLastRoutePlanningTrackedVehicle?.()?.location ||
+            null;
+
+        const latitude = Number(trackedLocation?.latitude);
+        const longitude = Number(trackedLocation?.longitude);
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            return null;
         }
-        const trackedVehicle =
-            window.getLastRoutePlanningTrackedVehicle?.();
-        const trackedLocation = trackedVehicle?.location || null;
-        if (
-            trackedLocation &&
-            Number.isFinite(Number(trackedLocation.latitude)) &&
-            Number.isFinite(Number(trackedLocation.longitude))
-        ) {
-            return {
-                latitude: Number(trackedLocation.latitude),
-                longitude: Number(trackedLocation.longitude),
-            };
-        }
-        return null;
+
+        return {
+            latitude,
+            longitude,
+        };
     }
 
     function getCurrentFullMapGpsData() {
-        const fleetLocation = window.FleetGPS?.getCurrentLocation?.() || null;
+        const liveVehicle = currentFullMapLiveVehicle;
         const trackedVehicle =
-            window.getLastRoutePlanningTrackedVehicle?.() || null;
-        const trackedLocation = trackedVehicle?.location || null;
-        const location = fleetLocation || trackedLocation || null;
+            liveVehicle ||
+            window.getLastRoutePlanningTrackedVehicle?.() ||
+            null;
+        const location = trackedVehicle?.location || null;
         if (!location) {
             return {
                 available: false,
@@ -525,19 +494,20 @@
                 recordedAt: null,
             };
         }
-        const rawAge = Number(
-            location.age_seconds ??
-                location.ageSeconds ??
-                trackedLocation?.age_seconds ??
-                trackedLocation?.ageSeconds,
-        );
+        const latitude = Number(location.latitude);
+        const longitude = Number(location.longitude);
+        const available =
+            Number.isFinite(latitude) && Number.isFinite(longitude);
+        if (!available) {
+            return {
+                available: false,
+                ageSeconds: null,
+                recordedAt: null,
+            };
+        }
+        const rawAge = Number(location.age_seconds ?? location.ageSeconds);
         let ageSeconds = Number.isFinite(rawAge) ? Math.max(0, rawAge) : null;
-        const recordedAt =
-            location.recorded_at ||
-            location.recordedAt ||
-            trackedLocation?.recorded_at ||
-            trackedLocation?.recordedAt ||
-            null;
+        const recordedAt = location.recorded_at ?? location.recordedAt ?? null;
         if (ageSeconds === null && recordedAt) {
             const timestamp = Date.parse(recordedAt);
 
@@ -545,17 +515,12 @@
                 ageSeconds = Math.max(0, (Date.now() - timestamp) / 1000);
             }
         }
-        const latitude = Number(location.latitude);
-        const longitude = Number(location.longitude);
-        const available =
-            Number.isFinite(latitude) && Number.isFinite(longitude);
-
         return {
-            available,
+            available: true,
             ageSeconds,
             recordedAt,
-            latitude: available ? latitude : null,
-            longitude: available ? longitude : null,
+            latitude,
+            longitude,
             speed: location.speed ?? null,
             heading: location.heading ?? null,
             accuracy: location.accuracy ?? null,
@@ -3474,14 +3439,11 @@
 
             const trackedVehicle = {
                 ...existingVehicle,
-
                 vehicle_id: vehicleId,
-
                 vehicle_label:
                     existingVehicle.vehicle_label ||
                     currentFullMapRecord.vehicle ||
                     "Vehicle",
-
                 plate_number: existingVehicle.plate_number || "—",
                 vehicle_status: existingVehicle.vehicle_status || "On Trip",
                 has_location: true,
@@ -3500,6 +3462,8 @@
                         new Date().toISOString(),
                 },
             };
+
+            currentFullMapLiveVehicle = trackedVehicle;
             updateFullRouteMapVehicleLocation(trackedVehicle);
             const currentTripStatus = normalizeTripStatus(
                 currentFullMapRecord?.tripStatus ??
@@ -3547,9 +3511,7 @@
             throw new Error("No active route is loaded.");
         }
 
-        const fleetGpsLocation = window.FleetGPS?.getCurrentLocation?.();
-        const trackedVehicle = window.getLastRoutePlanningTrackedVehicle?.();
-        const location = fleetGpsLocation || trackedVehicle?.location || null;
+        const location = getCurrentFullMapGpsLocation();
         const latitude = Number(location?.latitude);
         const longitude = Number(location?.longitude);
 
@@ -3739,7 +3701,7 @@
             const gpsLocation = getCurrentFullMapGpsLocation();
             if (isDriver() && gpsLocation) {
                 const gpsSpeed =
-                    window.FleetGPS?.getCurrentLocation?.()?.speed ?? null;
+                    currentFullMapLiveVehicle?.location?.speed ?? null;
                 centerFullMapOnNavigationLocation(
                     gpsLocation,
                     NAVIGATION_DEFAULT_ZOOM,
@@ -3862,6 +3824,7 @@
 
         currentFullMapRecord = null;
         currentFullMapRoute = null;
+        currentFullMapLiveVehicle = null;
 
         currentNavigationInstruction = null;
         currentNavigationInstructionIndex = -1;
@@ -3924,7 +3887,7 @@
                 centerFullMapOnNavigationLocation(
                     location,
                     16,
-                    window.FleetGPS?.getCurrentLocation?.()?.speed ?? null,
+                    currentFullMapLiveVehicle?.location?.speed ?? null,
                     false,
                 );
             });

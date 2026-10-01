@@ -739,7 +739,7 @@ class MaintenanceController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Maintenance record added successfully.',
+                'message' => 'Maintenance record requested successfully.',
                 'maintenance' => $result,
             ], 201);
 

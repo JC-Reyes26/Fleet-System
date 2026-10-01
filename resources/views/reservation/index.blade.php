@@ -329,6 +329,15 @@
     @endif
 
     @if(
+        ($reservationPermissions['canApprove'] ?? false) ||
+        ($reservationPermissions['canReject'] ?? false)
+    )
+        @include(
+            'components.reservation.approval-confirmation-modal'
+        )
+    @endif
+
+    @if(
         ($reservationPermissions['canArchive'] ?? false) ||
         ($reservationPermissions['canRestore'] ?? false)
     )
@@ -358,6 +367,7 @@
     <script src="{{ asset('assets/js/reservation/reservation-add.js') }}"></script>
     <script src="{{ asset('assets/js/reservation/reservation-view.js') }}"></script>
     <script src="{{ asset('assets/js/reservation/reservation-edit.js') }}"></script>
+    <script src="{{ asset('assets/js/reservation/reservation-approval.js') }}"></script>
     <script src="{{ asset('assets/js/reservation/reservation-delete.js') }}"></script>
     <script src="{{ asset('assets/js/reservation/reservation-filter.js') }}"></script>
     <script src="{{ asset('assets/js/reservation/reservation-table.js') }}"></script>

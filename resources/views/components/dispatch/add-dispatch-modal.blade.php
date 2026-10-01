@@ -8,7 +8,7 @@
   <div class="custom-modal">
     <div class="modal-header">
       <div>
-        <h2 id="addDispatchModalTitle">Create Dispatch</h2>
+        <h2 id="addDispatchModalTitle">Request Dispatch</h2>
         <p>Create a hospital transport dispatch request.</p>
       </div>
 
@@ -353,17 +353,14 @@
 
           <!-- Status -->
           <div class="form-group">
-            <label for="dispatchStatus">Status</label>
-            <select
-              id="dispatchStatus"
-              name="dispatchStatus"
-              required
-            >
-              <option value="">Select status</option>
-              <option value="Pending">Pending</option>
-              <option value="Assigned">Assigned</option>
-              <option value="En Route">En Route</option>
-            </select>
+              <label for="dispatchStatus">Status</label>
+              <input
+                  type="text"
+                  id="dispatchStatus"
+                  name="dispatchStatus"
+                  value="Pending"
+                  readonly
+              />
           </div>
 
           <!-- Contact -->

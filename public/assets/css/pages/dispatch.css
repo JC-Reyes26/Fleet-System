@@ -555,3 +555,635 @@
         justify-content: center;
     }
 }
+
+
+/* ==========================================
+   Request Reassignment Modal - Spacing
+========================================== */
+
+#requestReassignmentModal .modal-body {
+    padding: 24px;
+}
+
+#requestReassignmentModal .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#requestReassignmentModal .form-group label {
+    margin-bottom: 2px;
+}
+
+#requestReassignmentModal #reassignmentReason {
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+#requestReassignmentModal .form-group small {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-secondary, #9ca3af);
+}
+
+#requestReassignmentModal .modal-footer {
+    margin-top: 20px;
+    padding-top: 18px;
+}
+
+#requestReassignmentModal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+}
+
+#requestReassignmentModal .modal-footer button {
+    min-height: 40px;
+}
+
+#requestReassignmentModal .custom-modal {
+    overflow: hidden;
+}
+
+
+
+/* =========================================================
+   REASSIGNMENT REVIEW MODAL
+   Uses HIMS Design Tokens from variable.css
+   Matches the shared HIMS modal appearance
+   ========================================================= */
+#reassignmentReviewModal {
+    --modal-shell-bg: var(--modal-bg);
+    --modal-shell-surface: var(--color-surface);
+    --modal-shell-muted: var(--color-surface-muted);
+    --modal-shell-border: var(--color-border);
+    --modal-shell-text: var(--color-text);
+    --modal-shell-text-muted: var(--color-text-muted);
+    --modal-shell-primary: var(--color-primary);
+    --modal-shell-primary-soft: var(--color-primary-soft);
+    --modal-shell-danger: var(--color-danger);
+    --modal-shell-success: var(--color-success);
+}
+
+/* =========================================================
+   Bootstrap Modal Container
+   ========================================================= */
+#reassignmentReviewModal .modal-dialog {
+    width: min(
+        calc(100vw - 32px),
+        960px
+    );
+    max-width: 960px;
+    margin: auto;
+}
+
+#reassignmentReviewModal .modal-content {
+    width: 100%;
+    max-height: min(
+        90vh,
+        900px
+    );
+    display: flex;
+    flex-direction: column;
+    background: var(--modal-shell-bg) !important;
+    border: 1px solid var(
+        --modal-shell-border
+    ) !important;
+    border-radius: var(
+        --radius-xl
+    ) !important;
+    box-shadow: var(
+        --shadow-lg
+    ) !important;
+    overflow: hidden;
+}
+
+/* =========================================================
+   Header
+   ========================================================= */
+#reassignmentReviewModal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(
+        --space-4
+    );
+    padding:
+        var(--space-6)
+        var(--space-7);
+    background: var(
+        --modal-shell-bg
+    ) !important;
+    border-bottom: 1px solid var(
+        --modal-shell-border
+    ) !important;
+    flex-shrink: 0;
+}
+
+#reassignmentReviewModal .modal-title {
+    margin: 0;
+    font-family: var(
+        --font-family
+    );
+    font-size: clamp(
+        1.25rem,
+        2vw,
+        1.5rem
+    );
+    font-weight: var(
+        --font-semibold
+    );
+    line-height: var(
+        --line-height-tight
+    );
+    letter-spacing: -0.02em;
+    color: var(
+        --modal-shell-text
+    ) !important;
+}
+
+#reassignmentReviewModal .modal-header small {
+    display: block;
+    margin-top: var(
+        --space-2
+    );
+    font-family: var(
+        --font-family
+    );
+    font-size: var(
+        --font-size-sm
+    );
+    line-height: var(
+        --line-height-body
+    );
+    color: var(
+        --modal-shell-text-muted
+    ) !important;
+}
+
+/* =========================================================
+   Close Button
+   ========================================================= */
+#reassignmentReviewModal .btn-close {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0 !important;
+    border-radius: var(
+        --radius-control
+    );
+    background-color: var(
+        --btn-muted-bg
+    ) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+}
+
+#reassignmentReviewModal .btn-close::before {
+    content: "×";
+    display: block;
+    font-family: Arial, sans-serif;
+    font-size: 25px;
+    font-weight: 400;
+    line-height: 1;
+    color: var(
+        --color-text-muted
+    );
+}
+
+#reassignmentReviewModal .btn-close:hover {
+    background-color: var(
+        --color-surface-hover
+    ) !important;
+}
+
+#reassignmentReviewModal .btn-close:hover::before {
+    color: var(
+        --color-text
+    );
+}
+
+#reassignmentReviewModal .btn-close:focus {
+    box-shadow:
+        0 0 0 var(--focus-outline-width)
+        var(--focus-ring) !important;
+}
+
+/* =========================================================
+   Body
+   ========================================================= */
+#reassignmentReviewModal .modal-body {
+    padding:
+        var(--space-6)
+        var(--space-7);
+    background: var(
+        --modal-shell-bg
+    ) !important;
+    color: var(
+        --modal-shell-text
+    );
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+/* =========================================================
+   Bootstrap Grid
+   ========================================================= */
+#reassignmentReviewModal .row {
+    --bs-gutter-x: var(--space-4);
+    --bs-gutter-y: var(--space-4);
+}
+
+/* =========================================================
+   Labels
+   ========================================================= */
+#reassignmentReviewModal .form-label {
+    display: block;
+    margin-bottom: var(
+        --space-2
+    );
+    font-family: var(
+        --font-family
+    );
+    font-size: var(
+        --font-size-xs
+    );
+    font-weight: var(
+        --font-semibold
+    );
+    line-height: var(
+        --line-height-tight
+    );
+    color: var(
+        --modal-shell-text-muted
+    ) !important;
+}
+
+/* =========================================================
+   Inputs / Select / Textarea
+   ========================================================= */
+#reassignmentReviewModal .form-control,
+#reassignmentReviewModal .form-select {
+    width: 100%;
+    min-height: var(
+        --control-height
+    );
+    padding:
+        10px 14px;
+    box-sizing: border-box;
+    font-family: var(
+        --font-family
+    );
+    font-size: var(
+        --font-size-sm
+    );
+    line-height: var(
+        --line-height-body
+    );
+    color: var(
+        --modal-shell-text
+    ) !important;
+    background-color: var(
+        --input-bg
+    ) !important;
+    border: 1px solid var(
+        --input-border
+    ) !important;
+    border-radius: var(
+        --radius-control
+    ) !important;
+    box-shadow: none !important;
+}
+
+#reassignmentReviewModal .form-control::placeholder {
+    color: var(
+        --color-text-light
+    );
+}
+
+#reassignmentReviewModal .form-control:focus,
+#reassignmentReviewModal .form-select:focus {
+    color: var(
+        --modal-shell-text
+    ) !important;
+    background-color: var(
+        --input-bg
+    ) !important;
+    border-color: var(
+        --color-primary
+    ) !important;
+    outline: 0;
+    box-shadow:
+        0 0 0 3px var(
+            --focus-ring
+        ) !important;
+}
+
+/* Readonly fields */
+#reassignmentReviewModal
+.form-control[readonly] {
+    background-color: var(
+        --color-surface-muted
+    ) !important;
+    color: var(
+        --modal-shell-text
+    ) !important;
+    cursor: default;
+}
+
+/* Reason textarea */
+#reassignmentReviewModal textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+}
+
+/* =========================================================
+   Select Arrow / Options
+   ========================================================= */
+#reassignmentReviewModal .form-select {
+    cursor: pointer;
+}
+
+#reassignmentReviewModal .form-select option {
+    color: var(
+        --color-text
+    );
+    background: var(
+        --dropdown-bg
+    );
+}
+
+/* =========================================================
+   Helper Text
+   ========================================================= */
+#reassignmentReviewModal .text-muted {
+    font-family: var(
+        --font-family
+    );
+    font-size: var(
+        --font-size-meta
+    );
+    line-height: var(
+        --line-height-body
+    );
+    color: var(
+        --color-text-muted
+    ) !important;
+}
+
+/* =========================================================
+   Footer
+   ========================================================= */
+#reassignmentReviewModal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(
+        --space-3
+    );
+    margin-top: 0;
+    padding:
+        var(--space-5)
+        var(--space-7);
+
+    background: var(
+        --color-surface
+    ) !important;
+
+    border-top: 1px solid var(
+        --color-border
+    ) !important;
+
+    flex-shrink: 0;
+}
+
+/* =========================================================
+   Footer Buttons
+   ========================================================= */
+
+#reassignmentReviewModal .modal-footer .btn {
+    min-height: var(
+        --control-height
+    );
+    padding:
+        0
+        var(--space-4);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(
+        --space-1
+    );
+    font-family: var(
+        --font-family
+    );
+    font-size: var(
+        --font-size-sm
+    );
+    font-weight: var(
+        --font-semibold
+    );
+    line-height: 1;
+    border-radius: var(
+        --radius-button
+    ) !important;
+}
+
+/* Close */
+#reassignmentReviewModal
+.modal-footer
+.btn-outline-secondary {
+    color: var(
+        --btn-outline-text
+    ) !important;
+    background: var(
+        --btn-outline-bg
+    ) !important;
+    border: 1px solid var(
+        --btn-outline-border
+    ) !important;
+}
+
+#reassignmentReviewModal
+.modal-footer
+.btn-outline-secondary:hover {
+    color: var(
+        --color-text
+    ) !important;
+    background: var(
+        --color-surface-hover
+    ) !important;
+}
+
+/* Reject */
+#reassignmentReviewModal
+.modal-footer
+.btn-danger {
+    color: var(
+        --color-white
+    ) !important;
+    background: var(
+        --color-danger
+    ) !important;
+    border-color: var(
+        --color-danger
+    ) !important;
+}
+
+#reassignmentReviewModal
+.modal-footer
+.btn-danger:hover {
+    background: var(
+        --color-danger-hover
+    ) !important;
+    border-color: var(
+        --color-danger-hover
+    ) !important;
+}
+
+/* Approve */
+#reassignmentReviewModal
+.modal-footer
+.btn-success {
+    color: var(
+        --color-white
+    ) !important;
+    background: var(
+        --color-success
+    ) !important;
+    border-color: var(
+        --color-success
+    ) !important;
+}
+
+#reassignmentReviewModal
+.modal-footer
+.btn-success:hover {
+    background: var(
+        --color-primary-hover
+    ) !important;
+    border-color: var(
+        --color-primary-hover
+    ) !important;
+}
+
+/* Disabled approve */
+#reassignmentReviewModal
+.modal-footer
+.btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    box-shadow: none !important;
+}
+
+/* =========================================================
+   Bootstrap Scrollable Modal Fix
+   ========================================================= */
+
+#reassignmentReviewModal
+.modal-dialog-scrollable {
+    height: auto;
+    max-height: min(
+        90vh,
+        900px
+    );
+}
+
+#reassignmentReviewModal
+.modal-dialog-scrollable
+.modal-content {
+    max-height: min(
+        90vh,
+        900px
+    );
+}
+
+#reassignmentReviewModal
+.modal-dialog-scrollable
+.modal-body {
+    overflow-y: auto;
+}
+
+/* =========================================================
+   Backdrop
+   ========================================================= */
+.modal-backdrop {
+    background-color: var(
+        --modal-overlay
+    ) !important;
+}
+
+.modal-backdrop.show {
+    opacity: 1 !important;
+}
+/* =========================================================
+   Responsive
+   ========================================================= */
+@media (max-width: 768px) {
+
+    #reassignmentReviewModal .modal-dialog {
+        width: calc(100vw - 24px);
+        max-width: none;
+    }
+
+    #reassignmentReviewModal .modal-header {
+        padding:
+            var(--space-5)
+            var(--space-5);
+    }
+
+    #reassignmentReviewModal .modal-body {
+        padding:
+            var(--space-5)
+            var(--space-5);
+    }
+
+    #reassignmentReviewModal .modal-footer {
+        padding:
+            var(--space-4)
+            var(--space-5);
+    }
+}
+
+@media (max-width: 575px) {
+
+    #reassignmentReviewModal
+    .modal-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #reassignmentReviewModal
+    .modal-footer
+    .btn {
+        width: 100%;
+    }
+}
+
+/* =========================================================
+   Reassignment Review - Replacement Pair Hint
+   ========================================================= */
+
+#reassignmentReviewModal .form-group .field-hint {
+    display: block;
+
+    margin-top: var(--space-2);
+
+    font-family: var(--font-family);
+    font-size: var(--font-size-meta);
+    line-height: var(--line-height-body);
+
+    color: var(--color-text-muted);
+}

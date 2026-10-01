@@ -9,7 +9,7 @@
     <!-- Header -->
     <div class="modal-header">
       <div>
-        <h2 id="vehicleModalTitle">Add New Vehicle</h2>
+        <h2 id="vehicleModalTitle">Request New Vehicle</h2>
         <p>Register a new hospital fleet vehicle.</p>
       </div>
 

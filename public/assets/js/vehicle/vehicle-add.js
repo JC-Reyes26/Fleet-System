@@ -403,7 +403,7 @@ async function initVehicleAdd() {
             }
 
             window.showToast(
-                data.message || "Vehicle added successfully.",
+                data.message || "Vehicle requested successfully.",
                 "success",
             );
         } catch (error) {

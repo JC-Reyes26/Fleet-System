@@ -20,61 +20,116 @@ class DispatchRecommendationService
      * This is an explainable application-level recommendation engine.
      * It does NOT automatically modify the Reservation.
      */
-    public function recommend(Reservation $reservation): array
-    {
+    public function recommend(
+        Reservation $reservation
+    ): array {
         $reservation->load([
             'vehicle',
             'driver',
             'routePlan',
         ]);
-
-        $vehicles = Vehicle::query()
-        ->with([
-            'drivers' => function ($query) {
-                $query
-                    ->where('status', 'Available')
-                    ->orderBy('id');
-            },
-            'latestLocation',
-            'maintenances' => function ($query) {
-                $query
-                    ->orderByDesc('maintenance_date')
-                    ->orderByDesc('id');
-            },
-        ])
-            ->where('status', 'Available')
-            ->get();
-
-        $candidates = $vehicles
-            ->flatMap(function (Vehicle $vehicle) use ($reservation) {
-                $driver = $vehicle->drivers->first();
-
-                if (!$driver) {
-                    return [];
-                }
-
-                return [
-                    $this->scoreCandidate(
-                        $reservation,
-                        $vehicle,
-                        $driver
-                    ),
-                ];
-            })
-            ->sortByDesc('score')
-            ->values();
-
         /*
         |--------------------------------------------------------------------------
-        | Current assigned resources
+        | Get Available Vehicles
+        |--------------------------------------------------------------------------
+        |
+        | Only non-archived vehicles are considered.
+        |
+        */
+        $vehicles = Vehicle::query()
+            ->with([
+                'drivers' => function ($query) {
+                    $query
+                        ->where(
+                            'status',
+                            'Available'
+                        )
+                        ->whereNull(
+                            'archived_at'
+                        )
+                        ->orderBy(
+                            'id'
+                        );
+                },
+                'latestLocation',
+                'maintenances' => function ($query) {
+                    $query
+                        ->orderByDesc(
+                            'maintenance_date'
+                        )
+                        ->orderByDesc(
+                            'id'
+                        );
+                },
+            ])
+            ->where(
+                'status',
+                'Available'
+            )
+            ->whereNull(
+                'archived_at'
+            )
+            ->orderBy(
+                'id'
+            )
+            ->get();
+        /*
+        |--------------------------------------------------------------------------
+        | Build Complete Vehicle + Driver Candidates
+        |--------------------------------------------------------------------------
+        |
+        | Every available driver assigned to every available vehicle
+        | becomes an individual recommendation candidate.
+        |
+        */
+        $candidates = $vehicles
+            ->flatMap(
+                function (
+                    Vehicle $vehicle
+                ) use (
+                    $reservation
+                ) {
+                    if (
+                        $vehicle->drivers->isEmpty()
+                    ) {
+                        return [];
+                    }
+
+                    return $vehicle->drivers->map(
+                        function (
+                            Driver $driver
+                        ) use (
+                            $reservation,
+                            $vehicle
+                        ) {
+                            return $this->scoreCandidate(
+                                $reservation,
+                                $vehicle,
+                                $driver
+                            );
+                        }
+                    );
+                }
+            )
+            ->sortByDesc(
+                'score'
+            )
+            ->values();
+        /*
+        |--------------------------------------------------------------------------
+        | Current Assigned Vehicle + Driver
         |--------------------------------------------------------------------------
         */
-        $assignedVehicle = $reservation->vehicle;
-        $assignedDriver = $reservation->driver;
-
-        $assignedCandidate = null;
-
-        if ($assignedVehicle && $assignedDriver) {
+        $assignedVehicle =
+            $reservation->vehicle;
+        $assignedDriver =
+            $reservation->driver;
+        $assignedCandidate =
+            null;
+        if (
+            $assignedVehicle &&
+            $assignedDriver
+        ) {
             $assignedCandidate =
                 $this->scoreAssignedResource(
                     $reservation,
@@ -82,27 +137,182 @@ class DispatchRecommendationService
                     $assignedDriver
                 );
         }
-
-        $recommended = $candidates->first();
-
+        /*
+        |--------------------------------------------------------------------------
+        | Get Top Recommendation
+        |--------------------------------------------------------------------------
+        */
+        $recommended =
+            $candidates->first();
+        /*
+        |--------------------------------------------------------------------------
+        | No Available Pair
+        |--------------------------------------------------------------------------
+        */
         if (!$recommended) {
             return [
-                'success' => true,
-                'recommended' => null,
-                'assigned' => $assignedCandidate,
-                'candidates' => [],
+                'success' =>
+                    true,
+                'recommended' =>
+                    null,
+                'assigned' =>
+                    $assignedCandidate,
+                'candidates' =>
+                    [],
                 'message' =>
                     'No vehicle and driver combination is currently available for recommendation.',
             ];
         }
+        /*
+        |--------------------------------------------------------------------------
+        | Return Ranked Candidates
+        |--------------------------------------------------------------------------
+        */
+        return [
+            'success' =>
+                true,
+            'recommended' =>
+                $recommended,
+            'assigned' =>
+                $assignedCandidate,
+            'candidates' =>
+                $candidates->all(),
+            'message' =>
+                'Dispatch recommendation generated successfully.',
+        ];
+    }
+
+    public function recommendReplacementDriver(
+        Reservation $reservation,
+        int $currentDriverId
+    ): array {
+        $reservation->load([
+            'vehicle',
+            'driver',
+            'routePlan',
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Available Vehicle + Driver Pool
+        |--------------------------------------------------------------------------
+        |
+        | Reassignment now evaluates COMPLETE vehicle + driver combinations.
+        |
+        | Example:
+        | Honda Hiace - Maria
+        | Toyota Hiace - Juan
+        | Ford Transit - Ana
+        |
+        | The current driver is excluded.
+        |
+        */
+        $vehicles = Vehicle::query()
+            ->with([
+                'drivers' => function ($query) use ($currentDriverId) {
+                    $query
+                        ->where('status', 'Available')
+                        ->whereNull('archived_at')
+                        ->where(
+                            'id',
+                            '!=',
+                            $currentDriverId
+                        )
+                        ->orderBy('id');
+                },
+
+                'latestLocation',
+
+                'maintenances' => function ($query) {
+                    $query
+                        ->orderByDesc(
+                            'maintenance_date'
+                        )
+                        ->orderByDesc('id');
+                },
+            ])
+            ->where('status', 'Available')
+            ->whereNull('archived_at')
+            ->orderBy('id')
+            ->get();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Build Vehicle + Driver Candidates
+        |--------------------------------------------------------------------------
+        |
+        | Every available driver assigned to an available vehicle
+        | becomes one complete recommendation candidate.
+        |
+        */
+        $candidates = $vehicles
+            ->flatMap(
+                function (
+                    Vehicle $vehicle
+                ) use ($reservation) {
+
+                    if (
+                        $vehicle->drivers->isEmpty()
+                    ) {
+                        return [];
+                    }
+
+                    return $vehicle->drivers->map(
+                        function (
+                            Driver $driver
+                        ) use (
+                            $reservation,
+                            $vehicle
+                        ) {
+                            return $this->scoreCandidate(
+                                $reservation,
+                                $vehicle,
+                                $driver
+                            );
+                        }
+                    );
+                }
+            )
+            ->sortByDesc('score')
+            ->values();
+
+        /*
+        |--------------------------------------------------------------------------
+        | No Available Vehicle + Driver Pair
+        |--------------------------------------------------------------------------
+        */
+        if ($candidates->isEmpty()) {
+            return [
+                'success' => true,
+
+                'recommended' => null,
+
+                'candidates' => [],
+
+                'message' =>
+                    'No available vehicle and driver combination is currently available for reassignment.',
+            ];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Recommended Pair
+        |--------------------------------------------------------------------------
+        */
+        $recommended =
+            $candidates->first();
 
         return [
             'success' => true,
-            'recommended' => $recommended,
-            'assigned' => $assignedCandidate,
-            'candidates' => $candidates->all(),
+
+            'recommended' =>
+                $recommended,
+
+            'candidates' =>
+                $candidates->all(),
+
             'message' =>
-                'Dispatch recommendation generated successfully.',
+                'Vehicle and driver reassignment recommendation generated successfully.',
         ];
     }
 
@@ -566,6 +776,21 @@ class DispatchRecommendationService
                         $location->recorded_at
                     )
                 );
+        }
+
+        if (
+            $ageSeconds !== null &&
+            $ageSeconds > 120
+        ) {
+            return [
+                'score' => 0,
+                'distance_km' => null,
+                'has_location' => true,
+                'age_seconds' => $ageSeconds,
+                'reasons' => [
+                    'GPS proximity score skipped because the vehicle GPS position is stale.',
+                ],
+            ];
         }
 
         $reasons = [

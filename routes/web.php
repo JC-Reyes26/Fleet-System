@@ -270,6 +270,16 @@ Route::middleware([
         )->name('reservation.store');
 
         Route::post(
+            '/reservation/{reservation}/approve',
+            [ReservationController::class, 'approve']
+        )->name('reservation.approve');
+
+        Route::post(
+            '/reservation/{reservation}/reject',
+            [ReservationController::class, 'reject']
+        )->name('reservation.reject');
+
+        Route::post(
             '/reservation/{reservation}/apply-dispatch-recommendation',
             [ReservationController::class, 'applyDispatchRecommendation']
         )->name('reservation.apply-dispatch-recommendation');
@@ -328,6 +338,38 @@ Route::middleware([
             '/dispatch',
             [DispatchController::class, 'store']
         )->name('dispatch.store');
+
+        Route::post(
+            '/dispatch/{dispatch}/accept',
+            [DispatchController::class, 'accept']
+        )->name('dispatch.accept');
+
+        Route::post(
+            '/dispatch/{dispatch}/request-reassignment',
+            [DispatchController::class, 'requestReassignment']
+        )->name('dispatch.request-reassignment');
+
+        Route::get(
+            '/dispatch/reassignments/{reassignment}/available-pairs',
+            [DispatchController::class, 'availableReassignmentPairs']
+        )->name('dispatch.reassignments.available-pairs');
+
+        Route::post(
+            '/dispatch/reassignments/{reassignment}/approve',
+            [DispatchController::class, 'approveReassignment']
+        )->name('dispatch.reassignments.approve');
+
+        Route::post(
+            '/dispatch/reassignments/{reassignment}/reject',
+            [DispatchController::class, 'rejectReassignment']
+        )->name('dispatch.reassignments.reject');
+
+        Route::get(
+            '/dispatch/reassignments/{reassignment}/recommendation',
+            [DispatchController::class, 'reassignmentRecommendation']
+        )->name(
+            'dispatch.reassignments.recommendation'
+        );
 
         Route::post(
             '/dispatch/bulk-archive',

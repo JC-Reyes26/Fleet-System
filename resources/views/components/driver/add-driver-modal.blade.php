@@ -10,7 +10,7 @@
     <!-- Header -->
     <div class="modal-header">
       <div>
-        <h2 id="addDriverModalTitle">Add New Driver</h2>
+        <h2 id="addDriverModalTitle">Request New Driver</h2>
 
         <p id="addDriverModalDescription">
           Register a new hospital fleet driver.

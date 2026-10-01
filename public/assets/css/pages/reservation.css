@@ -220,3 +220,122 @@
     color: var(--color-text);
     background: var(--dropdown-bg);
 }
+
+
+/* ==========================================
+   Reservation Confirmation Modal
+========================================== */
+
+.reservation-confirmation-modal {
+    width: min(100% - 32px, 460px);
+    max-width: 460px;
+    padding: 40px;
+    text-align: center;
+}
+
+.reservation-confirmation-modal .delete-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+    font-size: 42px;
+}
+
+.reservation-confirmation-modal h2 {
+    margin: 0 0 12px;
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.reservation-confirmation-modal p {
+    margin: 0;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    font-size: 16px;
+}
+
+.reservation-confirmation-modal strong {
+    color: var(--color-text);
+}
+
+.reservation-confirmation-modal .delete-note {
+    margin-top: 12px !important;
+    color: var(--color-text-light);
+    font-size: 15px;
+}
+
+.reservation-confirmation-modal .modal-footer {
+    margin-top: 30px;
+    padding-top: 24px;
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    border-top: 1px solid var(--color-border);
+}
+
+.reservation-confirmation-modal .btn-outline,
+.reservation-confirmation-modal .btn-danger {
+    min-width: 140px;
+    height: var(--control-height);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--radius-button);
+}
+
+.reservation-confirmation-modal .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+}
+
+@media (max-width: 575px) {
+    .reservation-confirmation-modal {
+        padding: 32px 24px;
+    }
+
+    .reservation-confirmation-modal .modal-footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .reservation-confirmation-modal .btn-outline,
+    .reservation-confirmation-modal .btn-danger {
+        width: 100%;
+    }
+}
+
+
+/* ==========================================
+   Reservation Approve / Reject Hover
+========================================== */
+
+.action-btn.approve-reservation,
+.action-btn.reject-reservation {
+    transition:
+        background var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+}
+
+/* Approve - Green Hover */
+.action-btn.approve-reservation:hover {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+    border-color: var(--color-success);
+}
+
+/* Reject - Red Hover */
+.action-btn.reject-reservation:hover {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+}

@@ -21,7 +21,6 @@ class DispatchPolicy
         | System-wide roles
         |--------------------------------------------------------------------------
         */
-
         if ($user->hasRole(
             'fleet_manager',
             'dispatcher',
@@ -35,10 +34,8 @@ class DispatchPolicy
         | Driver - assigned dispatch only
         |--------------------------------------------------------------------------
         */
-
         if ($user->hasRole('driver')) {
-            $driverId =
-                $user->driverProfile?->id;
+            $driverId = $user->driverProfile?->id;
 
             return
                 $driverId !== null &&
@@ -51,7 +48,6 @@ class DispatchPolicy
         | Department Head - own department only
         |--------------------------------------------------------------------------
         */
-
         if ($user->hasRole('department_head')) {
             return
                 !empty($user->department) &&
@@ -64,26 +60,24 @@ class DispatchPolicy
 
     public function create(User $user): bool
     {
-        return $user->hasRole(
-            'fleet_manager',
-            'dispatcher'
-        );
+        /*
+        |--------------------------------------------------------------------------
+        | Dispatcher only
+        |--------------------------------------------------------------------------
+        */
+        return $user->hasRole('dispatcher');
     }
 
     public function update(
         User $user,
         Dispatch $dispatch
     ): bool {
-
         /*
         |--------------------------------------------------------------------------
-        | Fleet Manager / Dispatcher
+        | Dispatcher - full edit/update access
         |--------------------------------------------------------------------------
         */
-        if ($user->hasRole(
-            'fleet_manager',
-            'dispatcher'
-        )) {
+        if ($user->hasRole('dispatcher')) {
             return true;
         }
 
@@ -91,10 +85,15 @@ class DispatchPolicy
         |--------------------------------------------------------------------------
         | Driver - assigned dispatch only
         |--------------------------------------------------------------------------
+        | Needed for driver lifecycle actions such as:
+        | Pending -> Assigned
+        | Assigned -> En Route
+        | En Route -> Arrived
+        | Arrived -> Completed
+        |--------------------------------------------------------------------------
         */
         if ($user->hasRole('driver')) {
-            $driverId =
-                $user->driverProfile?->id;
+            $driverId = $user->driverProfile?->id;
 
             return
                 $driverId !== null &&
@@ -102,6 +101,11 @@ class DispatchPolicy
                     (int) $driverId;
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Fleet Manager - NO update access
+        |--------------------------------------------------------------------------
+        */
         return false;
     }
 
@@ -132,4 +136,77 @@ class DispatchPolicy
             'dispatcher'
         );
     }
+
+    public function accept(
+        User $user,
+        Dispatch $dispatch
+    ): bool {
+        if (!$user->hasRole('driver')) {
+            return false;
+        }
+
+        if ($dispatch->archived_at) {
+            return false;
+        }
+
+        $driverId = $user->driverProfile?->id;
+
+        return
+            $driverId !== null &&
+            (int) $dispatch->reservation?->driver_id ===
+                (int) $driverId;
+    }
+
+    public function requestReassignment(
+        User $user,
+        Dispatch $dispatch
+    ): bool {
+        if (!$user->hasRole('driver')) {
+            return false;
+        }
+
+        if ($dispatch->archived_at) {
+            return false;
+        }
+
+        $driverId = $user->driverProfile?->id;
+
+        return
+            $driverId !== null &&
+            (int) $dispatch->reservation?->driver_id ===
+                (int) $driverId;
+    }
+
+    public function reviewReassignment(
+        User $user,
+        Dispatch $dispatch
+    ): bool {
+        return $user->hasRole(
+            'dispatcher',
+        );
+    }
+
+    public function approveReassignment(
+        User $user,
+        Dispatch $dispatch
+    ): bool {
+        return $user->hasRole(
+            'dispatcher',
+        );
+    }
+
+    public function rejectReassignment(
+        User $user,
+        Dispatch $dispatch
+    ): bool {
+        return $user->hasRole(
+            'dispatcher',
+        );
+    }
+
+    public function reviewReassignmentList(User $user): bool
+    {
+        return $user->hasRole('dispatcher');
+    }
+
 }

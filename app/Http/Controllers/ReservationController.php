@@ -9,6 +9,7 @@ use App\Models\HospitalFacility;
 use Illuminate\Http\Request;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
+use App\Models\FleetNotification;
 use App\Services\AuditLogService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
@@ -148,7 +149,10 @@ class ReservationController extends Controller
             //'shipment',
         ]);
 
-        if ($request->boolean('show_archived')) {
+        if (
+            $user->hasRole('fleet_manager') &&
+            $request->boolean('show_archived')
+        ) {
             $query->whereNotNull('archived_at');
         } else {
             $query->whereNull('archived_at');
@@ -292,29 +296,24 @@ class ReservationController extends Controller
                 ),
             'canUpdate' =>
                 $user->hasRole(
-                    'fleet_manager',
                     'dispatcher',
                     'department_head'
                 ),
             'canArchive' =>
                 $user->hasRole(
                     'fleet_manager',
-                    'dispatcher'
                 ),
             'canBulkArchive' =>
                 $user->hasRole(
                     'fleet_manager',
-                    'dispatcher'
-                ),
-            'canRestore' =>
-                $user->hasRole(
-                    'fleet_manager',
-                    'dispatcher'
                 ),
             'canApprove' =>
                 $user->hasRole(
-                    'fleet_manager',
-                    'dispatcher'
+                    'fleet_manager'
+                ),
+            'canReject' =>
+                $user->hasRole(
+                    'fleet_manager'
                 ),
         ];
         return view(
@@ -682,7 +681,7 @@ class ReservationController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Reservation added successfully.',
+                'message' => 'Reservation requested successfully.',
                 'reservation' => $reservation,
             ], 201);
 
@@ -721,6 +720,14 @@ class ReservationController extends Controller
         Reservation $reservation
     ) {
         $this->authorize('update', $reservation);
+
+        if ($reservation->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Archived reservations cannot be edited.',
+            ], 422);
+        }
 
         $reservation->load([
             'routePlan',
@@ -1092,6 +1099,179 @@ class ReservationController extends Controller
             403,
             'You do not have permission to update this reservation.'
         );
+    }
+
+    /**
+     * Approve a pending reservation.
+     */
+    public function approve(
+        Request $request,
+        Reservation $reservation
+    ) {
+        $this->authorize('approve', $reservation);
+
+        $reservation->load([
+            'routePlan',
+            'dispatch',
+            'requester',
+        ]);
+
+        if ($reservation->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Archived reservations cannot be approved.',
+            ], 422);
+        }
+
+        if ($reservation->status !== 'Pending') {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Only Pending reservations can be approved.',
+            ], 422);
+        }
+
+        if ($reservation->dispatch) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'This reservation already has a dispatch.',
+            ], 422);
+        }
+
+        $oldValues = $this->getReservationAuditValues(
+            $reservation
+        );
+
+        DB::transaction(function () use (
+            $reservation
+        ) {
+            $reservation->update([
+                'status' => 'Approved',
+            ]);
+        });
+
+        $reservation->refresh();
+
+        $newValues = $this->getReservationAuditValues(
+            $reservation
+        );
+
+        $this->logReservationUpdate(
+            $reservation,
+            $oldValues,
+            $newValues
+        );
+
+        AuditLogService::log(
+            module: 'Reservation Management',
+            action: 'Approved',
+            description:
+                "Approved reservation {$reservation->reservation_number}.",
+            record: $reservation,
+            oldValues: $oldValues,
+            newValues: $newValues
+        );
+
+        $this->notifyReservationDecision(
+            $request,
+            $reservation,
+            'Approved'
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' =>
+                'Reservation approved successfully.',
+            'reservation' =>
+                $reservation->fresh()->load([
+                    'vehicle',
+                    'driver',
+                    'requester',
+                ]),
+        ]);
+    }
+    /**
+     * Reject a pending reservation.
+     */
+    public function reject(
+        Request $request,
+        Reservation $reservation
+    ) {
+        $this->authorize('reject', $reservation);
+
+        $reservation->load([
+            'requester',
+        ]);
+
+        if ($reservation->archived_at) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Archived reservations cannot be rejected.',
+            ], 422);
+        }
+
+        if ($reservation->status !== 'Pending') {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'Only Pending reservations can be rejected.',
+            ], 422);
+        }
+
+        $oldValues = $this->getReservationAuditValues(
+            $reservation
+        );
+
+        DB::transaction(function () use (
+            $reservation
+        ) {
+            $reservation->update([
+                'status' => 'Rejected',
+            ]);
+        });
+
+        $reservation->refresh();
+
+        $newValues = $this->getReservationAuditValues(
+            $reservation
+        );
+
+        $this->logReservationUpdate(
+            $reservation,
+            $oldValues,
+            $newValues
+        );
+
+        AuditLogService::log(
+            module: 'Reservation Management',
+            action: 'Rejected',
+            description:
+                "Rejected reservation {$reservation->reservation_number}.",
+            record: $reservation,
+            oldValues: $oldValues,
+            newValues: $newValues
+        );
+
+        $this->notifyReservationDecision(
+            $request,
+            $reservation,
+            'Rejected'
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' =>
+                'Reservation rejected successfully.',
+            'reservation' =>
+                $reservation->fresh()->load([
+                    'vehicle',
+                    'driver',
+                    'requester',
+                ]),
+        ]);
     }
 
     /**
@@ -1685,6 +1865,112 @@ class ReservationController extends Controller
                     )
                     ->count(),
         ]);
+    }
+
+    /**
+     * Notify requester + Fleet Manager + Dispatcher
+     * when a reservation is approved or rejected.
+     */
+    private function notifyReservationDecision(
+        Request $request,
+        Reservation $reservation,
+        string $decision
+    ): void {
+        $reservationNumber =
+            $reservation->reservation_number;
+
+        $link =
+            route('reservation.index');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Notification Content
+        |--------------------------------------------------------------------------
+        */
+        if ($decision === 'Approved') {
+            $settingKey =
+                'reservationApproved';
+
+            $title =
+                'Reservation Approved';
+
+            $requesterMessage =
+                "Your reservation {$reservationNumber} has been approved and can proceed to Route Planning.";
+
+            $roleMessage =
+                "Reservation {$reservationNumber} has been approved and can proceed to Route Planning.";
+        } else {
+            $settingKey =
+                'reservationRejected';
+
+            $title =
+                'Reservation Rejected';
+
+            $requesterMessage =
+                "Your reservation {$reservationNumber} has been rejected.";
+
+            $roleMessage =
+                "Reservation {$reservationNumber} has been rejected.";
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Notify Department Head / Original Requester
+        |--------------------------------------------------------------------------
+        */
+        $requester =
+            $reservation->requester;
+
+        if (
+            $requester &&
+            FleetNotificationService::enabled(
+                $settingKey,
+                true
+            ) &&
+            FleetNotificationService::userCanAccessLink(
+                $requester,
+                $link
+            )
+        ) {
+            FleetNotification::create([
+                'user_id' =>
+                    $requester->id,
+
+                'title' =>
+                    $title,
+
+                'message' =>
+                    $requesterMessage,
+
+                'status' =>
+                    'Unread',
+
+                'link' =>
+                    $link,
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Notify Fleet Manager + Dispatcher
+        |--------------------------------------------------------------------------
+        |
+        | Exclude the current approving/rejecting user
+        | to avoid duplicate self-notification.
+        |--------------------------------------------------------------------------
+        */
+        FleetNotificationService::createForRolesWhenEnabled(
+            settingKey: $settingKey,
+            roles: [
+                'fleet_manager',
+                'dispatcher',
+            ],
+            title: $title,
+            message: $roleMessage,
+            default: true,
+            link: $link,
+            excludeUserId: $request->user()->id
+        );
     }
 
     private function generateReservationNumber(): string

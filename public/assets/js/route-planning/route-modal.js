@@ -412,6 +412,7 @@ function resetRouteOptimization() {
 
 function applyReservationToRouteForm(reservation) {
     if (!reservation) {
+        resetRouteResourceDisplay();
         return;
     }
     const originInput = document.getElementById("routeOrigin");
@@ -420,10 +421,8 @@ function applyReservationToRouteForm(reservation) {
     const departmentInput = document.getElementById("routeDepartment");
     const departureDateInput = document.getElementById("routeDepartureDate");
     const departureTimeInput = document.getElementById("routeDepartureTime");
-
     if (originInput) {
         originInput.value = reservation.pickup_location || "";
-
         originInput.dataset.latitude =
             reservation.origin_latitude ??
             reservation.pickup_facility?.latitude ??
@@ -451,25 +450,21 @@ function applyReservationToRouteForm(reservation) {
         departmentInput.value = reservation.department || "";
     }
     if (departureDateInput) {
-        departureDateInput.value = formatRouteDateForInput(
-            reservation.schedule_date,
-        );
+        departureDateInput.value = String(
+            reservation.schedule_date || "",
+        ).slice(0, 10);
     }
     if (departureTimeInput) {
-        departureTimeInput.value = reservation.schedule_time || "";
+        departureTimeInput.value = String(
+            reservation.schedule_time || "",
+        ).slice(0, 5);
     }
-    // Keep selected vehicle and driver from the approved Reservation.
-    if (typeof setRouteFormVehicle === "function") {
-        setRouteFormVehicle(reservation.vehicle_id || "");
-    }
-    if (typeof setRouteFormDriver === "function") {
-        setRouteFormDriver(reservation.driver_id || "");
-    }
-    // Store the selected facility information for later route calculations.
+    applyReservationResourceDisplay(reservation);
     window.selectedRouteReservationFacilities = {
         pickup: reservation.pickup_facility || null,
         destination: reservation.destination_facility || null,
     };
+    resetRouteOptimization();
 }
 
 async function populateRouteReservations(selectedReservation = null) {
