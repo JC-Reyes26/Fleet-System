@@ -96,7 +96,6 @@ class FuelLogController extends Controller
                 ),
             'canUpdate' =>
                 $user->hasRole(
-                    'fleet_manager',
                     'maintenance'
                 ),
             /*

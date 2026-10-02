@@ -84,17 +84,27 @@ function initViewReservationModal() {
 
         const statusElement = document.getElementById("viewReservationStatusSummary");
 
-        if (statusElement) {
-            const status = reservation.status || NOT_PROVIDED;
-
-            statusElement.className = "status-badge";
-            statusElement.textContent = status;
-
-            if (statusClassMap[status]) {
-                statusElement.classList.add(
-                    statusClassMap[status]
-                );
-            }
+        const editButton = document.getElementById(
+            "editReservationFromViewBtn",
+        );
+        if (editButton) {
+            const role =
+                window.FleetRBAC?.getRole?.() || window.FLEET_RBAC?.role || "";
+            const canUpdate =
+                window.FleetRBAC?.hasPermission?.(
+                    "reservations",
+                    "canUpdate",
+                ) === true;
+            const roleCanEdit =
+                role === "dispatcher" || role === "department_head";
+            const canEdit = canUpdate && roleCanEdit;
+            const isStatusLocked = reservation.status !== "Pending";
+            const isArchived = Boolean(reservation.archived_at);
+            editButton.hidden = !canEdit || isArchived;
+            editButton.disabled = canEdit && !isArchived && isStatusLocked;
+            editButton.title = isStatusLocked
+                ? "Only Pending reservations can be edited."
+                : "Edit Reservation";
         }
     };
 

@@ -322,6 +322,12 @@ class VehicleTrackingController extends Controller
         return response()->json([
             'active' => true,
 
+            /*
+            * Fleet GPS reads this top-level vehicle_id.
+            * Keep it consistent with the driver's assigned vehicle.
+            */
+            'vehicle_id' => $driver->assigned_vehicle_id,
+
             'dispatch' => [
                 'id' => $dispatch->id,
                 'dispatch_number' => $dispatch->dispatch_number,

@@ -134,60 +134,132 @@
 
             <!-- Overview KPI cards (always visible) -->
             <div class="stats-grid" id="overviewKpis">
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <i class="ph-fill ph-car"></i>
-                </div>
-                <div class="stat-content">
-                  <h3 id="kpiTotalVehicles">0</h3>
-                  <p>Total Vehicles</p>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon success">
-                  <i class="ph-fill ph-check-circle"></i>
-                </div>
-                <div class="stat-content">
-                  <h3 id="kpiAvailableVehicles">0</h3>
-                  <p>Available Vehicles</p>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <i class="ph-fill ph-truck"></i>
-                </div>
-                <div class="stat-content">
-                  <h3 id="kpiCompletedTrips">0</h3>
-                  <p>Completed Trips</p>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon warning">
-                  <i class="ph-fill ph-calendar-check"></i>
-                </div>
-                <div class="stat-content">
-                  <h3 id="kpiActiveReservations">0</h3>
-                  <p>Active Reservations</p>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <i class="ph-fill ph-wrench"></i>
-                </div>
-                <div class="stat-content">
-                  <h3 id="kpiMaintenanceCost">₱0.00</h3>
-                  <p>Maintenance Cost</p>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <i class="ph-fill ph-gas-pump"></i>
-                </div>
-                <div class="stat-content">
-                  <h3 id="kpiFuelCost">₱0.00</h3>
-                  <p>Fuel Cost</p>
-                </div>
-              </div>
+                {{-- Total Vehicles --}}
+                @if(auth()->user()->canViewModule('vehicles'))
+                    <a
+                        href="{{ route('fleet') }}"
+                        class="stat-card stat-card-link"
+                    >
+                @else
+                    <div class="stat-card">
+                @endif
+                    <div class="stat-icon">
+                        <i class="ph-fill ph-car"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="kpiTotalVehicles">0</h3>
+                        <p>Total Vehicles</p>
+                    </div>
+                @if(auth()->user()->canViewModule('vehicles'))
+                    </a>
+                @else
+                    </div>
+                @endif
+                {{-- Available Vehicles --}}
+                @if(auth()->user()->canViewModule('vehicles'))
+                    <a
+                        href="{{ route('fleet') }}"
+                        class="stat-card stat-card-link"
+                    >
+                @else
+                    <div class="stat-card">
+                @endif
+                    <div class="stat-icon success">
+                        <i class="ph-fill ph-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="kpiAvailableVehicles">0</h3>
+                        <p>Available Vehicles</p>
+                    </div>
+                @if(auth()->user()->canViewModule('vehicles'))
+                    </a>
+                @else
+                    </div>
+                @endif
+                {{-- Completed Trips --}}
+                @if(auth()->user()->canViewModule('dispatch'))
+                    <a
+                        href="{{ route('dispatch') }}"
+                        class="stat-card stat-card-link"
+                    >
+                @else
+                    <div class="stat-card">
+                @endif
+                    <div class="stat-icon">
+                        <i class="ph-fill ph-truck"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="kpiCompletedTrips">0</h3>
+                        <p>Completed Trips</p>
+                    </div>
+                @if(auth()->user()->canViewModule('dispatch'))
+                    </a>
+                @else
+                    </div>
+                @endif
+                {{-- Active Reservations --}}
+                @if(auth()->user()->canViewModule('reservations'))
+                    <a
+                        href="{{ route('reservation.index') }}"
+                        class="stat-card stat-card-link"
+                    >
+                @else
+                    <div class="stat-card">
+                @endif
+                    <div class="stat-icon warning">
+                        <i class="ph-fill ph-calendar-check"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="kpiActiveReservations">0</h3>
+                        <p>Active Reservations</p>
+                    </div>
+                @if(auth()->user()->canViewModule('reservations'))
+                    </a>
+                @else
+                    </div>
+                @endif
+                {{-- Maintenance Cost --}}
+                @if(auth()->user()->canViewModule('maintenance'))
+                    <a
+                        href="{{ route('maintenance') }}"
+                        class="stat-card stat-card-link"
+                    >
+                @else
+                    <div class="stat-card">
+                @endif
+                    <div class="stat-icon">
+                        <i class="ph-fill ph-wrench"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="kpiMaintenanceCost">₱0.00</h3>
+                        <p>Maintenance Cost</p>
+                    </div>
+                @if(auth()->user()->canViewModule('maintenance'))
+                    </a>
+                @else
+                    </div>
+                @endif
+                {{-- Fuel Cost --}}
+                @if(auth()->user()->canViewModule('fuel'))
+                    <a
+                        href="{{ route('fuel') }}"
+                        class="stat-card stat-card-link"
+                    >
+                @else
+                    <div class="stat-card">
+                @endif
+                    <div class="stat-icon">
+                        <i class="ph-fill ph-gas-pump"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="kpiFuelCost">₱0.00</h3>
+                        <p>Fuel Cost</p>
+                    </div>
+                @if(auth()->user()->canViewModule('fuel'))
+                    </a>
+                @else
+                    </div>
+                @endif
             </div>
 
             <!-- Report-type specific KPI row -->

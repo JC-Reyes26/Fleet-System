@@ -622,31 +622,65 @@ class ReservationController extends Controller
             );
 
             if ($reservation->status === 'Pending') {
-                /*
-                |--------------------------------------------------------------------------
-                | Normal Pending Reservation
-                |--------------------------------------------------------------------------
-                */
-                FleetNotificationService::createWhenEnabled(
-                    'reservationPending',
-                    'Pending Reservation',
-                    "Reservation {$reservation->reservation_number} is waiting for approval.",
-                    true,
-                    route('reservation.index')
-                );
-                FleetNotificationService::createForRolesWhenEnabled(
-                    settingKey: 'reservationPending',
-                    roles: [
-                        'fleet_manager',
-                        'dispatcher',
-                    ],
-                    title: 'Pending Reservation',
-                    message:
-                        "Reservation {$reservation->reservation_number} is waiting for approval.",
-                    default: true,
-                    link: route('reservation.index'),
-                    excludeUserId: $request->user()->id
-                );
+                $hasAssignedVehicleAndDriver =
+                    $reservation->vehicle_id !== null &&
+                    $reservation->driver_id !== null;
+
+                if (!$hasAssignedVehicleAndDriver) {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Reservation needs Vehicle + Driver assignment
+                    |--------------------------------------------------------------------------
+                    */
+                    FleetNotificationService::createWhenEnabled(
+                        'reservationPending',
+                        'Reservation Needs Assignment',
+                        "Reservation {$reservation->reservation_number} needs an available vehicle and driver assignment before approval.",
+                        true,
+                        route('reservation.index')
+                    );
+
+                    FleetNotificationService::createForRolesWhenEnabled(
+                        settingKey: 'reservationPending',
+                        roles: [
+                            'fleet_manager',
+                            'dispatcher',
+                        ],
+                        title: 'Reservation Needs Assignment',
+                        message:
+                            "Reservation {$reservation->reservation_number} needs an available vehicle and driver assignment before approval.",
+                        default: true,
+                        link: route('reservation.index'),
+                        excludeUserId: $request->user()->id
+                    );
+                } else {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Reservation is ready for Approval
+                    |--------------------------------------------------------------------------
+                    */
+                    FleetNotificationService::createWhenEnabled(
+                        'reservationPending',
+                        'Pending Reservation',
+                        "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is waiting for approval.",
+                        true,
+                        route('reservation.index')
+                    );
+
+                    FleetNotificationService::createForRolesWhenEnabled(
+                        settingKey: 'reservationPending',
+                        roles: [
+                            'fleet_manager',
+                            'dispatcher',
+                        ],
+                        title: 'Pending Reservation',
+                        message:
+                            "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is waiting for approval.",
+                        default: true,
+                        link: route('reservation.index'),
+                        excludeUserId: $request->user()->id
+                    );
+                }
             } elseif ($isEmergencyTransfer) {
                 /*
                 |--------------------------------------------------------------------------
@@ -1063,11 +1097,50 @@ class ReservationController extends Controller
                     $reservation
                 );
 
+            $hadCompleteAssignment =
+                $reservation->vehicle_id !== null &&
+                $reservation->driver_id !== null;
+
             $reservation->update(
                 $validated
             );
 
             $reservation->refresh();
+
+            $hasCompleteAssignment =
+                $reservation->vehicle_id !== null &&
+                $reservation->driver_id !== null;
+            /*
+            |--------------------------------------------------------------------------
+            | Notify when Vehicle + Driver assignment is completed
+            |--------------------------------------------------------------------------
+            */
+            if (
+                !$hadCompleteAssignment &&
+                $hasCompleteAssignment &&
+                $reservation->status === 'Pending'
+            ) {
+                FleetNotificationService::createWhenEnabled(
+                    'reservationPending',
+                    'Pending Reservation',
+                    "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is now waiting for approval.",
+                    true,
+                    route('reservation.index')
+                );
+                FleetNotificationService::createForRolesWhenEnabled(
+                    settingKey: 'reservationPending',
+                    roles: [
+                        'fleet_manager',
+                        'dispatcher',
+                    ],
+                    title: 'Pending Reservation',
+                    message:
+                        "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is now waiting for approval.",
+                    default: true,
+                    link: route('reservation.index'),
+                    excludeUserId: $request->user()->id
+                );
+            }
 
             $newAuditValues =
                 $this->getReservationAuditValues(
@@ -1129,6 +1202,26 @@ class ReservationController extends Controller
                 'success' => false,
                 'message' =>
                     'Only Pending reservations can be approved.',
+            ], 422);
+        }
+
+        if (!$reservation->vehicle_id || !$reservation->driver_id) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'A vehicle and driver must both be assigned before the reservation can be approved.',
+            ], 422);
+        }
+
+        try {
+            $this->validateVehicleAndDriverAvailability(
+                $reservation->vehicle_id,
+                $reservation->driver_id
+            );
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
             ], 422);
         }
 
@@ -1218,6 +1311,26 @@ class ReservationController extends Controller
                 'success' => false,
                 'message' =>
                     'Only Pending reservations can be rejected.',
+            ], 422);
+        }
+
+        if (!$reservation->vehicle_id || !$reservation->driver_id) {
+            return response()->json([
+                'success' => false,
+                'message' =>
+                    'A vehicle and driver must both be assigned before the reservation can be rejected.',
+            ], 422);
+        }
+
+        try {
+            $this->validateVehicleAndDriverAvailability(
+                $reservation->vehicle_id,
+                $reservation->driver_id
+            );
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
             ], 422);
         }
 

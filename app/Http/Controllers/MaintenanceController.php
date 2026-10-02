@@ -468,7 +468,6 @@ class MaintenanceController extends Controller
                 ),
             'canUpdate' =>
                 $user->hasRole(
-                    'fleet_manager',
                     'maintenance'
                 ),
             'canArchive' =>

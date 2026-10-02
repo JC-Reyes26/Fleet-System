@@ -208,6 +208,9 @@ class VehicleController extends Controller
                 $request->user()->hasRole(
                     'fleet_manager'
                 ),
+
+            'canOpenMaintenance' =>
+                $request->user()->canViewModule('maintenance'),
         ];
         return view(
             'fleet.index',

@@ -3401,10 +3401,25 @@
              * Only update the marker when the GPS belongs
              * to the vehicle assigned to the current route.
              */
+            const currentVehicleId =
+                currentFullMapRecord.vehicleId ??
+                currentFullMapRecord.vehicle_id ??
+                currentFullMapRecord.dispatch?.vehicle_id ??
+                currentFullMapRecord.dispatch?.vehicle?.id ??
+                null;
+
             if (
-                !currentFullMapRecord.vehicleId ||
-                String(currentFullMapRecord.vehicleId) !== String(vehicleId)
+                !currentVehicleId ||
+                String(currentVehicleId) !== String(vehicleId)
             ) {
+                console.debug(
+                    "[Full Route Map] GPS ignored: vehicle mismatch.",
+                    {
+                        gpsVehicleId: vehicleId,
+                        routeVehicleId: currentVehicleId,
+                    },
+                );
+
                 return;
             }
 
@@ -3656,8 +3671,18 @@
         destinationArrivalNotified = false;
         isNearDestination = false;
 
+        const resolvedVehicleId =
+            selectedRecord?.vehicleId ??
+            selectedRecord?.vehicle_id ??
+            dispatch?.vehicle_id ??
+            dispatch?.vehicle?.id ??
+            dispatch?.vehicleId ??
+            null;
+
         currentFullMapRecord = {
             ...selectedRecord,
+            vehicleId: resolvedVehicleId,
+            vehicle_id: resolvedVehicleId,
             dispatchId: dispatch.id,
             tripStatus: dispatch.trip_status,
             dispatch,

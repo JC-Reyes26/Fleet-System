@@ -1318,6 +1318,11 @@ function initDispatchAdd() {
     }
     form.dataset.dispatchAddInitialized = "true";
     initDispatchAiScoreBreakdown();
+    const dispatchStatus = document.getElementById("dispatchStatus");
+    if (dispatchStatus) {
+        dispatchStatus.value = "Pending";
+        dispatchStatus.disabled = true;
+    }
     const reservationSelect = document.getElementById("dispatchReservation");
     /*
     |--------------------------------------------------------------------------
@@ -1412,6 +1417,11 @@ function initDispatchAdd() {
                 |--------------------------------------------------------------------------
                 */
             form.reset();
+            const dispatchStatus = document.getElementById("dispatchStatus");
+            if (dispatchStatus) {
+                dispatchStatus.value = "Pending";
+                dispatchStatus.disabled = true;
+            }
             clearReservationDetails();
             clearDispatchAiRecommendation();
             form.querySelectorAll(".is-invalid").forEach((element) =>

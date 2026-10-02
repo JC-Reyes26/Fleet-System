@@ -68,7 +68,6 @@ class ReservationPolicy
     {
         return $user->hasRole('department_head');
     }
-
     /*
     |--------------------------------------------------------------------------
     | Update
@@ -79,13 +78,15 @@ class ReservationPolicy
     |
     | Department Head:
     | - Own department only
-    | - Pending only
+    | - Can edit active reservations
+    | - Cannot edit archived reservations
     |--------------------------------------------------------------------------
     */
     public function update(
         User $user,
         Reservation $reservation
     ): bool {
+
         if ($user->hasRole('dispatcher')) {
             return $reservation->archived_at === null;
         }
@@ -94,8 +95,7 @@ class ReservationPolicy
             return
                 $reservation->archived_at === null &&
                 !empty($user->department) &&
-                $reservation->department === $user->department &&
-                $reservation->status === 'Pending';
+                $reservation->department === $user->department;
         }
 
         return false;

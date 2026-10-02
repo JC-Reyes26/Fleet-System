@@ -58,78 +58,122 @@
               </div>
 
               <div class="stats-grid dashboard-kpi-grid">
-                <article class="stat-card dashboard-kpi">
-                  <div class="stat-icon" aria-hidden="true">
-                    <i class="ph-fill ph-ambulance"></i>
-                  </div>
-                  <div class="stat-content">
-                    <span class="kpi-label">Available Vehicles</span>
-                    <h2 class="kpi-value" id="dashboardAvailableVehicles" >
-                        {{ number_format($availableVehicles) }}
-                    </h2>
-                    <div class="kpi-meta">
-                      <span class="kpi-trend kpi-trend--steady">Stable</span>
-                      <span class="kpi-support">Ready for assignment</span>
+                @if($dashboardPermissions['canOpenVehicles'] ?? false)
+                    <a
+                        href="{{ route('fleet') }}"
+                        class="stat-card dashboard-kpi dashboard-kpi-link"
+                    >
+                @else
+                    <article class="stat-card dashboard-kpi">
+                @endif
+                    <div class="stat-icon" aria-hidden="true">
+                        <i class="ph-fill ph-ambulance"></i>
                     </div>
-                  </div>
-                </article>
-
-                <article class="stat-card dashboard-kpi">
-                  <div class="stat-icon" aria-hidden="true">
-                    <i class="ph-fill ph-truck"></i>
-                  </div>
-                  <div class="stat-content">
-                    <span class="kpi-label">Active Dispatches</span>
-                    <h2 class="kpi-value" id="dashboardActiveDispatches">
-                        {{ number_format($activeDispatches) }}
-                    </h2>
-                    <div class="kpi-meta">
-                      <span class="kpi-trend kpi-trend--up">In progress</span>
-                      <span class="kpi-support">Trips currently running</span>
+                    <div class="stat-content">
+                        <span class="kpi-label">Available Vehicles</span>
+                        <h2 class="kpi-value" id="dashboardAvailableVehicles">
+                            {{ number_format($availableVehicles) }}
+                        </h2>
+                        <div class="kpi-meta">
+                            <span class="kpi-trend kpi-trend--steady">Stable</span>
+                            <span class="kpi-support">Ready for assignment</span>
+                        </div>
                     </div>
-                  </div>
-                </article>
+                @if($dashboardPermissions['canOpenVehicles'] ?? false)
+                    </a>
+                @else
+                    </article>
+                @endif
 
-                <article class="stat-card dashboard-kpi">
-                  <div class="stat-icon" aria-hidden="true">
-                    <i class="ph-fill ph-user"></i>
-                  </div>
-                  <div class="stat-content">
-                    <span class="kpi-label">Drivers On Duty</span>
-                    <h2 class="kpi-value" id="dashboardDriversOnDuty">
-                        {{ number_format($driversOnDuty) }}
-                    </h2>
-                    <div class="kpi-meta">
-                      <span class="kpi-trend kpi-trend--steady">On shift</span>
-                      <span class="kpi-support">Active driver pool</span>
+               @if($dashboardPermissions['canOpenDispatch'] ?? false)
+                    <a
+                        href="{{ route('dispatch') }}"
+                        class="stat-card dashboard-kpi dashboard-kpi-link"
+                    >
+                @else
+                    <article class="stat-card dashboard-kpi">
+                @endif
+                    <div class="stat-icon" aria-hidden="true">
+                        <i class="ph-fill ph-truck"></i>
                     </div>
-                  </div>
-                </article>
+                    <div class="stat-content">
+                        <span class="kpi-label">Active Dispatches</span>
+                        <h2 class="kpi-value" id="dashboardActiveDispatches">
+                            {{ number_format($activeDispatches) }}
+                        </h2>
+                        <div class="kpi-meta">
+                            <span class="kpi-trend kpi-trend--up">In progress</span>
+                            <span class="kpi-support">Trips currently running</span>
+                        </div>
+                    </div>
+                @if($dashboardPermissions['canOpenDispatch'] ?? false)
+                    </a>
+                @else
+                    </article>
+                @endif
 
-                <article class="stat-card dashboard-kpi">
-                  <div class="stat-icon" aria-hidden="true">
-                      <i class="ph-fill ph-gas-pump"></i>
-                  </div>
-                  <div class="stat-content">
-                      <span class="kpi-label">
-                          Average Fuel Level
-                      </span>
-                      <h2 class="kpi-value" id="dashboardAverageFuelLevel">
-                          {{ $averageFuelLevel }}%
-                      </h2>
-                      <div class="kpi-meta">
-                          <span
-                              id="dashboardFuelTrend"
-                              class="kpi-trend {{ $averageFuelLevel < 30 ? 'kpi-trend--up' : 'kpi-trend--steady' }}"
-                          >
-                              {{ $averageFuelLevel < 30 ? 'Low fuel' : 'Within range' }}
-                          </span>
-                          <span class="kpi-support">
-                              Current fleet tank average
-                          </span>
-                      </div>
-                  </div>
-                </article>
+                @if($dashboardPermissions['canOpenDrivers'] ?? false)
+                    <a
+                        href="{{ route('driver') }}"
+                        class="stat-card dashboard-kpi dashboard-kpi-link"
+                    >
+                @else
+                    <article class="stat-card dashboard-kpi">
+                @endif
+                    <div class="stat-icon" aria-hidden="true">
+                        <i class="ph-fill ph-user"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="kpi-label">Drivers On Duty</span>
+                        <h2 class="kpi-value" id="dashboardDriversOnDuty">
+                            {{ number_format($driversOnDuty) }}
+                        </h2>
+                        <div class="kpi-meta">
+                            <span class="kpi-trend kpi-trend--steady">On shift</span>
+                            <span class="kpi-support">Active driver pool</span>
+                        </div>
+                    </div>
+                @if($dashboardPermissions['canOpenDrivers'] ?? false)
+                    </a>
+                @else
+                    </article>
+                @endif
+
+                @if($dashboardPermissions['canOpenVehicles'] ?? false)
+                    <a
+                        href="{{ route('fleet') }}"
+                        class="stat-card dashboard-kpi dashboard-kpi-link"
+                    >
+                @else
+                    <article class="stat-card dashboard-kpi">
+                @endif
+                    <div class="stat-icon" aria-hidden="true">
+                        <i class="ph-fill ph-gas-pump"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="kpi-label">
+                            Average Fuel Level
+                        </span>
+                        <h2 class="kpi-value" id="dashboardAverageFuelLevel">
+                            {{ $averageFuelLevel }}%
+                        </h2>
+                        <div class="kpi-meta">
+                            <span
+                                id="dashboardFuelTrend"
+                                class="kpi-trend {{ $averageFuelLevel < 30 ? 'kpi-trend--up' : 'kpi-trend--steady' }}"
+                            >
+                                {{ $averageFuelLevel < 30 ? 'Low fuel' : 'Within range' }}
+                            </span>
+                            <span class="kpi-support">
+                                Current fleet tank average
+                            </span>
+                        </div>
+                    </div>
+                @if($dashboardPermissions['canOpenVehicles'] ?? false)
+                    </a>
+                @else
+                    </article>
+                @endif
               </div>
             </section>
 

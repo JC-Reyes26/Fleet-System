@@ -144,3 +144,11 @@
   font-weight: 500;
   color: var(--color-danger-text);
 }
+
+
+#viewFuelModal .modal-footer {
+  margin-top: 24px;
+  padding: 20px 24px;
+  justify-content: center;
+  gap: 12px;
+}

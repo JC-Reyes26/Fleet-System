@@ -54,7 +54,6 @@ class FuelLogPolicy
     public function create(User $user): bool
     {
         return $user->hasRole(
-            'fleet_manager',
             'maintenance',
             'driver'
         );
@@ -65,7 +64,6 @@ class FuelLogPolicy
         FuelLog $fuelLog
     ): bool {
         return $user->hasRole(
-            'fleet_manager',
             'maintenance'
         );
     }

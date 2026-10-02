@@ -41,6 +41,19 @@ class ReportController extends Controller
             'viewOnly' =>
                 $user->hasRole('it_admin'),
 
+            'canOpenVehicles' =>
+                $user->canViewModule('vehicles'),
+            'canOpenDispatch' =>
+                $user->canViewModule('dispatch'),
+            'canOpenDrivers' =>
+                $user->canViewModule('drivers'),
+            'canOpenReservations' =>
+                $user->canViewModule('reservations'),
+            'canOpenMaintenance' =>
+                $user->canViewModule('maintenance'),
+            'canOpenFuel' =>
+                $user->canViewModule('fuel'),
+
             'allowedReportTypes' =>
                 $this->allowedReportTypes(
                     $user->role

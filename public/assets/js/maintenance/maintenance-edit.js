@@ -84,11 +84,19 @@ async function getEditMaintenanceSettings() {
 }
 
 function applyEditMaintenanceSettings(settings) {
+    const requestType = document.getElementById("editMaintenanceRequestType");
+    const priority = document.getElementById("editMaintenancePriority");
     const status = document.getElementById("editMaintenanceStatus");
     const serviceType = document.getElementById("editMaintenanceServiceType");
     const provider = document.getElementById("editMaintenanceTechnician");
     const cost = document.getElementById("editMaintenanceCost");
     const mark = document.getElementById("editMaintenanceCostRequiredMark");
+    const scheduledDate = document.getElementById(
+        "editMaintenanceScheduledDate",
+    );
+    const completionDate = document.getElementById(
+        "editMaintenanceCompletionDate",
+    );
     /*
     |--------------------------------------------------------------------------
     | Service Type
@@ -143,6 +151,103 @@ function applyEditMaintenanceSettings(settings) {
             )
         ) {
             provider.value = currentValue;
+        }
+    }
+    /*
+|--------------------------------------------------------------------------
+| Request Type / Priority Behavior
+|--------------------------------------------------------------------------
+*/
+
+    const isEmergency = requestType?.value === "Emergency";
+
+    /*
+|--------------------------------------------------------------------------
+| Priority
+|--------------------------------------------------------------------------
+|
+| Normal:
+| High / Normal / Low
+|
+| Emergency:
+| Emergency only
+|
+*/
+    if (priority) {
+        const currentPriority = priority.value;
+        priority.innerHTML = `
+        <option value="">
+            Select Priority
+        </option>
+        <option value="High">
+            High
+        </option>
+        <option value="Normal">
+            Normal
+        </option>
+        <option value="Low">
+            Low
+        </option>
+    `;
+        if (isEmergency) {
+            const emergencyOption = document.createElement("option");
+            emergencyOption.value = "Emergency";
+            emergencyOption.textContent = "Emergency";
+            priority.appendChild(emergencyOption);
+            priority.value = "Emergency";
+            priority.disabled = true;
+        } else {
+            priority.disabled = false;
+            if (
+                currentPriority &&
+                ["High", "Normal", "Low"].includes(currentPriority)
+            ) {
+                priority.value = currentPriority;
+            } else {
+                priority.value = "Normal";
+            }
+        }
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Emergency Date Behavior
+    |--------------------------------------------------------------------------
+    */
+    if (isEmergency) {
+        /*
+        | Emergency maintenance starts immediately.
+        */
+        if (scheduledDate) {
+            const currentValue = scheduledDate.value;
+            /*
+            | Preserve the existing scheduled date
+            | when editing an existing record.
+            */
+            if (!currentValue) {
+                scheduledDate.value = getEditMaintenanceLocalDate();
+            }
+            scheduledDate.readOnly = true;
+        }
+        if (completionDate) {
+            /*
+            | Completion date remains available
+            | because an existing Emergency record
+            | may already be completed.
+            */
+            completionDate.disabled = false;
+            setEditMaintenanceCompletionDateMinimum();
+        }
+    } else {
+        /*
+        | Normal maintenance
+        */
+        if (scheduledDate) {
+            scheduledDate.readOnly = false;
+            setEditMaintenanceScheduledDateMinimum();
+        }
+        if (completionDate) {
+            completionDate.disabled = false;
+            setEditMaintenanceCompletionDateMinimum();
         }
     }
     /*
@@ -398,6 +503,10 @@ async function populateEditMaintenanceForm(row, maintenanceData = null) {
         };
 
         setValue("editMaintenanceNumber", maintenance.maintenance_number);
+        setValue(
+            "editMaintenanceRequestType",
+            maintenance.request_type || "Normal",
+        );
 
         await loadEditMaintenanceVehicles(
             maintenance.vehicle_id,
@@ -460,8 +569,37 @@ async function populateEditMaintenanceForm(row, maintenanceData = null) {
         setEditMaintenanceScheduledDateMinimum();
         setEditMaintenanceCompletionDateMinimum();
         setValue("editMaintenanceCost", maintenance.cost);
+        setValue(
+            "editMaintenanceRequestType",
+            maintenance.request_type || "Normal",
+        );
         setValue("editMaintenancePriority", maintenance.priority);
         setValue("editMaintenanceStatus", maintenance.status);
+        applyEditMaintenanceSettings(editMaintenanceSettings);
+        /*
+        |--------------------------------------------------------------------------
+        | Restore actual saved priority
+        |--------------------------------------------------------------------------
+        */
+        const prioritySelect = document.getElementById(
+            "editMaintenancePriority",
+        );
+        if (prioritySelect) {
+            const savedPriority = maintenance.priority;
+            if (
+                savedPriority &&
+                Array.from(prioritySelect.options).some(
+                    (option) => option.value === savedPriority,
+                )
+            ) {
+                prioritySelect.value = savedPriority;
+            }
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Keep existing status lifecycle
+        |--------------------------------------------------------------------------
+        */
         updateEditMaintenanceStatusOptions(maintenance.status);
         document
             .getElementById("editMaintenanceStatus")
@@ -556,6 +694,7 @@ async function updateMaintenanceRecord(form, maintenanceId) {
     const payload = {
         maintenance_number: getValue("editMaintenanceNumber").trim(),
         vehicle_id: getValue("editMaintenanceVehicle") || null,
+        request_type: getValue("editMaintenanceRequestType") || "Normal",
         maintenance_type: getValue("editMaintenanceServiceType"),
         technician: getValue("editMaintenanceTechnician").trim(),
         maintenance_date: getValue("editMaintenanceScheduledDate"),
@@ -623,6 +762,12 @@ async function initMaintenanceEdit() {
         .getElementById("editMaintenanceServiceType")
         ?.addEventListener("change", () => {
             syncEditMaintenanceCostFromServiceType();
+        });
+    
+    document
+        .getElementById("editMaintenanceRequestType")
+        ?.addEventListener("change", () => {
+            applyEditMaintenanceSettings(editMaintenanceSettings);
         });
 
     document

@@ -1,6 +1,15 @@
 /* =========================================================
    HIMS Fleet - AI Dispatch Recommendation
    ========================================================= */
+.view-dispatch-section-header {
+    padding: 15px;
+    background: var(--color-surface-muted);
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+.view-dispatch-section-header p {
+    margin: 0;
+}
 
 .dispatch-archived-toggle {
   display: inline-flex;
@@ -1186,4 +1195,73 @@
     line-height: var(--line-height-body);
 
     color: var(--color-text-muted);
+}
+
+
+/* ==========================================
+   Dispatch Reassignment Confirmation
+   Uses Delete Modal visual pattern
+========================================== */
+
+#dispatchActionConfirmModal {
+  z-index: 1111;
+}
+
+#dispatchActionConfirmModal .dispatch-confirm-modal {
+  position: relative;
+}
+
+#dispatchActionConfirmModal
+  .dispatch-confirm-icon-approve {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+#dispatchActionConfirmModal
+  .dispatch-confirm-icon-reject {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+#dispatchActionConfirmModal
+  .modal-footer {
+  justify-content: center;
+}
+
+#dispatchActionConfirmModal
+  .modal-footer .btn-outline,
+#dispatchActionConfirmModal
+  .modal-footer .btn-primary,
+#dispatchActionConfirmModal
+  .modal-footer .btn-danger {
+  min-width: 140px;
+  height: var(--control-height);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: var(--radius-button);
+}
+
+@media (max-width: 575px) {
+  #dispatchActionConfirmModal {
+    padding: 16px;
+  }
+
+  #dispatchActionConfirmModal
+    .dispatch-confirm-modal {
+    width: 100%;
+  }
+
+  #dispatchActionConfirmModal
+    .modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  #dispatchActionConfirmModal
+    .modal-footer button {
+    width: 100%;
+  }
 }

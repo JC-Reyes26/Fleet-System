@@ -194,10 +194,15 @@ function renderReservationTable(reservations) {
         const canEditThisReservation =
             canUpdate &&
             !reservation.archived_at &&
-            (role === "dispatcher" ||
-                (role === "department_head" &&
-                    reservation.status === "Pending"));
-
+            (role === "dispatcher" || role === "department_head");
+        const hasAssignedVehicle = Boolean(
+            reservation.vehicle_id || reservation.vehicle?.id,
+        );
+        const hasAssignedDriver = Boolean(
+            reservation.driver_id || reservation.driver?.id,
+        );
+        const hasAssignedVehicleAndDriver =
+            hasAssignedVehicle && hasAssignedDriver;
         const statusClass =
             getReservationStatusClass(
                 reservation.status
@@ -335,7 +340,8 @@ function renderReservationTable(reservations) {
                         ${
                             canApprove &&
                             reservation.status === "Pending" &&
-                            !reservation.archived_at
+                            !reservation.archived_at &&
+                            hasAssignedVehicleAndDriver
                                 ? `
                                     <button
                                         type="button"
@@ -350,11 +356,11 @@ function renderReservationTable(reservations) {
                                 `
                                 : ""
                         }
-
                         ${
                             canReject &&
                             reservation.status === "Pending" &&
-                            !reservation.archived_at
+                            !reservation.archived_at &&
+                            hasAssignedVehicleAndDriver
                                 ? `
                                     <button
                                         type="button"

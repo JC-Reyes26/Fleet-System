@@ -360,6 +360,7 @@
                   name="dispatchStatus"
                   value="Pending"
                   readonly
+                  disabled
               />
           </div>
 

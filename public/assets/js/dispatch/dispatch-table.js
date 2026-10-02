@@ -266,8 +266,8 @@ function renderDispatchTable(dispatches) {
     }
 
     const role = window.FleetRBAC?.getRole?.() || window.FLEET_RBAC?.role || "";
-    //const canUpdate =
-    //    window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") === true;
+    const canUpdate =
+        window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") === true;
     const canArchive =
         window.FleetRBAC?.hasPermission?.("dispatch", "canArchive") === true;
     const canBulkArchive =
@@ -339,8 +339,8 @@ function renderDispatchTable(dispatches) {
         const remarks = dispatch.remarks || "";
         const contact = reservation.contact_number || "";
         const statusClass = getDispatchStatusClass(status);
-        //const canEdit = canUpdate && !dispatch.archived_at;
-        //const isLifecycleLocked = ["Completed", "Cancelled"].includes(status);
+        const canEdit = canUpdate && !dispatch.archived_at;
+        const isLifecycleLocked = ["Completed", "Cancelled"].includes(status);
         const isArchived = Boolean(dispatch.archived_at);
         //const canArchiveThisDispatch = canArchive && !isArchived;
         const safeDispatchNumber = escapeDispatchHtml(
@@ -486,6 +486,25 @@ function renderDispatchTable(dispatches) {
                                 <i class="ph ph-eye"></i>
                             </button>
                             ${
+                                canEdit
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="action-btn edit-dispatch"
+                                            data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Edit ${safeDispatchNumber}"
+                                            title="${
+                                                isLifecycleLocked
+                                                    ? "Completed or Cancelled dispatches cannot be edited"
+                                                    : "Edit Dispatch"
+                                            }"
+                                        >
+                                            <i class="ph ph-pencil-simple"></i>
+                                        </button>
+                                    `
+                                    : ""
+                            }
+                            ${
                                 role === "driver" &&
                                 status === "Pending" &&
                                 !openReassignment
@@ -502,25 +521,6 @@ function renderDispatchTable(dispatches) {
                                     `
                                     : ""
                             }
-                            ${
-                                canReviewReassignment &&
-                                openReassignment &&
-                                status === "Pending"
-                                    ? `
-                                        <button
-                                            type="button"
-                                            class="action-btn btn-review-reassignment"
-                                            data-id="${escapeDispatchHtml(openReassignment.id)}"
-                                            data-dispatch-id="${escapeDispatchHtml(dispatch.id)}"
-                                            aria-label="Review reassignment for ${safeDispatchNumber}"
-                                            title="Review Reassignment Request"
-                                        >
-                                            <i class="ph ph-arrows-left-right"></i>
-                                        </button>
-                                    `
-                                    : ""
-                            }
-
                             ${
                                 canArchive && !isArchived
                                     ? `
@@ -547,6 +547,24 @@ function renderDispatchTable(dispatches) {
                                             title="Restore Dispatch"
                                         >
                                             <i class="ph ph-arrow-counter-clockwise"></i>
+                                        </button>
+                                    `
+                                    : ""
+                            }
+                            ${
+                                canReviewReassignment &&
+                                openReassignment &&
+                                status === "Pending"
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="action-btn btn-review-reassignment"
+                                            data-id="${escapeDispatchHtml(openReassignment.id)}"
+                                            data-dispatch-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Review reassignment for ${safeDispatchNumber}"
+                                            title="Review Reassignment Request"
+                                        >
+                                            <i class="ph ph-arrows-left-right"></i>
                                         </button>
                                     `
                                     : ""

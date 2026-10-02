@@ -79,8 +79,11 @@ function getReservationEditRole() {
     return window.FleetRBAC?.getRole?.() || "";
 }
 function canEditReservations() {
+    const role = getReservationEditRole();
     return (
-        window.FleetRBAC?.hasPermission?.("reservations", "canUpdate") === true
+        window.FleetRBAC?.hasPermission?.("reservations", "canUpdate") ===
+            true &&
+        (role === "dispatcher" || role === "department_head")
     );
 }
 function setReservationEditFieldAccess(id, visible) {
@@ -100,12 +103,48 @@ function applyReservationEditRbac() {
     |--------------------------------------------------------------------------
     | Fleet Manager can edit reservation approval status.
     */
-    if (role === "fleet_manager") {
-        setReservationEditFieldAccess("editReservationNumber", true);
-        setReservationEditFieldAccess("editReservationVehicle", true);
-        setReservationEditFieldAccess("editReservationDriver", true);
-        setReservationEditFieldAccess("editReservationStatus", true);
-        return;
+    function applyReservationEditRbac() {
+        const role = getReservationEditRole();
+        /*
+         * Dispatcher
+         * Can edit reservation information and operational
+         * assignment, but cannot modify approval status.
+         */
+        if (role === "dispatcher") {
+            setReservationEditFieldAccess("editReservationNumber", true);
+            setReservationEditFieldAccess("editReservationVehicle", true);
+            setReservationEditFieldAccess("editReservationDriver", true);
+            setReservationEditFieldAccess("editReservationStatus", false);
+            return;
+        }
+        /*
+         * Department Head
+         * Can edit reservation details only.
+         * Operational assignment and status remain locked.
+         */
+        if (role === "department_head") {
+            [
+                "editReservationNumber",
+                "editReservationVehicle",
+                "editReservationDriver",
+                "editReservationStatus",
+            ].forEach((id) => {
+                setReservationEditFieldAccess(id, false);
+            });
+
+            return;
+        }
+        /*
+         * Any other role has no editable reservation fields.
+         */
+        [
+            "editReservationNumber",
+            "editReservationVehicle",
+            "editReservationDriver",
+            "editReservationStatus",
+        ].forEach((id) => {
+            setReservationEditFieldAccess(id, false);
+        });
     }
     /*
     |--------------------------------------------------------------------------
@@ -375,11 +414,37 @@ async function initEditReservationModal() {
     modal.currentRow = null;
   };
   document.body.addEventListener("click", (event) => {
-    const button = event.target.closest(".action-btn.edit-reservation");
-    if (button) {
+      const button = event.target.closest(".action-btn.edit-reservation");
+      if (!button) {
+          return;
+      }
       const row = button.closest("tr");
+      if (!row) {
+          return;
+      }
+      if (!canEditReservations()) {
+          window.showToast(
+              "You do not have permission to edit this reservation.",
+              "error",
+          );
+          return;
+      }
+      const role = getReservationEditRole();
+      const status = row.dataset.status?.trim() || "";
+      /*
+       * Department Head:
+       * Only Pending reservations can actually be opened.
+       * The Edit button remains visible for non-Pending rows
+       * so the user receives a clear status message.
+       */
+      if (role === "department_head" && status !== "Pending") {
+          window.showToast(
+              "Department Head can only edit Pending reservations.",
+              "error",
+          );
+          return;
+      }
       openEditReservationModal(row);
-    }
   });
   document
     .getElementById("closeEditReservationModal")
@@ -437,8 +502,7 @@ async function initEditReservationModal() {
       let isValid = true;
 
       const role = getReservationEditRole();
-      const isOperationalEditor =
-          role === "fleet_manager" || role === "dispatcher";
+      const isOperationalEditor = role === "dispatcher";
       if (
           isOperationalEditor &&
           (!reservationNumber ||

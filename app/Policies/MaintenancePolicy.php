@@ -28,7 +28,6 @@ class MaintenancePolicy
     public function create(User $user): bool
     {
         return $user->hasRole(
-            'fleet_manager',
             'maintenance'
         );
     }
@@ -38,7 +37,6 @@ class MaintenancePolicy
         Maintenance $maintenance
     ): bool {
         return $user->hasRole(
-            'fleet_manager',
             'maintenance'
         );
     }

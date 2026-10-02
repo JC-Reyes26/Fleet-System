@@ -30,6 +30,17 @@ async function openEditMaintenanceFromView() {
         viewMaintenanceModal.currentMaintenanceId ||
         viewModal?.dataset.maintenanceId ||
         "";
+    const canEdit = window.FLEET_RBAC?.maintenance?.canUpdate === true;
+    if (!canEdit) {
+        if (typeof showToast === "function") {
+            showToast(
+                "You do not have permission to edit maintenance records.",
+                "error",
+            );
+        }
+
+        return;
+    }
     const row = viewMaintenanceModal.currentRow;
     const maintenance = viewMaintenanceModal.currentMaintenance;
 
@@ -143,6 +154,11 @@ async function openViewMaintenanceModal(row) {
         setText("viewMaintenanceNumber", maintenance.maintenance_number);
         setText("viewMaintenanceVehicle", vehicleText, "Unassigned");
         setText("viewMaintenanceServiceType", maintenance.maintenance_type);
+        setText(
+            "viewMaintenanceRequestType",
+            maintenance.request_type,
+            "Normal",
+        );
         setText("viewMaintenanceTechnician", maintenance.technician);
         setText(
             "viewMaintenanceScheduledDate",

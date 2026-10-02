@@ -21,7 +21,6 @@ class RoutePlanPolicy
         | System-wide viewers
         |--------------------------------------------------------------------------
         */
-
         if ($user->hasRole(
             'fleet_manager',
             'dispatcher',
@@ -35,7 +34,6 @@ class RoutePlanPolicy
         | Driver - own assigned route only
         |--------------------------------------------------------------------------
         */
-
         if ($user->hasRole('driver')) {
             $driverId =
                 $user->driverProfile?->id;
@@ -49,25 +47,38 @@ class RoutePlanPolicy
         return false;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Create
+    |--------------------------------------------------------------------------
+    | Route Planning creation is handled by Dispatcher.
+    |--------------------------------------------------------------------------
+    */
     public function create(User $user): bool
     {
-        return $user->hasRole(
-            'fleet_manager',
-            'dispatcher'
-        );
+        return $user->hasRole('dispatcher');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Update
+    |--------------------------------------------------------------------------
+    | Fleet Manager is monitoring only.
+    |--------------------------------------------------------------------------
+    */
     public function update(
         User $user,
         RoutePlan $routePlan
     ): bool {
-        return $user->hasRole(
-            'fleet_manager',
-            'dispatcher'
-        );
+        return $user->hasRole('dispatcher');
     }
 
-    public function delete(
+    /*
+    |--------------------------------------------------------------------------
+    | Archive
+    |--------------------------------------------------------------------------
+    */
+    public function archive(
         User $user,
         RoutePlan $routePlan
     ): bool {
@@ -77,11 +88,37 @@ class RoutePlanPolicy
         );
     }
 
-    public function deleteAny(User $user): bool
-    {
+    /*
+    |--------------------------------------------------------------------------
+    | Restore
+    |--------------------------------------------------------------------------
+    */
+    public function restore(
+        User $user,
+        RoutePlan $routePlan
+    ): bool {
         return $user->hasRole(
             'fleet_manager',
             'dispatcher'
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Delete
+    |--------------------------------------------------------------------------
+    | Route plans are intentionally non-deletable.
+    |--------------------------------------------------------------------------
+    */
+    public function delete(
+        User $user,
+        RoutePlan $routePlan
+    ): bool {
+        return false;
+    }
+
+    public function deleteAny(User $user): bool
+    {
+        return false;
     }
 }

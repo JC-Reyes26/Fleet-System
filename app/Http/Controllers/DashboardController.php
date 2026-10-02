@@ -67,6 +67,9 @@ class DashboardController extends Controller
             'canOpenDispatch' =>
                 $user->canViewModule('dispatch'),
 
+            'canOpenDrivers' =>
+                $user->canViewModule('drivers'),
+
             'canOpenMaintenance' =>
                 $user->canViewModule('maintenance'),
         ];

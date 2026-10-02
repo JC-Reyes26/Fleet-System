@@ -62,6 +62,30 @@
             </select>
           </div>
 
+          <!-- Request Type -->
+          <div class="form-group">
+              <label for="editMaintenanceRequestType">
+                  Request Type *
+              </label>
+
+              <select
+                  id="editMaintenanceRequestType"
+                  required
+              >
+                  <option value="">
+                      Select Request Type
+                  </option>
+
+                  <option value="Normal">
+                      Normal Maintenance
+                  </option>
+
+                  <option value="Emergency">
+                      Emergency Maintenance
+                  </option>
+              </select>
+          </div>
+
           <!-- Service Type -->
           <div class="form-group">
             <label for="editMaintenanceServiceType">

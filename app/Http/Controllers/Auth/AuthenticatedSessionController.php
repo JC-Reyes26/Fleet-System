@@ -63,6 +63,7 @@ class AuthenticatedSessionController extends Controller
         $request->session()->forget([
             'two_factor_user_id',
             'two_factor_remember',
+            'last_user_activity',
         ]);
 
         /*

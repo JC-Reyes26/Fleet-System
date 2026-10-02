@@ -56,6 +56,11 @@
         </div>
 
         <div class="view-maintenance-detail-item">
+          <label>Request Type</label>
+          <p id="viewMaintenanceRequestType"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
           <label>Technician / Workshop</label>
           <p id="viewMaintenanceTechnician"></p>
         </div>
@@ -98,10 +103,16 @@
         Close
       </button>
 
-      <button type="button" class="btn-primary" id="editMaintenanceFromViewBtn">
-        <i class="ph ph-pencil-simple"></i>
-        Edit Maintenance
-      </button>
+      @if($maintenancePermissions['canUpdate'] ?? false)
+          <button
+              type="button"
+              class="btn-primary"
+              id="editMaintenanceFromViewBtn"
+          >
+              <i class="ph ph-pencil-simple"></i>
+              Edit Maintenance
+          </button>
+      @endif
     </div>
   </div>
 </div>

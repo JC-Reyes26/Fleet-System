@@ -190,6 +190,7 @@
 }
 
 /* Tablet landscape and smaller: switch to an off-canvas navigation shell. */
+/*
 @media (max-width: 991px) {
   .main-content,
   .main-content.expanded,
@@ -198,6 +199,29 @@
     max-width: 100%;
     margin-left: 0;
   }
+*/
+@media (max-width: 991px) {
+    .app {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+    }
+
+    .main-content,
+    .main-content.expanded,
+    body.sidebar-collapsed .main-content {
+        display: flex;
+        flex-direction: column;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: none !important;
+        margin-left: 0 !important;
+    }
 
   .sidebar,
   body.sidebar-collapsed .sidebar {

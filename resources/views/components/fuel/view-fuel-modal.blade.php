@@ -95,10 +95,12 @@
 
     <div class="modal-footer">
       <button type="button" class="btn-outline" id="closeViewFuelBtn">Close</button>
-      <button type="button" class="btn-primary" id="editFuelFromViewBtn">
-        <i class="ph ph-pencil-simple"></i>
-        Edit Fuel Record
-      </button>
+      @if($fuelPermissions['canUpdate'] ?? false)
+        <button type="button" class="btn-primary" id="editFuelFromViewBtn">
+          <i class="ph ph-pencil-simple"></i>
+          Edit Fuel Record
+        </button>
+      @endif
     </div>
   </div>
 </div>

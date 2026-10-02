@@ -91,6 +91,58 @@
         </div>
       </div>
 
+      <div class="view-dispatch-assignment-section">
+        <div class="view-dispatch-section-header">
+            <h3>Assignment History</h3>
+            <p>
+                Original assignment, AI recommendation, and final reassignment.
+            </p>
+        </div>
+        <div class="view-dispatch-details">
+            <div class="view-dispatch-detail-item">
+                <label>Original Vehicle</label>
+                <p id="viewDispatchOriginalVehicle">
+                    Not reassigned
+                </p>
+            </div>
+
+            <div class="view-dispatch-detail-item">
+                <label>Original Driver</label>
+                <p id="viewDispatchOriginalDriver">
+                    Not reassigned
+                </p>
+            </div>
+
+            <div class="view-dispatch-detail-item">
+                <label>AI Recommended Vehicle</label>
+                <p id="viewDispatchRecommendedVehicle">
+                    No recommendation
+                </p>
+            </div>
+
+            <div class="view-dispatch-detail-item">
+                <label>AI Recommended Driver</label>
+                <p id="viewDispatchRecommendedDriver">
+                    No recommendation
+                </p>
+            </div>
+
+            <div class="view-dispatch-detail-item">
+                <label>Reassigned Vehicle</label>
+                <p id="viewDispatchReassignedVehicle">
+                    Not reassigned
+                </p>
+            </div>
+
+            <div class="view-dispatch-detail-item">
+                <label>Reassigned Driver</label>
+                <p id="viewDispatchReassignedDriver">
+                    Not reassigned
+                </p>
+            </div>
+        </div>
+    </div>
+
       <div class="view-dispatch-notes">
         <label>Notes</label>
         <p id="viewDispatchNotes"></p>

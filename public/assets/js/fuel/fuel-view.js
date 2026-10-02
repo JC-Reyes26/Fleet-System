@@ -185,28 +185,29 @@ function closeViewFuelModal() {
 
 async function openEditFuelFromView() {
     const modal = document.getElementById("viewFuelModal");
-
+    const canEdit = window.FLEET_RBAC?.fuel?.canUpdate === true;
+    if (!canEdit) {
+        showToast?.(
+            "You do not have permission to edit fuel records.",
+            "error",
+        );
+        return;
+    }
     const fuelId =
         viewFuelModalState.currentFuelId || modal?.dataset.fuelId || "";
-
     let row = viewFuelModalState.currentRow;
-
     if (!row || !document.body.contains(row)) {
         row = resolveFuelRowById(fuelId);
     }
     if (!row) {
         showToast?.("Fuel record is no longer available.", "error");
-
         return;
     }
     if (typeof openEditFuelModal !== "function") {
         console.error("openEditFuelModal is not available.");
-
         return;
     }
-
     closeViewFuelModal();
-
     openEditFuelModal(row);
 }
 

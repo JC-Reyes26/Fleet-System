@@ -63,17 +63,29 @@
                 </div>
               </div>
 
-              <div class="stat-card">
-                <div class="stat-icon danger">
-                  <i class="ph-fill ph-wrench"></i>
-                </div>
+              @if($vehiclePermissions['canOpenMaintenance'] ?? false)
+                  <a
+                      href="{{ route('maintenance') }}"
+                      class="stat-card stat-card-link"
+                  >
+              @else
+                  <div class="stat-card">
+              @endif
 
-                <div class="stat-content">
-                  <h3 id="maintenanceVehicles">0</h3>
+                  <div class="stat-icon danger">
+                      <i class="ph-fill ph-wrench"></i>
+                  </div>
 
-                  <p>Maintenance</p>
-                </div>
-              </div>
+                  <div class="stat-content">
+                      <h3 id="maintenanceVehicles">0</h3>
+                      <p>Maintenance</p>
+                  </div>
+
+              @if($vehiclePermissions['canOpenMaintenance'] ?? false)
+                  </a>
+              @else
+                  </div>
+              @endif
             </div>
 
               <!-- Toolbar -->

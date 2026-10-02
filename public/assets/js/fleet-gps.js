@@ -113,7 +113,12 @@
     }
 
     async function sendLocation(location) {
-        if (!FleetGPS.active || FleetGPS.sending || !location) {
+        if (
+            !FleetGPS.active ||
+            FleetGPS.sending ||
+            !location ||
+            !FleetGPS.vehicleId
+        ) {
             return;
         }
 
@@ -279,7 +284,9 @@
             const vehicleId = data.vehicle_id ?? null;
 
             if (!vehicleId) {
-                stop();
+                FleetGPS.vehicleId = null;
+                FleetGPS.dispatchId = null;
+                FleetGPS.dispatchStatus = null;
 
                 setStatus("no-vehicle", {
                     message: "No vehicle is currently assigned to this driver.",
@@ -380,15 +387,19 @@
             return false;
         }
 
-        await syncDriverContext();
-
-        if (!FleetGPS.vehicleId) {
-            return false;
-        }
-
+        /*
+         * Start GPS first.
+         * This allows the browser to request location permission
+         * even when the driver has no vehicle assigned yet.
+         */
         if (FleetGPS.watchId === null) {
             startWatcher();
         }
+
+        /*
+         * Sync vehicle and dispatch context separately.
+         */
+        await syncDriverContext();
 
         /*
          * Keep dispatch association synchronized.

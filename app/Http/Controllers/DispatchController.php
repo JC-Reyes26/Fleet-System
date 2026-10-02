@@ -156,8 +156,18 @@ class DispatchController extends Controller
             'reservation.vehicle',
             'reservation.driver',
             'reservation.routePlan.stops',
+
             'reassignments.requestedBy',
             'reassignments.reviewedBy',
+
+            'reassignments.originalVehicle',
+            'reassignments.originalDriver',
+
+            'reassignments.recommendedVehicle',
+            'reassignments.recommendedDriver',
+
+            'reassignments.newVehicle',
+            'reassignments.newDriver',
         ]);
 
         if ($request->boolean('show_archived')) {
@@ -609,6 +619,20 @@ class DispatchController extends Controller
 
         if (!empty($recommendation['recommended'])) {
             $recommended = $recommendation['recommended'];
+            /*
+            |--------------------------------------------------------------------------
+            | Persist AI Recommendation
+            |--------------------------------------------------------------------------
+            | Store the exact vehicle + driver recommended by the scoring engine.
+            | This allows the Dispatch View modal to show the recommendation later
+            | even after the reassignment request has already been approved.
+            */
+            $lockedReassignment->update([
+                'recommended_vehicle_id' =>
+                    $recommended['vehicle_id'] ?? null,
+                'recommended_driver_id' =>
+                    $recommended['driver_id'] ?? null,
+            ]);
 
             try {
                 $recommendation['gemini_explanation'] =
@@ -1347,19 +1371,18 @@ class DispatchController extends Controller
                         );
                     }
 
-                    return DispatchReassignment::create([
-                        'dispatch_id' =>
-                            $dispatch->id,
-
-                        'requested_by' =>
-                            $request->user()->id,
-
-                        'reason' =>
-                            $validator->validated()['reason'],
-
-                        'status' =>
-                            'Requested',
+                    $reassignment = DispatchReassignment::create([
+                        'dispatch_id' => $dispatch->id,
+                        'requested_by' => $request->user()->id,
+                        'reason' => $request->string('reason')->trim(),
+                        'status' => 'Requested',
+                        'original_vehicle_id' =>
+                            $dispatch->reservation->vehicle_id,
+                        'original_driver_id' =>
+                            $dispatch->reservation->driver_id,
                     ]);
+
+                    return $reassignment;
                 }
             );
 
@@ -1873,12 +1896,9 @@ class DispatchController extends Controller
                 $dispatch
             ) {
                 $dispatch = Dispatch::with([
-                    'reservation',
-                ])
-                    ->lockForUpdate()
-                    ->findOrFail(
-                        $dispatch->id
-                    );
+                    'reservation.vehicle',
+                    'reservation.driver',
+                ])->lockForUpdate()->findOrFail($dispatch->id);
 
                 $reservation =
                     $dispatch->reservation;
@@ -2480,12 +2500,14 @@ class DispatchController extends Controller
             $lockedReassignment->update([
                 'status' =>
                     'Approved',
-
                 'reviewed_by' =>
                     $request->user()->id,
-
                 'reviewed_at' =>
                     now(),
+                'new_vehicle_id' =>
+                    $newVehicle->id,
+                'new_driver_id' =>
+                    $newDriver->id,
             ]);
 
             /*
@@ -2747,9 +2769,9 @@ class DispatchController extends Controller
                 'dispatcher',
                 'fleet_manager',
             ],
-            title: 'Dispatch Reassignment Requested',
+            title: 'Dispatch Reassignment Rejected',
             message:
-                "A reassignment was requested for Dispatch {$dispatch->dispatch_number}.",
+                "The reassignment request for Dispatch {$dispatch->dispatch_number} was rejected.",
             default: true,
             link: route('dispatch'),
             excludeUserId: $request->user()->id
@@ -2760,17 +2782,19 @@ class DispatchController extends Controller
         | Notify Requesting Driver
         |--------------------------------------------------------------------------
         */
-        FleetNotificationService::createForUserWhenEnabled(
-            user: $request->user(),
-            settingKey: 'dispatchUpdates',
-            title: 'Reassignment Request Submitted',
-            message:
-                "Your reassignment request for Dispatch {$dispatch->dispatch_number} has been submitted for review.",
-            eventKey:
-                "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:requester:{$request->user()->id}",
-            default: true,
-            link: route('dispatch')
-        );
+        if ($requestingDriverUser) {
+            FleetNotificationService::createForUserWhenEnabled(
+                user: $requestingDriverUser,
+                settingKey: 'dispatchUpdates',
+                title: 'Reassignment Request Rejected',
+                message:
+                    "Your reassignment request for Dispatch {$dispatch->dispatch_number} was rejected.",
+                eventKey:
+                    "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:rejected:{$requestingDriverUser->id}",
+                default: true,
+                link: route('dispatch')
+            );
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -2801,8 +2825,18 @@ class DispatchController extends Controller
             'reservation.vehicle',
             'reservation.driver',
             'reservation.routePlan.stops',
+
             'reassignments.requestedBy',
             'reassignments.reviewedBy',
+
+            'reassignments.originalVehicle',
+            'reassignments.originalDriver',
+
+            'reassignments.recommendedVehicle',
+            'reassignments.recommendedDriver',
+
+            'reassignments.newVehicle',
+            'reassignments.newDriver',
         ]);
 
         $this->authorize('view', $dispatch);

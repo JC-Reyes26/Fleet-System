@@ -25,24 +25,40 @@
     |--------------------------------------------------------------------------
     */
     const reassignmentIdInput = document.getElementById("reviewReassignmentId");
-
     const dispatchNumberInput = document.getElementById("reviewDispatchNumber");
-
     const reservationNumberInput = document.getElementById(
         "reviewReservationNumber",
     );
-
     const currentDriverInput = document.getElementById("reviewCurrentDriver");
-
     const vehicleInput = document.getElementById("reviewVehicle");
-
     const reasonInput = document.getElementById("reviewReason");
-
     const newDriverSelect = document.getElementById("reviewNewDriver");
-
     const approveButton = document.getElementById("btnApproveReassignment");
-
     const rejectButton = document.getElementById("btnRejectReassignment");
+    /*
+    |--------------------------------------------------------------------------
+    | Action Confirmation Modal
+    |--------------------------------------------------------------------------
+    */
+    const actionConfirmModal = document.getElementById(
+        "dispatchActionConfirmModal",
+    );
+    const actionConfirmIcon = document.getElementById(
+        "dispatchActionConfirmIcon",
+    );
+    const actionConfirmTitle = document.getElementById(
+        "dispatchActionConfirmTitle",
+    );
+    const actionConfirmMessage = document.getElementById(
+        "dispatchActionConfirmMessage",
+    );
+    const actionConfirmCancel = document.getElementById(
+        "dispatchActionConfirmCancel",
+    );
+    const actionConfirmConfirm = document.getElementById(
+        "dispatchActionConfirmConfirm",
+    );
+    let pendingConfirmationAction = null;
 
     /*
     |--------------------------------------------------------------------------
@@ -50,29 +66,19 @@
     |--------------------------------------------------------------------------
     */
     const reviewAiPanel = document.getElementById("reviewAiRecommendation");
-
     const reviewAiLoading = document.getElementById("reviewAiLoading");
-
     const reviewAiScoreBadge = document.getElementById("reviewAiScoreBadge");
-
     const reviewAiVehicle = document.getElementById("reviewAiVehicle");
-
     const reviewAiDriver = document.getElementById("reviewAiDriver");
-
     const reviewAiDistance = document.getElementById("reviewAiDistance");
-
     const reviewAiEta = document.getElementById("reviewAiEta");
-
     const reviewAiTrafficDelay = document.getElementById(
         "reviewAiTrafficDelay",
     );
 
     const reviewAiTraffic = document.getElementById("reviewAiTraffic");
-
     const reviewAiGps = document.getElementById("reviewAiGps");
-
     const reviewAiReasons = document.getElementById("reviewAiReasons");
-
     const reviewAiMessage = document.getElementById("reviewAiMessage");
 
     /*
@@ -1885,7 +1891,88 @@
             }
         }
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Open Action Confirmation
+    |--------------------------------------------------------------------------
+    */
+    function openActionConfirmation({
+        type = "approve",
+        title,
+        message,
+        confirmLabel,
+    }) {
+        if (
+            !actionConfirmModal ||
+            !actionConfirmIcon ||
+            !actionConfirmTitle ||
+            !actionConfirmMessage ||
+            !actionConfirmConfirm
+        ) {
+            console.error(
+                "Dispatch action confirmation modal elements were not found.",
+            );
+            return false;
+        }
+        pendingConfirmationAction = type;
+        actionConfirmTitle.textContent =
+            title || "Confirm Action";
+        actionConfirmMessage.textContent =
+            message ||
+            "Are you sure you want to continue?";
+        actionConfirmIcon.classList.remove(
+            "dispatch-confirm-icon-approve",
+            "dispatch-confirm-icon-reject",
+        );
+        if (type === "reject") {
+            actionConfirmIcon.classList.add(
+                "dispatch-confirm-icon-reject",
+            );
+            actionConfirmIcon.innerHTML =
+                '<i class="ph-fill ph-warning-circle"></i>';
+            actionConfirmConfirm.className =
+                "btn-danger";
+            actionConfirmConfirm.innerHTML = `
+                <i class="ph ph-x-circle"></i>
+                <span>
+                    ${escapeHtml(confirmLabel || "Reject")}
+                </span>
+            `;
+        } else {
+            actionConfirmIcon.classList.add(
+                "dispatch-confirm-icon-approve",
+            );
 
+            actionConfirmIcon.innerHTML =
+                '<i class="ph-fill ph-warning-circle"></i>';
+
+            actionConfirmConfirm.className =
+                "btn-primary";
+
+            actionConfirmConfirm.innerHTML = `
+                <i class="ph ph-check-circle"></i>
+                <span>
+                    ${escapeHtml(confirmLabel || "Approve")}
+                </span>
+            `;
+        }
+
+        actionConfirmModal.classList.add("show");
+
+        return true;
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Close Action Confirmation
+    |--------------------------------------------------------------------------
+    */
+    function closeActionConfirmation() {
+        if (!actionConfirmModal) {
+            return;
+        }
+        actionConfirmModal.classList.remove("show");
+        pendingConfirmationAction = null;
+    }
     /*
     |--------------------------------------------------------------------------
     | Approve Reassignment
@@ -1900,29 +1987,15 @@
 
             return;
         }
-
-        const selectedOption = newDriverSelect?.selectedOptions?.[0];
-        const newDriverId = selectedOption?.dataset?.driverId || "";
-        const newVehicleId = selectedOption?.dataset?.vehicleId || "";
-
-        if (!newVehicleId || !newDriverId) {
-            showMessage(
-                "Please select a vehicle and driver combination.",
-                "error",
-            );
+        const newDriverId = newDriverSelect?.value || "";
+        if (!newDriverId) {
+            showMessage("Please select a replacement driver.", "error");
             return;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent Same Driver
-        |--------------------------------------------------------------------------
-        */
         const currentDriverId =
             currentDispatch?.reservation?.driver_id ||
             currentDispatch?.reservation?.driver?.id ||
             null;
-
         if (
             currentDriverId &&
             Number(newDriverId) === Number(currentDriverId)
@@ -1934,69 +2007,96 @@
 
             return;
         }
+        openActionConfirmation({
+            type: "approve",
+            title: "Approve Reassignment?",
+            message:
+                "Approve this reassignment and assign the selected vehicle and driver?",
+            confirmLabel: "Approve",
+        });
+    }
 
-        const confirmed = window.confirm(
-            "Approve this reassignment and assign the selected vehicle and driver?",
-        );
+    /*
+    |--------------------------------------------------------------------------
+    | Submit Approve Reassignment
+    |--------------------------------------------------------------------------
+    */
+    async function submitApproveReassignment() {
+        if (!currentReassignment) {
+            showMessage(
+                "No reassignment request is currently selected.",
+                "error",
+            );
 
-        if (!confirmed) {
             return;
         }
-
-        setLoading(approveButton, true, "Approving...");
-
+        const selectedOption = newDriverSelect?.selectedOptions?.[0] || null;
+        const newVehicleId = selectedOption?.dataset?.vehicleId || "";
+        const newDriverId = selectedOption?.dataset?.driverId || "";
+        if (!newVehicleId || !newDriverId) {
+            showMessage(
+                "Please select a replacement vehicle and driver combination.",
+                "error",
+            );
+            return;
+        }
+        closeActionConfirmation();
+        setLoading(
+            approveButton,
+            true,
+            "Approving...",
+        );
         try {
             const response = await fetch(
                 `/dispatch/reassignments/${currentReassignment.id}/approve`,
                 {
                     method: "POST",
-
                     headers: {
                         "Content-Type": "application/json",
-
                         Accept: "application/json",
-
                         "X-Requested-With": "XMLHttpRequest",
-
                         "X-CSRF-TOKEN": getCsrfToken(),
                     },
-
                     credentials: "same-origin",
-
                     body: JSON.stringify({
                         new_vehicle_id: Number(newVehicleId),
                         new_driver_id: Number(newDriverId),
                     }),
                 },
             );
-
-            const payload = await response.json().catch(() => ({}));
-
+            const payload =
+                await response
+                    .json()
+                    .catch(() => ({}));
             if (!response.ok) {
                 throw new Error(
-                    payload?.message || "Unable to approve reassignment.",
+                    payload?.message ||
+                        "Unable to approve reassignment.",
                 );
             }
-
             modal.hide();
-
             showMessage(
-                payload?.message || "Reassignment request approved.",
+                payload?.message ||
+                    "Reassignment request approved.",
                 "success",
             );
-
             setTimeout(() => {
                 window.location.reload();
             }, 700);
         } catch (error) {
-            console.error("Approve reassignment error:", error);
-
+            console.error(
+                "Approve reassignment error:",
+                error,
+            );
             showMessage(
-                error?.message || "Unable to approve reassignment.",
+                error?.message ||
+                    "Unable to approve reassignment.",
                 "error",
             );
-
-            setLoading(approveButton, false);
+            setLoading(
+                approveButton,
+                false,
+            );
         }
     }
 
@@ -2014,60 +2114,83 @@
 
             return;
         }
-
-        const confirmed = window.confirm("Reject this reassignment request?");
-
-        if (!confirmed) {
+        openActionConfirmation({
+            type: "reject",
+            title: "Reject Reassignment?",
+            message:
+                "Are you sure you want to reject this reassignment request?",
+            confirmLabel: "Reject",
+        });
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Submit Reject Reassignment
+    |--------------------------------------------------------------------------
+    */
+    async function submitRejectReassignment() {
+        if (!currentReassignment) {
+            showMessage(
+                "No reassignment request is currently selected.",
+                "error",
+            );
             return;
         }
-
-        setLoading(rejectButton, true, "Rejecting...");
-
+        closeActionConfirmation();
+        setLoading(
+            rejectButton,
+            true,
+            "Rejecting...",
+        );
         try {
             const response = await fetch(
                 `/dispatch/reassignments/${currentReassignment.id}/reject`,
                 {
                     method: "POST",
-
                     headers: {
-                        Accept: "application/json",
-
-                        "X-Requested-With": "XMLHttpRequest",
-
-                        "X-CSRF-TOKEN": getCsrfToken(),
+                        Accept:
+                            "application/json",
+                        "X-Requested-With":
+                            "XMLHttpRequest",
+                        "X-CSRF-TOKEN":
+                            getCsrfToken(),
                     },
-
-                    credentials: "same-origin",
+                    credentials:
+                        "same-origin",
                 },
             );
-
-            const payload = await response.json().catch(() => ({}));
-
+            const payload =
+                await response
+                    .json()
+                    .catch(() => ({}));
             if (!response.ok) {
                 throw new Error(
-                    payload?.message || "Unable to reject reassignment.",
+                    payload?.message ||
+                        "Unable to reject reassignment.",
                 );
             }
-
             modal.hide();
-
             showMessage(
-                payload?.message || "Reassignment request rejected.",
+                payload?.message ||
+                    "Reassignment request rejected.",
                 "success",
             );
-
             setTimeout(() => {
                 window.location.reload();
             }, 700);
         } catch (error) {
-            console.error("Reject reassignment error:", error);
-
+            console.error(
+                "Reject reassignment error:",
+                error,
+            );
             showMessage(
-                error?.message || "Unable to reject reassignment.",
+                error?.message ||
+                    "Unable to reject reassignment.",
                 "error",
             );
-
-            setLoading(rejectButton, false);
+            setLoading(
+                rejectButton,
+                false,
+            );
         }
     }
 
@@ -2082,17 +2205,12 @@
         if (!reviewButton) {
             return;
         }
-
         const reassignmentId = reviewButton.dataset.id;
-
         const dispatchId = reviewButton.dataset.dispatchId;
-
         if (!reassignmentId || !dispatchId) {
             showMessage("Invalid reassignment request.", "error");
-
             return;
         }
-
         openReview(reassignmentId, dispatchId);
     });
 
@@ -2104,7 +2222,6 @@
     if (approveButton) {
         approveButton.addEventListener("click", approveReassignment);
     }
-
     /*
     |--------------------------------------------------------------------------
     | Reject Button
@@ -2113,7 +2230,6 @@
     if (rejectButton) {
         rejectButton.addEventListener("click", rejectReassignment);
     }
-
     /*
     |--------------------------------------------------------------------------
     | Use Recommendation
@@ -2125,7 +2241,6 @@
             useReviewAiRecommendation,
         );
     }
-
     /*
     |--------------------------------------------------------------------------
     | Score Breakdown Toggle
@@ -2134,20 +2249,16 @@
     if (toggleReviewAiScoreBreakdown && reviewAiScoreBreakdown) {
         toggleReviewAiScoreBreakdown.addEventListener("click", function () {
             const isHidden = reviewAiScoreBreakdown.hidden;
-
             reviewAiScoreBreakdown.hidden = !isHidden;
-
             toggleReviewAiScoreBreakdown.setAttribute(
                 "aria-expanded",
                 String(isHidden),
             );
-
             toggleReviewAiScoreBreakdown.innerHTML = isHidden
                 ? '<i class="ph ph-chart-bar"></i> Hide Score Breakdown'
                 : '<i class="ph ph-chart-bar"></i> View Score Breakdown';
         });
     }
-
     /*
     |--------------------------------------------------------------------------
     | Driver Selection Change
@@ -2163,7 +2274,57 @@
             }
         });
     }
-
+    /*
+    |--------------------------------------------------------------------------
+    | Confirmation Cancel
+    |--------------------------------------------------------------------------
+    */
+    if (actionConfirmCancel) {
+        actionConfirmCancel.addEventListener(
+            "click",
+            closeActionConfirmation,
+        );
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Confirmation Confirm
+    |--------------------------------------------------------------------------
+    */
+    if (actionConfirmConfirm) {
+        actionConfirmConfirm.addEventListener(
+            "click",
+            async () => {
+                if (
+                    pendingConfirmationAction ===
+                    "approve"
+                ) {
+                    await submitApproveReassignment();
+                    return;
+                }
+                if (
+                    pendingConfirmationAction ===
+                    "reject"
+                ) {
+                    await submitRejectReassignment();
+                }
+            },
+        );
+    }
+    if (actionConfirmModal) {
+        actionConfirmModal.addEventListener("click", (event) => {
+            if (event.target === actionConfirmModal) {
+                closeActionConfirmation();
+            }
+        });
+    }
+    document.addEventListener("keydown", (event) => {
+        if (
+            event.key === "Escape" &&
+            actionConfirmModal?.classList.contains("show")
+        ) {
+            closeActionConfirmation();
+        }
+    });
     /*
     |--------------------------------------------------------------------------
     | Modal Hidden

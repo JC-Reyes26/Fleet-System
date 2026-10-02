@@ -554,3 +554,69 @@
         </div>
     </div>
 </div>
+
+
+<!-- ========================================================= -->
+<!-- REASSIGNMENT ACTION CONFIRMATION MODAL -->
+<!-- ========================================================= -->
+
+<!-- ========================================================= -->
+<!-- REASSIGNMENT ACTION CONFIRMATION MODAL -->
+<!-- Same visual pattern as Delete Modal -->
+<!-- ========================================================= -->
+
+<div
+    id="dispatchActionConfirmModal"
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="dispatchActionConfirmTitle"
+    aria-describedby="dispatchActionConfirmMessage"
+>
+    <div class="custom-modal delete-modal dispatch-confirm-modal">
+        <div
+            id="dispatchActionConfirmIcon"
+            class="delete-icon dispatch-confirm-icon-approve"
+            aria-hidden="true"
+        >
+            <i class="ph-fill ph-warning-circle"></i>
+        </div>
+
+        <h2 id="dispatchActionConfirmTitle">
+            Approve Reassignment?
+        </h2>
+
+        <p id="dispatchActionConfirmMessage">
+            Approve this reassignment and assign the selected vehicle
+            and driver?
+        </p>
+
+        <p
+            id="dispatchActionConfirmNote"
+            class="delete-note"
+        >
+            Please review the selected vehicle and driver before continuing.
+        </p>
+
+        <div class="modal-footer">
+
+            <button
+                type="button"
+                class="btn-outline"
+                id="dispatchActionConfirmCancel"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                class="btn-primary"
+                id="dispatchActionConfirmConfirm"
+            >
+                <i class="ph ph-check-circle"></i>
+                <span>Approve</span>
+            </button>
+
+        </div>
+    </div>
+</div>

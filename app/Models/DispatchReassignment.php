@@ -12,6 +12,16 @@ class DispatchReassignment extends Model
         'requested_by',
         'reason',
         'status',
+
+        'original_vehicle_id',
+        'original_driver_id',
+
+        'recommended_vehicle_id',
+        'recommended_driver_id',
+
+        'new_vehicle_id',
+        'new_driver_id',
+
         'reviewed_by',
         'reviewed_at',
     ];
@@ -33,5 +43,35 @@ class DispatchReassignment extends Model
     public function reviewedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function originalVehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'original_vehicle_id');
+    }
+
+    public function originalDriver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class, 'original_driver_id');
+    }
+
+    public function recommendedVehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'recommended_vehicle_id');
+    }
+
+    public function recommendedDriver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class, 'recommended_driver_id');
+    }
+
+    public function newVehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'new_vehicle_id');
+    }
+
+    public function newDriver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class, 'new_driver_id');
     }
 }

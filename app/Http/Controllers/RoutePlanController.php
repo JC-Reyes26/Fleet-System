@@ -161,7 +161,6 @@ class RoutePlanController extends Controller
                 ),
             'canUpdate' =>
                 $user->hasRole(
-                    'fleet_manager',
                     'dispatcher'
                 ),
             'canArchive' =>
@@ -176,7 +175,6 @@ class RoutePlanController extends Controller
                 ),
             'canDuplicate' =>
                 $user->hasRole(
-                    'fleet_manager',
                     'dispatcher'
                 ),
         ];
@@ -996,7 +994,7 @@ class RoutePlanController extends Controller
      */
     public function archive(RoutePlan $routePlan)
     {
-        $this->authorize('update', $routePlan);
+       $this->authorize('archive', $routePlan);
 
         $routePlan->load([
             'reservation.dispatch',
@@ -1068,7 +1066,7 @@ class RoutePlanController extends Controller
      */
     public function restore(RoutePlan $routePlan)
     {
-        $this->authorize('update', $routePlan);
+        $this->authorize('restore', $routePlan);
 
         $routePlan->load([
             'reservation.dispatch',

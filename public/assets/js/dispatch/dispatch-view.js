@@ -146,6 +146,27 @@ async function loadViewDispatch(dispatchId) {
         const routePlan = getViewDispatchRoutePlan(reservation);
         const vehicle = reservation.vehicle || null;
         const driver = reservation.driver || null;
+        /*
+        |--------------------------------------------------------------------------
+        | Reassignment History
+        |--------------------------------------------------------------------------
+        */
+        const reassignments = Array.isArray(dispatch.reassignments)
+            ? dispatch.reassignments
+            : [];
+        const latestApprovedReassignment =
+            [...reassignments]
+                .filter(
+                    (item) =>
+                        String(item?.status || "")
+                            .trim()
+                            .toLowerCase() === "approved",
+                )
+                .sort((a, b) => {
+                    const aId = Number(a?.id || 0);
+                    const bId = Number(b?.id || 0);
+                    return bId - aId;
+                })[0] || null;
 
         setViewDispatchValue(
             "viewDispatchNumber",
@@ -176,6 +197,52 @@ async function loadViewDispatch(dispatchId) {
             "viewDispatchDriver",
             formatViewDriver(driver),
             "Unassigned",
+        );
+        /*
+        |--------------------------------------------------------------------------
+        | Assignment History Display
+        |--------------------------------------------------------------------------
+        */
+        const originalVehicle =
+            latestApprovedReassignment?.original_vehicle || null;
+        const originalDriver =
+            latestApprovedReassignment?.original_driver || null;
+        const recommendedVehicle =
+            latestApprovedReassignment?.recommended_vehicle || null;
+        const recommendedDriver =
+            latestApprovedReassignment?.recommended_driver || null;
+        const reassignedVehicle =
+            latestApprovedReassignment?.new_vehicle || null;
+        const reassignedDriver = latestApprovedReassignment?.new_driver || null;
+        setViewDispatchValue(
+            "viewDispatchOriginalVehicle",
+            originalVehicle ? formatViewVehicle(originalVehicle) : null,
+            "Not reassigned",
+        );
+        setViewDispatchValue(
+            "viewDispatchOriginalDriver",
+            originalDriver ? formatViewDriver(originalDriver) : null,
+            "Not reassigned",
+        );
+        setViewDispatchValue(
+            "viewDispatchRecommendedVehicle",
+            recommendedVehicle ? formatViewVehicle(recommendedVehicle) : null,
+            "No recommendation",
+        );
+        setViewDispatchValue(
+            "viewDispatchRecommendedDriver",
+            recommendedDriver ? formatViewDriver(recommendedDriver) : null,
+            "No recommendation",
+        );
+        setViewDispatchValue(
+            "viewDispatchReassignedVehicle",
+            reassignedVehicle ? formatViewVehicle(reassignedVehicle) : null,
+            "Not reassigned",
+        );
+        setViewDispatchValue(
+            "viewDispatchReassignedDriver",
+            reassignedDriver ? formatViewDriver(reassignedDriver) : null,
+            "Not reassigned",
         );
         setViewDispatchValue(
             "viewDispatchPickup",
@@ -220,10 +287,14 @@ async function loadViewDispatch(dispatchId) {
         }
         const editButton = document.getElementById("editDispatchFromViewBtn");
         if (editButton) {
+            const canEdit =
+                window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") ===
+                true;
             const finalStatus = ["Completed", "Cancelled"].includes(
                 dispatch.trip_status,
             );
-            editButton.disabled = finalStatus;
+            editButton.hidden = !canEdit;
+            editButton.disabled = canEdit && finalStatus;
             editButton.title = finalStatus
                 ? "This dispatch can no longer be edited."
                 : "Edit Dispatch";
@@ -274,7 +345,11 @@ function initViewDispatchModal() {
     const editFromViewButton = document.getElementById(
         "editDispatchFromViewBtn",
     );
+
     if (editFromViewButton) {
+        const canEdit =
+            window.FleetRBAC?.hasPermission?.("dispatch", "canUpdate") === true;
+        editFromViewButton.hidden = !canEdit;
         editFromViewButton.addEventListener("click", async () => {
             const viewModal = document.getElementById("viewDispatchModal");
             const editModal = document.getElementById("editDispatchModal");

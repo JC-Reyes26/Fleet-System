@@ -338,6 +338,10 @@
 
     @include('components.dispatch.view-dispatch-modal')
 
+    @if($dispatchPermissions['canUpdate'] ?? false)
+        @include('components.dispatch.edit-dispatch-modal')
+    @endif
+
     @if($dispatchPermissions['role'] === 'driver')
         @include('components.dispatch.request-reassignment-modal')
     @endif
@@ -377,7 +381,7 @@
     <script src="{{ asset('assets/js/dispatch/dispatch-modal.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-add.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-view.js') }}"></script>
-    //<script src="{{ asset('assets/js/dispatch/dispatch-edit.js') }}"></script>
+    <script src="{{ asset('assets/js/dispatch/dispatch-edit.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-delete.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-filter.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-table.js') }}"></script>
