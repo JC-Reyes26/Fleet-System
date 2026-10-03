@@ -385,8 +385,33 @@ async function initEditReservationModal() {
         loadEditReservationOptions(vehicleId);
     }
 
-    setValue("editReservationPickup", getRowText(row, ".reservation-pickup"));
-    setValue("editReservationDestination", getRowText(row, ".reservation-destination"));
+    const pickupInput = document.getElementById("editReservationPickup");
+    const destinationInput = document.getElementById(
+        "editReservationDestination",
+    );
+
+    if (pickupInput) {
+        pickupInput.value = getRowText(row, ".reservation-pickup");
+        const pickupHospitalId = getRowData(row, "pickupHospitalId");
+        if (pickupHospitalId) {
+            pickupInput.dataset.facilityId = pickupHospitalId;
+        } else {
+            delete pickupInput.dataset.facilityId;
+            delete pickupInput.dataset.latitude;
+            delete pickupInput.dataset.longitude;
+        }
+    }
+    if (destinationInput) {
+        destinationInput.value = getRowText(row, ".reservation-destination");
+        const destinationHospitalId = getRowData(row, "destinationHospitalId");
+        if (destinationHospitalId) {
+            destinationInput.dataset.facilityId = destinationHospitalId;
+        } else {
+            delete destinationInput.dataset.facilityId;
+            delete destinationInput.dataset.latitude;
+            delete destinationInput.dataset.longitude;
+        }
+    }
     setValue("editReservationDate", getRowData(row, "scheduleDate"));
     setValue("editReservationTime", getRowData(row, "scheduleTime"));
     setValue("editReservationPriority", getRowData(row, "priority"));
@@ -670,7 +695,10 @@ async function initEditReservationModal() {
           patient_name: reservationPatient.value.trim(),
           request_type: reservationType.value,
           pickup_location: reservationPickup.value.trim(),
+          pickup_hospital_id: reservationPickup.dataset.facilityId || null,
           destination: reservationDestination.value.trim(),
+          destination_hospital_id:
+              reservationDestination.dataset.facilityId || null,
           schedule_date: reservationDate.value,
           schedule_time: reservationTime.value,
           priority: reservationPriority.value,

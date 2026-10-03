@@ -268,6 +268,16 @@ function normalizeRouteApiRecord(raw, index = 0) {
     const reservation = raw.reservation || null;
     const vehicle = reservation?.vehicle || null;
     const driver = reservation?.driver || null;
+    const pickupHospital =
+        reservation?.pickup_hospital || reservation?.pickupHospital || null;
+    const destinationHospital =
+        reservation?.destination_hospital ||
+        reservation?.destinationHospital ||
+        null;
+    const routeOrigin = String(pickupHospital?.name || raw.origin || "").trim();
+    const routeDestination = String(
+        destinationHospital?.name || raw.destination || "",
+    ).trim();
     const estimatedMinutes =
         raw.estimated_time === null || raw.estimated_time === undefined
             ? null
@@ -336,7 +346,7 @@ function normalizeRouteApiRecord(raw, index = 0) {
     | Route Information
     |--------------------------------------------------------------------------
     */
-        origin: String(raw.origin || "").trim(),
+        origin: routeOrigin,
         originLatitude:
             raw.origin_latitude === null ||
             raw.origin_latitude === undefined ||
@@ -349,7 +359,7 @@ function normalizeRouteApiRecord(raw, index = 0) {
             raw.origin_longitude === ""
                 ? null
                 : Number(raw.origin_longitude),
-        destination: String(raw.destination || "").trim(),
+        destination: routeDestination,
         destinationLatitude:
             raw.destination_latitude === null ||
             raw.destination_latitude === undefined ||

@@ -567,7 +567,7 @@
                 </div>
                 <div class="form-group">
                   <label for="routePriority">Priority *</label>
-                  <select id="routePriority" required>
+                  <select id="routePriority" readonly>
                     <option value="Low">Low</option>
                     <option value="Normal" selected>Normal</option>
                     <option value="High">High</option>

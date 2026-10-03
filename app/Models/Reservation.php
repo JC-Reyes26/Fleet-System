@@ -10,6 +10,7 @@ use App\Models\Dispatch;
 use App\Models\RoutePlan;
 use App\Models\User;
 use App\Models\Shipment;
+use App\Models\HospitalFacility;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -27,7 +28,9 @@ class Reservation extends Model
         'vehicle_id',
         'driver_id',
         'pickup_location',
+        'pickup_hospital_id',
         'destination',
+        'destination_hospital_id',
         'schedule_date',
         'schedule_time',
         'priority',
@@ -82,5 +85,21 @@ class Reservation extends Model
     public function shipment(): BelongsTo
     {
         return $this->belongsTo(Shipment::class);
+    }
+
+    public function pickupHospital(): BelongsTo
+    {
+        return $this->belongsTo(
+            HospitalFacility::class,
+            'pickup_hospital_id'
+        );
+    }
+
+    public function destinationHospital(): BelongsTo
+    {
+        return $this->belongsTo(
+            HospitalFacility::class,
+            'destination_hospital_id'
+        );
     }
 }

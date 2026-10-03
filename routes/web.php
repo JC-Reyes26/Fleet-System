@@ -21,6 +21,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserAccountController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\VehicleTrackingController;
+use App\Http\Controllers\HospitalFacilityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -803,4 +804,12 @@ Route::middleware([
     ])
         ->name('tracking.active-dispatch');
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | HOSPITAL FACILITIES
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/hospital-facilities/search', [HospitalFacilityController::class, 'search'])
+        ->name('hospital-facilities.search');
 });

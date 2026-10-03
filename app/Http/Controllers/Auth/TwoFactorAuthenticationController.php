@@ -104,22 +104,52 @@ class TwoFactorAuthenticationController extends Controller
          * Complete authentication only after
          * successful 2FA verification.
          */
-        Auth::login(
+        /*
+        |--------------------------------------------------------------------------
+        | Complete authentication after successful 2FA
+        |--------------------------------------------------------------------------
+        */
+        Auth::guard('web')->login(
             $user,
             session('two_factor_remember', false)
         );
 
-        $request
-            ->session()
-            ->regenerate();
+        /*
+        |--------------------------------------------------------------------------
+        | Rotate the session ID after authentication
+        |--------------------------------------------------------------------------
+        */
+        $request->session()->regenerate();
 
         /*
-         * Remove pending 2FA state.
-         */
+        |--------------------------------------------------------------------------
+        | Initialize authenticated-session activity immediately
+        |--------------------------------------------------------------------------
+        | This prevents the first authenticated Fleet request from being
+        | responsible for creating the initial activity timestamp.
+        |--------------------------------------------------------------------------
+        */
+        $request->session()->put(
+            'last_user_activity',
+            now()->timestamp
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Remove pending 2FA state
+        |--------------------------------------------------------------------------
+        */
         $request->session()->forget([
             'two_factor_user_id',
             'two_factor_remember',
         ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Explicitly persist the completed authenticated session
+        |--------------------------------------------------------------------------
+        */
+        $request->session()->save();
 
         /*
          * Update last login only after the

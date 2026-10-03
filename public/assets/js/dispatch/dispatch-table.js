@@ -511,6 +511,17 @@ function renderDispatchTable(dispatches) {
                                     ? `
                                         <button
                                             type="button"
+                                            class="action-btn accept-dispatch"
+                                            data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            data-dispatch-number="${escapeDispatchHtml(dispatch.dispatch_number || "")}"
+                                            aria-label="Accept ${safeDispatchNumber}"
+                                            title="Accept Dispatch"
+                                        >
+                                            <i class="ph ph-check"></i>
+                                        </button>
+
+                                        <button
+                                            type="button"
                                             class="action-btn request-reassignment"
                                             data-id="${escapeDispatchHtml(dispatch.id)}"
                                             aria-label="Request reassignment for ${safeDispatchNumber}"

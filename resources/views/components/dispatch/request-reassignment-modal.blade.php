@@ -83,3 +83,47 @@
         </div>
     </div>
 </div>
+
+
+<div
+    id="acceptDispatchModal"
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="acceptDispatchModalTitle"
+    aria-describedby="acceptDispatchModalDescription"
+    hidden
+>
+    <div class="custom-modal delete-modal accept-dispatch-modal">
+        <div class="delete-icon">
+            <i class="ph-fill ph-check-circle"></i>
+        </div>
+        <h2 id="acceptDispatchModalTitle">
+            Accept Dispatch
+        </h2>
+        <p id="acceptDispatchModalDescription">
+            Are you sure you want to accept
+            <strong id="acceptDispatchName">this dispatch</strong>?
+        </p>
+        <p class="delete-note" id="acceptDispatchMessageText">
+            Once accepted, the dispatch status will be updated to Assigned.
+        </p>
+        <div class="modal-footer">
+            <button
+                type="button"
+                class="btn-outline"
+                id="cancelAcceptDispatch"
+            >
+                Cancel
+            </button>
+            <button
+                type="button"
+                class="btn-success"
+                id="confirmAcceptDispatch"
+            >
+                <i class="ph ph-check"></i>
+                Accept Dispatch
+            </button>
+        </div>
+    </div>
+</div>

@@ -528,9 +528,15 @@ async function initReservationAdd() {
             pickup_location: document
                 .getElementById("reservationPickup")
                 .value.trim(),
+            pickup_hospital_id:
+                document.getElementById("reservationPickup")?.dataset
+                    .facilityId || null,
             destination: document
                 .getElementById("reservationDestination")
                 .value.trim(),
+            destination_hospital_id:
+                document.getElementById("reservationDestination")?.dataset
+                    .facilityId || null,
             schedule_date: document.getElementById("reservationDate").value,
             schedule_time: document.getElementById("reservationTime").value,
             priority: document.getElementById("reservationPriority").value,
@@ -589,12 +595,6 @@ async function initReservationAdd() {
             }
 
             if (data.success) {
-                // Emergency Transfer goes directly to Route Planning
-                if (isEmergencyTransferReservation()) {
-                    window.location.href = "/route-planning";
-                    return;
-                }
-
                 // Normal reservations stay on Reservation page
                 await loadReservations();
 
@@ -679,6 +679,9 @@ function setupFacilityAutocomplete(
         return;
     }
     input.addEventListener("input", () => {
+        delete input.dataset.facilityId;
+        delete input.dataset.latitude;
+        delete input.dataset.longitude;
         if (
             document.getElementById(requestTypeId)?.value === "Supply Delivery"
         ) {
@@ -758,32 +761,23 @@ async function loadFacilitySuggestions(search, input, suggestions) {
             .map((facility) => {
                 const name = escapeFacilityHtml(facility.name ?? "");
                 const address = escapeFacilityHtml(facility.address ?? "");
-                const value = escapeFacilityHtml(
-                    [facility.name, facility.address]
-                        .filter(Boolean)
-                        .join(", "),
-                );
-
-                const latitude =
-                    facility.latitude !== null &&
-                    facility.latitude !== undefined
-                        ? facility.latitude
-                        : "";
-                const longitude =
-                    facility.longitude !== null &&
-                    facility.longitude !== undefined
-                        ? facility.longitude
-                        : "";
+                /*
+                |--------------------------------------------------------------------------
+                | Selected value
+                |--------------------------------------------------------------------------
+                | The search result displays Name + Address,
+                | but the actual Reservation field stores Name only.
+                |--------------------------------------------------------------------------
+                */
+                const value = escapeFacilityHtml(facility.name ?? "");
                 const facilityId = facility.id ?? "";
                 
                 return `
-                        <div
-                            class="facility-suggestion-item"
-                            data-id="${escapeFacilityHtml(facilityId)}"
-                            data-value="${value}"
-                            data-latitude="${escapeFacilityHtml(latitude)}"
-                            data-longitude="${escapeFacilityHtml(longitude)}"
-                        >
+                    <div
+                        class="facility-suggestion-item"
+                        data-id="${escapeFacilityHtml(facilityId)}"
+                        data-value="${value}"
+                    >
                         <div class="facility-suggestion-name">
                             ${name}
                         </div>
@@ -800,10 +794,28 @@ async function loadFacilitySuggestions(search, input, suggestions) {
             .querySelectorAll(".facility-suggestion-item")
             .forEach((item) => {
                 item.addEventListener("click", () => {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Reservation stores hospital/facility name only.
+                    |--------------------------------------------------------------------------
+                    */
                     input.value = item.dataset.value || "";
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Preserve the exact HospitalFacility record.
+                    |--------------------------------------------------------------------------
+                    */
                     input.dataset.facilityId = item.dataset.id || "";
-                    input.dataset.latitude = item.dataset.latitude || "";
-                    input.dataset.longitude = item.dataset.longitude || "";
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Do not store/use coordinates in Reservation autocomplete.
+                    |--------------------------------------------------------------------------
+                    */
+                    delete input.dataset.latitude;
+                    delete input.dataset.longitude;
+
                     suggestions.innerHTML = "";
                     suggestions.hidden = true;
                 });

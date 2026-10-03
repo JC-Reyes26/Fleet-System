@@ -944,40 +944,115 @@ async function geocodeRouteLocation(address) {
     if (cache[cacheKey]) {
         return cache[cacheKey];
     }
-    await waitForRouteGeocoderSlot();
     /*
     |--------------------------------------------------------------------------
-    | Add Philippines to improve local matching
+    | Geocoding Query Candidates
+    |--------------------------------------------------------------------------
+    |
+    | The saved RoutePlan value remains NAME ONLY.
+    |
+    | We only use temporary fallback search terms when the exact
+    | hospital name is not indexed by the geocoder.
+    |
+    */
+    const queryCandidates = [normalized];
+    const normalizedLower = normalized.toLowerCase();
+    /*
+    |--------------------------------------------------------------------------
+    | Dr. Jose N. Rodriguez Memorial Hospital and Sanitarium
+    |--------------------------------------------------------------------------
+    |
+    | Some geocoders may index the shorter hospital name or its
+    | commonly used Tala Hospital name instead of the full current name.
+    |
+    */
+    if (
+        normalizedLower ===
+            "dr. jose n. rodriguez memorial hospital and sanitarium" ||
+        normalizedLower.includes(
+            "dr. jose n. rodriguez memorial hospital and sanitarium",
+        )
+    ) {
+        queryCandidates.push(
+            "Dr. Jose N. Rodriguez Memorial Hospital",
+            "Tala Hospital",
+            "Tala Hospital, Caloocan City",
+        );
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Remove duplicate search candidates
     |--------------------------------------------------------------------------
     */
-    const query = encodeURIComponent(`${normalized}, Philippines`);
-    const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ph&q=${query}`,
-        {
-            method: "GET",
-            headers: {
-                Accept: "application/json",
-            },
-        },
-    );
-    if (!response.ok) {
-        throw new Error("Unable to search the route location.");
+    const uniqueQueries = [
+        ...new Set(
+            queryCandidates
+                .map((query) => String(query || "").trim())
+                .filter(Boolean),
+        ),
+    ];
+    let lastError = null;
+    for (const searchValue of uniqueQueries) {
+        try {
+            const searchCacheKey = searchValue.toLowerCase();
+            if (cache[searchCacheKey]) {
+                const cachedResult = cache[searchCacheKey];
+                /*
+                |------------------------------------------------------------------
+                | Also cache the original saved name.
+                |------------------------------------------------------------------
+                */
+                cache[cacheKey] = cachedResult;
+                writeRouteGeocodeCache(cache);
+                return cachedResult;
+            }
+            await waitForRouteGeocoderSlot();
+            const query = encodeURIComponent(`${searchValue}, Philippines`);
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ph&q=${query}`,
+                {
+                    method: "GET",
+                    headers: {
+                        Accept: "application/json",
+                    },
+                },
+            );
+            if (!response.ok) {
+                throw new Error("Unable to search the route location.");
+            }
+            const results = await response.json();
+            if (!Array.isArray(results) || results.length === 0) {
+                lastError = new Error(`Location not found: ${searchValue}`);
+                continue;
+            }
+            const result = {
+                lat: Number(results[0].lat),
+                lng: Number(results[0].lon),
+                displayName: results[0].display_name || normalized,
+            };
+            if (!Number.isFinite(result.lat) || !Number.isFinite(result.lng)) {
+                lastError = new Error(
+                    `Invalid coordinates returned for: ${searchValue}`,
+                );
+                continue;
+            }
+            /*
+            |--------------------------------------------------------------------------
+            | Cache both:
+            | 1. The actual query that succeeded
+            | 2. The original saved hospital name
+            |--------------------------------------------------------------------------
+            */
+            cache[searchCacheKey] = result;
+            cache[cacheKey] = result;
+            writeRouteGeocodeCache(cache);
+            return result;
+        } catch (error) {
+            lastError = error;
+            continue;
+        }
     }
-    const results = await response.json();
-    if (!Array.isArray(results) || results.length === 0) {
-        throw new Error(`Location not found: ${normalized}`);
-    }
-    const result = {
-        lat: Number(results[0].lat),
-        lng: Number(results[0].lon),
-        displayName: results[0].display_name || normalized,
-    };
-    if (!Number.isFinite(result.lat) || !Number.isFinite(result.lng)) {
-        throw new Error(`Invalid coordinates returned for: ${normalized}`);
-    }
-    cache[cacheKey] = result;
-    writeRouteGeocodeCache(cache);
-    return result;
+    throw new Error(lastError?.message || `Location not found: ${normalized}`);
 }
 
 async function initRouteLeafletMap() {
@@ -1597,62 +1672,37 @@ async function geocodeRouteRecord(record) {
     |--------------------------------------------------------------------------
     | Origin
     |--------------------------------------------------------------------------
-    | Prefer saved MySQL coordinates.
-    | Fall back to Nominatim only when coordinates are missing.
+    |
+    | Route Planning intentionally geocodes the saved origin text again.
+    |
+    | Do NOT use:
+    |   record.originLatitude
+    |   record.originLongitude
+    |
+    | The RoutePlan coordinates may be old, approximate, or based on a
+    | previous coordinate source. The location name/address is treated
+    | as the authoritative routing input.
+    |
     |--------------------------------------------------------------------------
     */
-    let origin = makeRouteCoordinate(
-        record.originLatitude,
-        record.originLongitude,
-        record.origin,
-    );
-    if (!origin) {
-        origin = await geocodeRouteLocation(record.origin);
-    }
+    const origin = await geocodeRouteLocation(record.origin);
     /*
     |--------------------------------------------------------------------------
     | Stops
+    |--------------------------------------------------------------------------
+    |
+    | Stops are also geocoded from their location text.
+    | This keeps the same behavior as origin/destination.
+    |
     |--------------------------------------------------------------------------
     */
     const stops = Array.isArray(record.stops)
         ? record.stops.map((stop) => String(stop || "").trim()).filter(Boolean)
         : [];
-    const persistedStopCoordinates = Array.isArray(record.stopCoordinates)
-        ? record.stopCoordinates
-        : [];
     const stopCoordinates = [];
     for (let index = 0; index < stops.length; index++) {
         const location = stops[index];
-        const persisted = persistedStopCoordinates[index] || null;
-        /*
-        |--------------------------------------------------------------------------
-        | Only reuse a coordinate when it belongs to the same stop.
-        |--------------------------------------------------------------------------
-        */
-        const sameLocation =
-            persisted &&
-            String(persisted.location || "")
-                .trim()
-                .toLowerCase() === location.toLowerCase();
-        let coordinate = null;
-        if (
-            sameLocation &&
-            hasValidRouteCoordinate(persisted.latitude, persisted.longitude)
-        ) {
-            coordinate = makeRouteCoordinate(
-                persisted.latitude,
-                persisted.longitude,
-                location,
-            );
-        }
-        /*
-        |--------------------------------------------------------------------------
-        | Missing coordinate → Nominatim fallback
-        |--------------------------------------------------------------------------
-        */
-        if (!coordinate) {
-            coordinate = await geocodeRouteLocation(location);
-        }
+        const coordinate = await geocodeRouteLocation(location);
         stopCoordinates.push({
             location,
             coordinate,
@@ -1662,15 +1712,13 @@ async function geocodeRouteRecord(record) {
     |--------------------------------------------------------------------------
     | Destination
     |--------------------------------------------------------------------------
+    |
+    | Again, intentionally use the destination name/address and geocode it.
+    | Do NOT reuse saved RoutePlan destination coordinates.
+    |
+    |--------------------------------------------------------------------------
     */
-    let destination = makeRouteCoordinate(
-        record.destinationLatitude,
-        record.destinationLongitude,
-        record.destination,
-    );
-    if (!destination) {
-        destination = await geocodeRouteLocation(record.destination);
-    }
+    const destination = await geocodeRouteLocation(record.destination);
     return {
         origin,
         stops: stopCoordinates,

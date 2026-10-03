@@ -1265,3 +1265,46 @@
     width: 100%;
   }
 }
+
+
+
+/* ==========================================
+   Accept Dispatch Confirmation Modal
+========================================== */
+
+.accept-dispatch-modal .delete-icon {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.accept-dispatch-modal .btn-success {
+    min-width: 140px;
+    height: var(--control-height);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--color-success);
+    background: var(--color-success);
+    color: var(--color-text-inverse);
+    border-radius: var(--radius-button);
+    cursor: pointer;
+    transition:
+        background var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast);
+}
+
+.accept-dispatch-modal .btn-success:hover {
+    background: var(--color-primary-hover);
+    color: var(--color-text-inverse);
+}
+
+
+/* Accept button in Dispatch table */
+
+.action-btn.accept-dispatch:hover {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+    border-color: var(--color-success);
+}

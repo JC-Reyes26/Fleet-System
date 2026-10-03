@@ -47,6 +47,8 @@ class RoutePlanController extends Controller
         $query = RoutePlan::with([
             'reservation.vehicle',
             'reservation.driver',
+            'reservation.pickupHospital',
+            'reservation.destinationHospital',
             'stops',
         ]);
 
@@ -194,6 +196,8 @@ class RoutePlanController extends Controller
         $reservations = Reservation::with([
             'vehicle',
             'driver',
+            'pickupHospital',
+            'destinationHospital',
         ])
             ->where('status', 'Approved')
             ->whereDoesntHave('routePlan')
@@ -201,68 +205,9 @@ class RoutePlanController extends Controller
             ->orderBy('schedule_time', 'asc')
             ->get();
 
-        $facilities = HospitalFacility::query()
-            ->where('status', true)
-            ->get([
-                'id',
-                'name',
-                'address',
-                'city',
-                'province',
-                'latitude',
-                'longitude',
-                'type',
-            ]);
-
-        $normalizeLocation = static function ($value): string {
-            return mb_strtolower(
-                preg_replace('/\s+/', ' ', trim((string) $value))
-            );
-        };
-
-        $findFacility = static function ($location) use (
-            $facilities,
-            $normalizeLocation
-        ) {
-            $normalized = $normalizeLocation($location);
-
-            if ($normalized === '') {
-                return null;
-            }
-
-            // Exact match first
-            $facility = $facilities->first(function ($item) use (
-                $normalized,
-                $normalizeLocation
-            ) {
-                return $normalizeLocation($item->name) === $normalized
-                    || $normalizeLocation($item->address) === $normalized;
-            });
-
-            if ($facility) {
-                return $facility;
-            }
-
-            // Partial match fallback
-            return $facilities->first(function ($item) use (
-                $normalized,
-                $normalizeLocation
-            ) {
-                $name = $normalizeLocation($item->name);
-                $address = $normalizeLocation($item->address);
-
-                return ($name !== '' && str_contains($normalized, $name))
-                    || ($name !== '' && str_contains($name, $normalized))
-                    || ($address !== '' && str_contains($normalized, $address))
-                    || ($address !== '' && str_contains($address, $normalized));
-            });
-        };
-
-        $reservations->each(function ($reservation) use (
-            $findFacility
-        ) {
-            $pickupFacility = $findFacility($reservation->pickup_location);
-            $destinationFacility = $findFacility($reservation->destination);
+        $reservations->each(function ($reservation) {
+            $pickupFacility = $reservation->pickupHospital;
+            $destinationFacility = $reservation->destinationHospital;
 
             $reservation->pickup_facility = $pickupFacility
                 ? [
@@ -271,8 +216,6 @@ class RoutePlanController extends Controller
                     'address' => $pickupFacility->address,
                     'city' => $pickupFacility->city,
                     'province' => $pickupFacility->province,
-                    'latitude' => $pickupFacility->latitude,
-                    'longitude' => $pickupFacility->longitude,
                     'type' => $pickupFacility->type,
                 ]
                 : null;
@@ -284,17 +227,9 @@ class RoutePlanController extends Controller
                     'address' => $destinationFacility->address,
                     'city' => $destinationFacility->city,
                     'province' => $destinationFacility->province,
-                    'latitude' => $destinationFacility->latitude,
-                    'longitude' => $destinationFacility->longitude,
                     'type' => $destinationFacility->type,
                 ]
                 : null;
-
-            $reservation->origin_latitude = $pickupFacility?->latitude;
-            $reservation->origin_longitude = $pickupFacility?->longitude;
-
-            $reservation->destination_latitude = $destinationFacility?->latitude;
-            $reservation->destination_longitude = $destinationFacility?->longitude;
         });
 
         return response()->json([
@@ -456,6 +391,8 @@ class RoutePlanController extends Controller
                 $reservation = Reservation::with([
                     'vehicle',
                     'driver',
+                    'pickupHospital',
+                    'destinationHospital',
                 ])
                     ->lockForUpdate()
                     ->findOrFail(
@@ -464,20 +401,23 @@ class RoutePlanController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
-                | Resolve Reservation Hospital Coordinates
+                | Resolve Reservation Hospital Names
                 |--------------------------------------------------------------------------
                 |
-                | HospitalFacility is the authoritative source for hospital coordinates.
-                | Frontend coordinates remain useful for preview, but the backend
-                | resolves them again before saving the RoutePlan.
+                | HospitalFacility relationship is the authoritative source for
+                | normal hospital/facility reservations.
+                |
+                | Supply Delivery reservations have no HospitalFacility IDs, so
+                | they continue using their existing reservation location values.
                 |
                 */
-                $originFacility = $this->resolveFacilityCoordinates(
-                    $reservation->pickup_location
-                );
-                $destinationFacility = $this->resolveFacilityCoordinates(
-                    $reservation->destination
-                );
+                $originLocation =
+                    $reservation->pickupHospital?->name
+                    ?: $reservation->pickup_location;
+
+                $destinationLocation =
+                    $reservation->destinationHospital?->name
+                    ?: $reservation->destination;
                 /*
                 |--------------------------------------------------------------------------
                 | Reservation must be Approved
@@ -536,25 +476,17 @@ class RoutePlanController extends Controller
                     'reservation_id' =>
                         $reservation->id,
                     'origin' =>
-                        $reservation->pickup_location,
+                        $originLocation,
                     'origin_latitude' =>
-                        $originFacility['latitude']
-                        ?? $validated['origin_latitude']
-                        ?? null,
+                        $validated['origin_latitude'] ?? null,
                     'origin_longitude' =>
-                        $originFacility['longitude']
-                        ?? $validated['origin_longitude']
-                        ?? null,
+                        $validated['origin_longitude'] ?? null,
                     'destination' =>
-                        $reservation->destination,
+                        $destinationLocation,
                     'destination_latitude' =>
-                        $destinationFacility['latitude']
-                        ?? $validated['destination_latitude']
-                        ?? null,
+                        $validated['destination_latitude'] ?? null,
                     'destination_longitude' =>
-                        $destinationFacility['longitude']
-                        ?? $validated['destination_longitude']
-                        ?? null,
+                        $validated['destination_longitude'] ?? null,
                     'priority' =>
                         $reservation->priority,
                     'department' =>
@@ -644,6 +576,8 @@ class RoutePlanController extends Controller
         $routePlan->load([
             'reservation.vehicle',
             'reservation.driver',
+            'reservation.pickupHospital',
+            'reservation.destinationHospital',
             'stops',
         ]);
 
@@ -781,6 +715,8 @@ class RoutePlanController extends Controller
             ) {
                 $routePlan = RoutePlan::with([
                     'reservation.dispatch',
+                    'reservation.pickupHospital',
+                    'reservation.destinationHospital',
                 ])
                     ->lockForUpdate()
                     ->findOrFail(
@@ -886,6 +822,14 @@ class RoutePlanController extends Controller
                     }
                 }
 
+                $originLocation =
+                    $routePlan->reservation?->pickupHospital?->name
+                    ?: $validated['origin'];
+
+                $destinationLocation =
+                    $routePlan->reservation?->destinationHospital?->name
+                    ?: $validated['destination'];
+
                 /*
                 |--------------------------------------------------------------------------
                 | Update Route Plan
@@ -894,13 +838,13 @@ class RoutePlanController extends Controller
 
                 $routePlan->update([
                     'origin' =>
-                        $validated['origin'],
+                        $originLocation,
                     'origin_latitude' =>
                         $validated['origin_latitude'] ?? null,
                     'origin_longitude' =>
                         $validated['origin_longitude'] ?? null,
                     'destination' =>
-                        $validated['destination'],
+                        $destinationLocation,
                     'destination_latitude' =>
                         $validated['destination_latitude'] ?? null,
                     'destination_longitude' =>
@@ -1226,18 +1170,13 @@ class RoutePlanController extends Controller
                 $reservation = Reservation::with([
                     'vehicle',
                     'driver',
+                    'pickupHospital',
+                    'destinationHospital',
                 ])
                     ->lockForUpdate()
                     ->findOrFail(
                         $validated['reservation_id']
                     );
-
-                $originFacility = $this->resolveFacilityCoordinates(
-                    $reservation->pickup_location
-                );
-                $destinationFacility = $this->resolveFacilityCoordinates(
-                    $reservation->destination
-                );
                 /*
                 |--------------------------------------------------------------------------
                 | Target Reservation Must Be Approved
@@ -1286,6 +1225,13 @@ class RoutePlanController extends Controller
                         'The duplicated route must use a different reservation.'
                     );
                 }
+                $originLocation =
+                    $reservation->pickupHospital?->name
+                    ?: $reservation->pickup_location;
+
+                $destinationLocation =
+                    $reservation->destinationHospital?->name
+                    ?: $reservation->destination;
                 /*
                 |--------------------------------------------------------------------------
                 | Create New Draft Route Plan
@@ -1300,17 +1246,17 @@ class RoutePlanController extends Controller
                     'reservation_id' =>
                         $reservation->id,
                     'origin' =>
-                        $reservation->pickup_location,
+                        $originLocation,
                     'origin_latitude' =>
-                        $originFacility['latitude'] ?? null,
+                        null,
                     'origin_longitude' =>
-                        $originFacility['longitude'] ?? null,
+                        null,
                     'destination' =>
-                        $reservation->destination,
+                        $destinationLocation,
                     'destination_latitude' =>
-                        $destinationFacility['latitude'] ?? null,
+                        null,
                     'destination_longitude' =>
-                        $destinationFacility['longitude'] ?? null,
+                        null,
                     'priority' =>
                         $reservation->priority,
                     'department' =>
