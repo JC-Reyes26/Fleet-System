@@ -580,6 +580,40 @@ function renderDispatchTable(dispatches) {
                                     `
                                     : ""
                             }
+                            ${
+                                role === "driver" &&
+                                status === "Completed" &&
+                                !dispatch.trip_log
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="action-btn submit-trip-log"
+                                            data-dispatch="${escapeDispatchHtml(JSON.stringify(dispatch))}"
+                                            aria-label="Submit Trip Log for ${safeDispatchNumber}"
+                                            title="Submit Trip Log"
+                                        >
+                                            <i class="ph ph-notebook"></i>
+                                        </button>
+                                    `
+                                    : ""
+                            }    
+                            ${
+                                ["dispatcher", "fleet_manager"].includes(role) &&
+                                status === "Completed" &&
+                                dispatch.trip_log
+                                    ? `
+                                        <button
+                                            type="button"
+                                            class="action-btn view-trip-log"
+                                            data-id="${escapeDispatchHtml(dispatch.trip_log.id)}"
+                                            aria-label="View Trip Log for ${safeDispatchNumber}"
+                                            title="View Trip Log"
+                                        >
+                                            <i class="ph ph-notebook"></i>
+                                        </button>
+                                    `
+                                    : ""
+                            }    
                         </div>
                     </td>
 

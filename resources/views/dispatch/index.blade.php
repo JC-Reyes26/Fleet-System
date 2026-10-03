@@ -346,6 +346,12 @@
         @include('components.dispatch.request-reassignment-modal')
     @endif
 
+    @if($dispatchPermissions['role'] === 'driver')
+        @include('components.dispatch.trip-log-modal')
+    @endif
+
+    @include('components.dispatch.trip-log-view-modal')
+
     @if($dispatchPermissions['canReviewReassignment'] ?? false)
         @include('components.dispatch.reassignment-review-modal')
     @endif
@@ -388,6 +394,8 @@
     <script src="{{ asset('assets/js/dispatch/dispatch-lifecycle.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-reassignment.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-reassignment-review.js') }}"></script>
+    <script src="{{ asset('assets/js/dispatch/dispatch-trip-log.js') }}"></script>
+    <script src="{{ asset('assets/js/dispatch/dispatch-trip-log-view.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-stats.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-sort.js') }}"></script>
     <script src="{{ asset('assets/js/dispatch/dispatch-pagination.js') }}"></script>

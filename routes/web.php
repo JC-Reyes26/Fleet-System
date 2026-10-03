@@ -22,6 +22,7 @@ use App\Http\Controllers\UserAccountController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\VehicleTrackingController;
 use App\Http\Controllers\HospitalFacilityController;
+use App\Http\Controllers\TripLogController;
 
 /*
 |--------------------------------------------------------------------------
@@ -812,4 +813,29 @@ Route::middleware([
     */
     Route::get('/hospital-facilities/search', [HospitalFacilityController::class, 'search'])
         ->name('hospital-facilities.search');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TRIP LOG MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:dispatch')->group(function () {
+        Route::get(
+            '/trip-logs',
+            [TripLogController::class, 'index']
+        )->name('trip-logs');
+
+        Route::get(
+            '/trip-logs/{tripLog}',
+            [TripLogController::class, 'show']
+        )->name('trip-logs.show');
+
+        Route::post(
+            '/trip-logs/{dispatch}',
+            [TripLogController::class, 'store']
+        )->name('trip-logs.store');
+    });
+
+
 });

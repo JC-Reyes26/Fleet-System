@@ -5,9 +5,11 @@ namespace App\Models;
 use App\Models\Reservation;
 use App\Models\User;
 use App\Models\DispatchReassignment;
+use App\Models\TripLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Dispatch extends Model
 {
@@ -53,6 +55,14 @@ class Dispatch extends Model
     public function reassignments(): HasMany
     {
         return $this->hasMany(DispatchReassignment::class);
+    }
+
+    public function tripLog(): HasOne
+    {
+        return $this->hasOne(
+            TripLog::class,
+            'dispatch_id'
+        );
     }
 
 }

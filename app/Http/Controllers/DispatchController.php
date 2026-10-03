@@ -168,6 +168,8 @@ class DispatchController extends Controller
 
             'reassignments.newVehicle',
             'reassignments.newDriver',
+
+            'tripLog',
         ]);
 
         if ($request->boolean('show_archived')) {
